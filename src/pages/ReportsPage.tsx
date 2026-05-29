@@ -17,7 +17,7 @@ export default function ReportsPage() {
         const response = await fetch('/api/reports');
         if (response.ok) {
           const data = await response.json();
-          // Sort reports by updatedAt from newest to oldest
+          // Backend already sorts by updated_at DESC, but we sort again for safety
           const sorted = data.sort((a: Report, b: Report) => {
             return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
           });
@@ -188,13 +188,19 @@ export default function ReportsPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {filteredReports.map((report) => (
-                <div key={report.id} className="relative group">
+                <motion.div
+                  key={report.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="relative group"
+                >
                   <ReportCard report={report} />
-                  {/* Subtle chronological indicator */}
+                  {/* Subtle chronological indicator using backend-formatted monthYear */}
                   <span className="absolute top-3 right-3 text-[8px] font-mono text-gray-500 bg-black/40 px-1.5 py-0.5 rounded pointer-events-none">
                     {report.monthYear}
                   </span>
-                </div>
+                </motion.div>
               ))}
             </div>
           )}
