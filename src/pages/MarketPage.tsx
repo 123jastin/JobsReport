@@ -7,18 +7,19 @@ import {
   Briefcase, 
   TrendingUp, 
   Clock, 
-  SlidersHorizontal,
-  Plus,
-  Globe
+  Globe,
+  RefreshCw,
+  Filter
 } from 'lucide-react';
 import { RawJob, Company } from '../types';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useCountry } from '../context/CountryContext';
 import { useCareerRedirect } from '../context/CareerRedirectContext';
 
-export default function JobsPage() {
+export default function MarketPage() {
   const [jobs, setJobs] = useState<RawJob[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [roles, setRoles] = useState<string[]>(['All']);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -30,27 +31,25 @@ export default function JobsPage() {
   const { triggerRedirect } = useCareerRedirect();
   
   useEffect(() => {
-    async function loadJobsAndCompanies() {
+    async function loadMarketData() {
       try {
-        const [jobsRes, companiesRes] = await Promise.all([
-          fetch('/api/jobs'),
-          fetch('/api/companies')
-        ]);
-        if (jobsRes.ok) {
-          const data = await jobsRes.json();
-          setJobs(data);
-        }
-        if (companiesRes.ok) {
-          const companiesData = await companiesRes.json();
-          setCompanies(companiesData);
+        // ✅ SINGLE API CALL: Fetches jobs + companies + roles
+        const response = await fetch('/api/market');
+        
+        if (response.ok) {
+          const data = await response.json();
+          setJobs(data.jobs || []);
+          setCompanies(data.companies || []);
+          // ✅ Use backend-provided roles list
+          setRoles(['All', ...(data.roles || [])]);
         }
       } catch (err) {
-        console.error("Error loading jobs and companies:", err);
+        console.error("Error loading market telemetry:", err);
       } finally {
         setLoading(false);
       }
     }
-    loadJobsAndCompanies();
+    loadMarketData();
   }, []);
 
   // Sync selectedRole if URL search param changes
@@ -79,8 +78,6 @@ export default function JobsPage() {
     return foundCo?.logoUrl;
   };
 
-  const roles: string[] = ['All', ...Array.from(new Set(jobs.map(j => j.role))) as string[]];
-
   const filteredJobs = jobs.filter(job => {
     const matchesSearch = 
       job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -91,65 +88,73 @@ export default function JobsPage() {
     return matchesSearch && matchesRole && matchesCountry;
   });
 
-
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-        <div className="w-8 h-8 rounded-full border-4 border-blue-500 border-t-transparent animate-spin" />
-        <p className="text-gray-500 font-mono text-xs">LOADING CURRENT INGESTION STREAM...</p>
+        <RefreshCw size={24} className="text-blue-500 animate-spin" />
+        <span className="text-[10px] font-mono text-gray-500 tracking-widest uppercase">
+          Loading Live Market Telemetry Stream...
+        </span>
       </div>
     );
   }
 
   return (
     <div className="space-y-8 pb-12">
-      {/* Page Header */}
+      {/* Page Header - Updated Messaging */}
       <div>
         <div className="flex items-center gap-2 text-xs font-bold text-blue-500 uppercase tracking-[0.2em] mb-2 font-mono">
-          <Briefcase size={14} /> {selectedCountry === 'Worldwide' ? 'GLOBAL' : `${selectedCountry.toUpperCase()} REGIONAL`} INGESTION DIRECTORY
+          <TrendingUp size={14} /> 
+          {selectedCountry === 'Worldwide' ? 'GLOBAL' : `${selectedCountry.toUpperCase()} REGIONAL`} MARKET TELEMETRY
         </div>
         <h1 className="text-4xl md:text-5xl font-black text-white tracking-widest leading-none uppercase">
-          JOBS IN {selectedCountry} {currentFlag}
+          Live Job Market {currentFlag}
         </h1>
         <p className="text-sm text-gray-400 max-w-xl mt-2 select-none">
-          Browse real-time raw job postings in <b>{selectedCountry} {currentFlag}</b>. Track actual telemetry data straight from corporate employment portals mapped into target market indices.
+          Live job market telemetry stream for <b>{selectedCountry} {currentFlag}</b>. Real-time aggregation of active placements, demand signals, and employer hiring patterns extracted from corporate career portals.
         </p>
       </div>
 
-      {/* Summary Matrix Grid */}
+      {/* Summary Matrix Grid - Market Intelligence Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="p-4 rounded-2xl bg-white/[0.01] border border-white/5">
-          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Total Ingested ({currentFlag})</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Active Signals ({currentFlag})</p>
           <p className="text-2xl font-mono text-white mt-1">{filteredJobs.length}</p>
+          <p className="text-[9px] text-gray-600 mt-1 font-mono uppercase">Live positions</p>
         </div>
         <div className="p-4 rounded-2xl bg-white/[0.01] border border-white/5">
-          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Matched Companies</p>
-          <p className="text-2xl font-mono text-white mt-1">{Array.from(new Set(filteredJobs.map(j => j.company))).length}</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Hiring Entities</p>
+          <p className="text-2xl font-mono text-white mt-1">
+            {Array.from(new Set(filteredJobs.map(j => j.company))).length}
+          </p>
+          <p className="text-[9px] text-gray-600 mt-1 font-mono uppercase">Active employers</p>
         </div>
         <div className="p-4 rounded-2xl bg-white/[0.01] border border-white/5">
-          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Unique Index Sectors</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Market Sectors</p>
           <p className="text-2xl font-mono text-white mt-1">{roles.length - 1}</p>
+          <p className="text-[9px] text-gray-600 mt-1 font-mono uppercase">Role categories</p>
         </div>
         <div className="p-4 rounded-2xl bg-white/[0.01] border border-white/5">
-          <p className="text-[10px] text-green-400 uppercase tracking-widest font-bold">Verification Rate</p>
+          <p className="text-[10px] text-green-400 uppercase tracking-widest font-bold">Signal Integrity</p>
           <p className="text-2xl font-mono text-green-400 mt-1">100%</p>
+          <p className="text-[9px] text-gray-600 mt-1 font-mono uppercase">Verified sources</p>
         </div>
       </div>
 
-      {/* Filters Area */}
+      {/* Filters Area - Market Intelligence Controls */}
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between p-4 bg-white/[0.02] border border-white/5 rounded-3xl">
         <div className="relative w-full md:w-80">
           <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
           <input 
             type="text" 
-            placeholder="Search matching title or company..."
+            placeholder="Search title, company, or sector..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-white/5 border border-white/10 rounded-2xl pl-11 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+            className="w-full bg-white/5 border border-white/10 rounded-2xl pl-11 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors font-mono"
           />
         </div>
 
-        {/* Roles Tabs Horizontal Scroll */}
+        {/* Role Sector Filters */}
         <div className="flex gap-1.5 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 scrollbar-none">
           {roles.map(role => (
             <button
@@ -157,7 +162,7 @@ export default function JobsPage() {
               onClick={() => handleRoleSelect(role)}
               className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-all ${
                 selectedRole === role 
-                  ? 'bg-blue-600 text-white shadow-sm' 
+                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20' 
                   : 'text-gray-500 hover:text-white bg-white/5 hover:bg-white/10'
               }`}
             >
@@ -167,11 +172,14 @@ export default function JobsPage() {
         </div>
       </div>
 
-      {/* Grid of job listings */}
+      {/* Market Telemetry Stream */}
       <div className="space-y-3">
         <div className="flex items-center justify-between text-xs text-gray-500 px-1">
-          <span>SHOWING {filteredJobs.length} VERIFIED POSITIONS</span>
-          <span className="font-mono text-[10px]">FILTERED TELEMETRY STREAM</span>
+          <span className="flex items-center gap-2">
+            <Filter size={12} className="text-blue-500" />
+            STREAMING {filteredJobs.length} VERIFIED MARKET SIGNALS
+          </span>
+          <span className="font-mono text-[10px]">LIVE TELEMETRY FEED</span>
         </div>
 
         <AnimatePresence mode="popLayout">
@@ -184,8 +192,10 @@ export default function JobsPage() {
             >
               <Globe size={32} className="text-gray-600 animate-[pulse_2.5s_infinite]" />
               <div className="space-y-1">
-                <p className="text-white font-bold text-sm">No Active Telemetry Found</p>
-                <p className="text-xs text-gray-500 max-w-sm">No verified job listings or indices available in {selectedCountry} {currentFlag} matching your lookup criteria.</p>
+                <p className="text-white font-bold text-sm">No Active Market Signals Found</p>
+                <p className="text-xs text-gray-500 max-w-sm">
+                  No verified job listings or market indices available in {selectedCountry} {currentFlag} matching your telemetry filters.
+                </p>
               </div>
               <button 
                 onClick={() => {
@@ -195,7 +205,7 @@ export default function JobsPage() {
                 }}
                 className="px-4 py-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all"
               >
-                Reset Ingestion Filters
+                Reset Telemetry Filters
               </button>
             </motion.div>
           ) : (
@@ -207,10 +217,10 @@ export default function JobsPage() {
                   animate={{ opacity: 1, y: 0, transition: { delay: Math.min(idx * 0.04, 0.4) } }}
                   exit={{ opacity: 0, scale: 0.95 }}
                   key={job.id}
-                  className="p-5 bg-white/[0.01] border hover:bg-white/[0.03] border-white/5 rounded-3xl transition-all duration-300 flex flex-col justify-between"
+                  className="group p-5 bg-white/[0.01] border hover:bg-white/[0.03] border-white/5 rounded-3xl transition-all duration-300 flex flex-col justify-between"
                 >
                   <div className="flex gap-4 items-start">
-                    {/* Company Logo Image on Left */}
+                    {/* Company Logo */}
                     <div className="flex-shrink-0 w-12 h-12 rounded-2xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center p-0.5 mt-0.5">
                       {getCompanyLogo(job.company) ? (
                         <img 
@@ -226,7 +236,7 @@ export default function JobsPage() {
                       )}
                     </div>
 
-                    {/* Job details block */}
+                    {/* Job Signal Details */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2 mb-2">
                         <span className="px-2 py-0.5 rounded text-[8px] font-bold bg-blue-500/10 text-blue-400 font-mono tracking-widest uppercase">
@@ -238,7 +248,7 @@ export default function JobsPage() {
                         </span>
                       </div>
 
-                      <h3 className="font-bold text-white text-base leading-tight hover:text-blue-400 transition-colors">
+                      <h3 className="font-bold text-white text-base leading-tight group-hover:text-blue-400 transition-colors">
                         {job.title}
                       </h3>
                       
@@ -259,7 +269,7 @@ export default function JobsPage() {
                   <div className="flex items-center justify-between border-t border-white/5 pt-4 mt-6">
                     <div className="flex flex-col gap-1">
                       <span className="text-[10px] text-gray-500 font-mono uppercase tracking-widest">
-                        ID: JR-{job.id.slice(0, 4).toUpperCase()}
+                        SIGNAL: JR-{job.id.slice(0, 4).toUpperCase()}
                       </span>
                       {job.expiresAt && (
                         <span className="text-[9px] text-gray-500 font-mono">
@@ -270,9 +280,9 @@ export default function JobsPage() {
                     
                     <button 
                       onClick={() => triggerRedirect(job.url, job.company, job.title)}
-                      className="px-3.5 py-1.5 rounded-xl bg-white/5 text-gray-300 hover:text-white hover:bg-white/10 transition-colors text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5"
+                      className="px-3.5 py-1.5 rounded-xl bg-blue-600/10 hover:bg-blue-600 text-blue-400 hover:text-white transition-all text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 border border-blue-500/20 hover:border-blue-500"
                     >
-                      <span>Careers Portal</span>
+                      <span>View Signal</span>
                       <ExternalLink size={10} />
                     </button>
                   </div>
@@ -283,17 +293,18 @@ export default function JobsPage() {
         </AnimatePresence>
       </div>
 
-      {/* Call to Active Admin Action banner if admin logged in */}
+      {/* Market Intelligence Actions */}
       <div className="p-6 rounded-3xl bg-gradient-to-r from-blue-950/20 to-violet-950/20 border border-blue-500/10 flex flex-col md:flex-row items-center justify-between gap-4">
         <div>
-          <h4 className="font-bold text-white text-sm">Need to add more records or aggregate the talent feed?</h4>
-          <p className="text-xs text-gray-400 mt-1">Access the Admin studio to enter raw files, change trending scores, or sync indices.</p>
+          <h4 className="font-bold text-white text-sm">Ingest new market signals or adjust telemetry parameters?</h4>
+          <p className="text-xs text-gray-400 mt-1">Access the Admin Studio to add raw market data, update trending indices, or sync employer feeds.</p>
         </div>
         <Link 
           to="/admin"
-          className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase tracking-wider transition-colors shrink-0"
+          className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase tracking-wider transition-colors shrink-0 flex items-center gap-2"
         >
-          Open Admin Panel
+          <span>Admin Studio</span>
+          <ArrowUpRight size={12} />
         </Link>
       </div>
     </div>
