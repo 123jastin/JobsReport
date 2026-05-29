@@ -1,0 +1,8 @@
+{
+  "name": "JobsReport",
+  "description": "A job intelligence platform providing data analytics, trending job reports, and aggregated discovery from official company sites.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

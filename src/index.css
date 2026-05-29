@@ -1,0 +1,125 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  
+  --color-brand-primary: #8b5cf6;
+  --color-brand-secondary: #3b82f6;
+  --color-bg-deep: #0A0B10;
+  --color-bg-surface: #0D0F16;
+  --color-border-subtle: rgba(255, 255, 255, 0.1);
+  --color-border-dim: rgba(255, 255, 255, 0.05);
+}
+
+@layer base {
+  body {
+    @apply bg-bg-deep text-gray-100 font-sans antialiased;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply bg-white/[0.02] border border-border-subtle backdrop-blur-sm;
+  }
+  
+  .trend-gradient {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(59, 130, 246, 0.08) 100%);
+  }
+
+  .status-text {
+    @apply text-[10px] uppercase font-mono tracking-widest text-gray-500;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-white/10 rounded-full hover:bg-white/20 transition-colors;
+}
+
+/* ✍️ WordPress-vibe High fidelity WYSIWYG text formatting blocks */
+.wysiwyg-editor, .excerpt-rich-content {
+  color: #e7e5e4 !important; /* stone-200 */
+}
+.wysiwyg-editor h2, .excerpt-rich-content h2 {
+  font-size: 1.4rem !important;
+  font-weight: 800 !important;
+  color: #ffffff !important;
+  margin-top: 1.5rem !important;
+  margin-bottom: 0.75rem !important;
+  line-height: 1.4 !important;
+  display: block;
+}
+.wysiwyg-editor h3, .excerpt-rich-content h3 {
+  font-size: 1.15rem !important;
+  font-weight: 700 !important;
+  color: #f3f4f6 !important;
+  margin-top: 1.25rem !important;
+  margin-bottom: 0.5rem !important;
+  display: block;
+}
+.wysiwyg-editor p, .excerpt-rich-content p {
+  margin-bottom: 1rem !important;
+  line-height: 1.7 !important;
+  color: #d6d3d1 !important; /* stone-300 */
+}
+.wysiwyg-editor ul, .excerpt-rich-content ul {
+  list-style-type: disc !important;
+  margin-left: 1.5rem !important;
+  margin-top: 0.5rem !important;
+  margin-bottom: 1rem !important;
+  padding-left: 0.5rem !important;
+}
+.wysiwyg-editor ol, .excerpt-rich-content ol {
+  list-style-type: decimal !important;
+  margin-left: 1.5rem !important;
+  margin-top: 0.5rem !important;
+  margin-bottom: 1rem !important;
+  padding-left: 0.5rem !important;
+}
+.wysiwyg-editor li, .excerpt-rich-content li {
+  margin-bottom: 0.35rem !important;
+  display: list-item !important;
+  color: #d6d3d1 !important;
+}
+.wysiwyg-editor blockquote, .excerpt-rich-content blockquote {
+  border-left: 4px solid #3b82f6 !important; /* border-blue-500 */
+  padding-left: 1.25rem !important;
+  padding-top: 0.5rem !important;
+  padding-bottom: 0.5rem !important;
+  margin-top: 1.25rem !important;
+  margin-bottom: 1.25rem !important;
+  font-style: italic !important;
+  color: #a8a29e !important; /* stone-400 */
+  background: rgba(255, 255, 255, 0.02) !important;
+  border-radius: 0 12px 12px 0;
+}
+.wysiwyg-editor strong, .excerpt-rich-content strong {
+  font-weight: 700 !important;
+  color: #ffffff !important;
+}
+.wysiwyg-editor em, .excerpt-rich-content em {
+  font-style: italic !important;
+}
+.wysiwyg-editor u, .excerpt-rich-content u {
+  text-decoration: underline !important;
+}
+.wysiwyg-editor:focus {
+  outline: none !important;
+}
+
+/* 🎨 ContentEditable placeholder support */
+.wysiwyg-editor[contenteditable="true"]:empty:before {
+  content: attr(placeholder);
+  color: #57534e !important; /* stone-600 */
+  cursor: text;
+  display: block;
+}
