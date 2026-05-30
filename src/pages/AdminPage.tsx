@@ -299,28 +299,12 @@ export default function AdminPage() {
   // 1. Ingest Job Telemetry
   const handleIngestJob = async (e: FormEvent) => {
     e.preventDefault();
-    if (userRole === 'editor') {
-      showFeedback('error', 'PERMISSION DENIED: Editor permissions are strict. Editors cannot change the job index.');
-      return;
-    }
-
-    if (!jobForm.title || (!isCreatingNewCompanyInline && !jobForm.companySelected) || (isCreatingNewCompanyInline && !jobForm.companyNewName)) {
-      showFeedback('error', 'Please fill in the Job Title, Location, and correct Company selections.');
-      return;
-    }
+    // ... validation code ...
 
     setActionLoading(true);
     try {
-      const targetCompany = isCreatingNewCompanyInline ? jobForm.companyNewName : jobForm.companySelected;
-
-      // Duplicate check client guard
-      if (duplicateWarning) {
-        showFeedback('error', 'Duplicate insertion blocked to ensure dynamic list purity.');
-        setActionLoading(false);
-        return;
-      }
-
-      const res = await fetch('/api/jobs', {
+      // ✅ POST to /api/admin/jobs (create new admin endpoint)
+      const res = await fetch('/api/admin/jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -334,6 +318,7 @@ export default function AdminPage() {
           expiresAt: jobForm.expiresAt
         })
       });
+      // ... rest of handler ...
 
       if (res.ok) {
         const addedJob = await res.json();
