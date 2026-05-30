@@ -11,9 +11,7 @@ import ReportDetailPage from './pages/ReportDetailPage';
 import ReportsPage from './pages/ReportsPage';
 import AdminPage from './pages/AdminPage';
 
-// NEW PAGES (you will create these)
-import MarketPage from './pages/MarketPage';
-import CompanyPage from './pages/CompanyPage';
+
 
 import { AuthProvider } from './context/AuthContext';
 import { CountryProvider } from './context/CountryContext';
