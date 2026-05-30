@@ -297,13 +297,32 @@ export default function AdminPage() {
   // --- ACTION HANDLERS ---
 
   // 1. Ingest Job Telemetry
-  const handleIngestJob = async (e: FormEvent) => {
+const handleIngestJob = async (e: FormEvent) => {
     e.preventDefault();
-    // ... validation code ...
+    
+    // ✅ ADD THIS - Define targetCompany
+    const targetCompany = isCreatingNewCompanyInline 
+      ? jobForm.companyNewName 
+      : jobForm.companySelected;
+
+    if (userRole === 'editor') {
+      showFeedback('error', 'PERMISSION DENIED: Editor permissions are strict. Editors cannot change the job index.');
+      return;
+    }
+
+    if (!jobForm.title || (!isCreatingNewCompanyInline && !jobForm.companySelected) || (isCreatingNewCompanyInline && !jobForm.companyNewName)) {
+      showFeedback('error', 'Please fill in the Job Title, Location, and correct Company selections.');
+      return;
+    }
 
     setActionLoading(true);
     try {
-      // ✅ POST to /api/admin/jobs (create new admin endpoint)
+      if (duplicateWarning) {
+        showFeedback('error', 'Duplicate insertion blocked to ensure dynamic list purity.');
+        setActionLoading(false);
+        return;
+      }
+
       const res = await fetch('/api/admin/jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -318,14 +337,12 @@ export default function AdminPage() {
           expiresAt: jobForm.expiresAt
         })
       });
-      // ... rest of handler ...
 
       if (res.ok) {
         const addedJob = await res.json();
         setJobs(prev => [addedJob, ...prev]);
         showFeedback('success', `Ingested "${jobForm.title}" for ${targetCompany} successfully.`);
         
-        // Reset job form parameters
         setJobForm({
           title: '',
           roleSelected: 'Software Developer',
@@ -340,7 +357,6 @@ export default function AdminPage() {
         });
         setIsCreatingNewCompanyInline(false);
         
-        // Reload system updates
         await fetchSystemData();
       } else {
         const errObj = await res.json();
@@ -352,6 +368,12 @@ export default function AdminPage() {
       setActionLoading(false);
     }
   };
+
+
+
+
+
+
 
   const handleToggleJobActive = async (id: string, currentStatus: boolean) => {
     if (userRole === 'editor') {
@@ -704,21 +726,6 @@ const handleUploadMedia = async (e: FormEvent) => {
   };
 
 
-
-      if (res.ok) {
-        const added = await res.json();
-        setMediaAssets(prev => [added, ...prev]);
-        showFeedback('success', `Saved asset "${mediaForm.name}" directly to media vault.`);
-        setMediaForm({ name: '', altText: '' });
-        setSelectedFileBase64(null);
-        fetchSystemData();
-      }
-    } catch (err) {
-      showFeedback('error', 'Error uploading binary.');
-    } finally {
-      setActionLoading(false);
-    }
-  };
 
   const handleDeleteMedia = async (id: string) => {
     if (!confirm("Are you sure you want to purge this image from media library?")) return;
