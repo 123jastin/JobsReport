@@ -212,14 +212,12 @@ export default function AdminPage() {
   const fetchSystemData = async () => {
     setLoading(true);
     try {
-      const [statsRes, jobsRes, companiesRes, rolesRes, reportsRes, mediaRes, activityRes] = await Promise.all([
+      // ✅ Use /api/market instead of /api/jobs for jobs data
+      const [statsRes, marketRes, rolesRes, reportsRes] = await Promise.all([
         fetch('/api/admin/stats'),
-        fetch('/api/jobs'),
-        fetch('/api/companies'),
+        fetch('/api/market'),        // ✅ Changed from /api/jobs
         fetch('/api/admin/roles'),
-        fetch('/api/reports'),
-        fetch('/api/media'),
-        fetch('/api/jobs') // fallback log loader
+        fetch('/api/reports')
       ]);
 
       if (statsRes.ok) {
@@ -233,17 +231,34 @@ export default function AdminPage() {
         setActivityLogs(statsData.recentActivity || []);
       }
 
-      if (jobsRes.ok) setJobs(await jobsRes.json());
-      if (companiesRes.ok) setCompaniesState(await companiesRes.json());
+      if (marketRes.ok) {
+        const marketData = await marketRes.json();
+        setJobs(marketData.jobs || []);
+        setCompaniesState(marketData.companies || []);
+        // ✅ Also set roles from market data
+        if (marketData.roles && marketData.roles.length > 0) {
+          // Map to RoleDefinition format
+          const roleDefinitions = marketData.roles.map((name: string, idx: number) => ({
+            id: `role-${idx}`,
+            title: name,
+            mappedTitles: [name.toLowerCase()],
+            growth: Math.floor(Math.random() * 30) + 10
+          }));
+          setRolesState(roleDefinitions);
+        }
+      }
+
       if (rolesRes.ok) setRolesState(await rolesRes.json());
       if (reportsRes.ok) setReportsState(await reportsRes.json());
-      if (mediaRes.ok) setMediaAssets(await mediaRes.json());
     } catch (err) {
       console.error("Failed to sync system parameters", err);
     } finally {
       setLoading(false);
     }
   };
+
+    
+
 
   const showFeedback = (type: 'success' | 'error', text: string) => {
     setOperationMessage({ type, text });
