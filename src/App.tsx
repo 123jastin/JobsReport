@@ -9,9 +9,8 @@ import Layout from './components/Layout';
 import HomePage from './pages/HomePage';
 import ReportDetailPage from './pages/ReportDetailPage';
 import ReportsPage from './pages/ReportsPage';
+import MarketPage from './pages/MarketPage';
 import AdminPage from './pages/AdminPage';
-
-
 
 import { AuthProvider } from './context/AuthContext';
 import { CountryProvider } from './context/CountryContext';
@@ -26,21 +25,21 @@ export default function App() {
             <Layout>
               <Routes>
 
-                {/* 🏠 Homepage */}
+                {/* 🏠 Homepage - Market Intelligence Dashboard */}
                 <Route path="/" element={<HomePage />} />
 
-                {/* 📰 Reports */}
-                <Route path="/report/:slug" element={<ReportDetailPage />} />
-                <Route path="/reports" element={<ReportsPage />} />
+                {/* 📊 Market Telemetry Stream */}
+                <Route path="/market" element={<MarketPage />} />
 
-                {/* 🧠 Intelligence Pages */}
-                <Route path="/role/:slug" element={<RolePage />} />
-                <Route path="/company/:id" element={<CompanyPage />} />
+                {/* 📰 Reports */}
+                <Route path="/reports" element={<ReportsPage />} />
+                <Route path="/report/:slug" element={<ReportDetailPage />} />
 
                 {/* 🔐 Admin */}
                 <Route path="/admin" element={<AdminPage />} />
 
                 {/* Optional fallback routes */}
+                <Route path="/jobs" element={<Navigate to="/market" replace />} />
                 <Route path="/companies" element={<Navigate to="/" replace />} />
 
                 {/* ❌ Catch-all */}
