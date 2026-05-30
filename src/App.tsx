@@ -12,7 +12,7 @@ import ReportsPage from './pages/ReportsPage';
 import AdminPage from './pages/AdminPage';
 
 // NEW PAGES (you will create these)
-import RolePage from './pages/RolePage';
+import MarketPage from './pages/MarketPage';
 import CompanyPage from './pages/CompanyPage';
 
 import { AuthProvider } from './context/AuthContext';
