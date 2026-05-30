@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -10,7 +9,9 @@ import {
   Clock, 
   Globe,
   RefreshCw,
-  Filter
+  Filter,
+  ArrowUpRight,
+  AlertTriangle
 } from 'lucide-react';
 import { RawJob, Company } from '../types';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -22,6 +23,7 @@ export default function MarketPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [roles, setRoles] = useState<string[]>(['All']);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   
   const [searchParams, setSearchParams] = useSearchParams();
@@ -34,18 +36,27 @@ export default function MarketPage() {
   useEffect(() => {
     async function loadMarketData() {
       try {
-        // ✅ SINGLE API CALL: Fetches jobs + companies + roles
+        setError(null);
         const response = await fetch('/api/market');
         
-        if (response.ok) {
-          const data = await response.json();
-          setJobs(data.jobs || []);
-          setCompanies(data.companies || []);
-          // ✅ Use backend-provided roles list
-          setRoles(['All', ...(data.roles || [])]);
+        if (!response.ok) {
+          throw new Error(`API returned ${response.status}: ${response.statusText}`);
         }
+        
+        const data = await response.json();
+        console.log('Market API Response:', data); // Debug log
+        
+        setJobs(Array.isArray(data.jobs) ? data.jobs : []);
+        setCompanies(Array.isArray(data.companies) ? data.companies : []);
+        setRoles(['All', ...(Array.isArray(data.roles) ? data.roles : [])]);
       } catch (err) {
         console.error("Error loading market telemetry:", err);
+        setError(err instanceof Error ? err.message : 'Failed to load market data');
+        
+        // ✅ FALLBACK: Set empty arrays to prevent blank page
+        setJobs([]);
+        setCompanies([]);
+        setRoles(['All']);
       } finally {
         setLoading(false);
       }
@@ -102,7 +113,20 @@ export default function MarketPage() {
 
   return (
     <div className="space-y-8 pb-12">
-      {/* Page Header - Updated Messaging */}
+      {/* Error Banner */}
+      {error && (
+        <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center gap-3">
+          <AlertTriangle size={16} className="text-red-400 flex-shrink-0" />
+          <div>
+            <p className="text-red-400 text-xs font-bold uppercase tracking-wider">Market Data Unavailable</p>
+            <p className="text-red-300/70 text-[10px] mt-0.5">
+              Using offline mode. Some features may be limited. Error: {error}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Page Header */}
       <div>
         <div className="flex items-center gap-2 text-xs font-bold text-blue-500 uppercase tracking-[0.2em] mb-2 font-mono">
           <TrendingUp size={14} /> 
@@ -116,7 +140,7 @@ export default function MarketPage() {
         </p>
       </div>
 
-      {/* Summary Matrix Grid - Market Intelligence Stats */}
+      {/* Summary Matrix Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="p-4 rounded-2xl bg-white/[0.01] border border-white/5">
           <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Active Signals ({currentFlag})</p>
@@ -142,7 +166,8 @@ export default function MarketPage() {
         </div>
       </div>
 
-      {/* Filters Area - Market Intelligence Controls */}
+      {/* Rest of the component remains the same... */}
+      {/* Filters Area */}
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between p-4 bg-white/[0.02] border border-white/5 rounded-3xl">
         <div className="relative w-full md:w-80">
           <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
@@ -155,7 +180,6 @@ export default function MarketPage() {
           />
         </div>
 
-        {/* Role Sector Filters */}
         <div className="flex gap-1.5 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 scrollbar-none">
           {roles.map(role => (
             <button
@@ -195,7 +219,10 @@ export default function MarketPage() {
               <div className="space-y-1">
                 <p className="text-white font-bold text-sm">No Active Market Signals Found</p>
                 <p className="text-xs text-gray-500 max-w-sm">
-                  No verified job listings or market indices available in {selectedCountry} {currentFlag} matching your telemetry filters.
+                  {error 
+                    ? "Market data ingestion is currently being configured. Check back soon."
+                    : `No verified job listings or market indices available in ${selectedCountry} ${currentFlag} matching your telemetry filters.`
+                  }
                 </p>
               </div>
               <button 
@@ -221,7 +248,6 @@ export default function MarketPage() {
                   className="group p-5 bg-white/[0.01] border hover:bg-white/[0.03] border-white/5 rounded-3xl transition-all duration-300 flex flex-col justify-between"
                 >
                   <div className="flex gap-4 items-start">
-                    {/* Company Logo */}
                     <div className="flex-shrink-0 w-12 h-12 rounded-2xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center p-0.5 mt-0.5">
                       {getCompanyLogo(job.company) ? (
                         <img 
@@ -237,7 +263,6 @@ export default function MarketPage() {
                       )}
                     </div>
 
-                    {/* Job Signal Details */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2 mb-2">
                         <span className="px-2 py-0.5 rounded text-[8px] font-bold bg-blue-500/10 text-blue-400 font-mono tracking-widest uppercase">
@@ -270,7 +295,7 @@ export default function MarketPage() {
                   <div className="flex items-center justify-between border-t border-white/5 pt-4 mt-6">
                     <div className="flex flex-col gap-1">
                       <span className="text-[10px] text-gray-500 font-mono uppercase tracking-widest">
-                        SIGNAL: JR-{job.id.slice(0, 4).toUpperCase()}
+                        SIGNAL: JR-{job.id?.toString().slice(0, 4).toUpperCase()}
                       </span>
                       {job.expiresAt && (
                         <span className="text-[9px] text-gray-500 font-mono">
