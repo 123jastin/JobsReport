@@ -57,7 +57,7 @@ import {
 } from 'recharts';
 
 export default function AdminPage() {
-  const { isAdmin, logout: triggerLogout } = useAuth();
+  const { isAdmin, login, logout: triggerLogout } = useAuth();
   const { selectedCountry, currentFlag } = useCountry();
   const { triggerRedirect } = useCareerRedirect();
   
@@ -66,6 +66,11 @@ export default function AdminPage() {
   
   // Authentication Simulated Permission level
   const [userRole, setUserRole] = useState<'admin' | 'editor'>('admin'); // admin = read/write anything, editor = read-only on jobs/companies/roles but full access on reports/media
+
+  // ✅ ADD THESE - Login form states
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
 
   // Core CMS state
   const [jobs, setJobs] = useState<RawJob[]>([]);
@@ -163,9 +168,22 @@ export default function AdminPage() {
   // --- PIPELINE RUN STATE ---
   const [pipelineFinishedInfo, setPipelineFinishedInfo] = useState<{ original: number; deduplicated: number } | null>(null);
 
+  const handleLogin = async (e: FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+    
+    const result = await login(loginEmail, loginPassword);
+    
+    if (!result.success) {
+      setLoginError(result.message);
+    }
+  };
+
   useEffect(() => {
-    fetchSystemData();
-  }, []);
+    if (isAdmin) {
+      fetchSystemData();
+    }
+  }, [isAdmin]);
 
   // Sync / Auto-Normalize Detection Hook inside Job input
   useEffect(() => {
@@ -256,9 +274,6 @@ export default function AdminPage() {
       setLoading(false);
     }
   };
-
-    
-
 
   const showFeedback = (type: 'success' | 'error', text: string) => {
     setOperationMessage({ type, text });
@@ -368,12 +383,6 @@ const handleIngestJob = async (e: FormEvent) => {
       setActionLoading(false);
     }
   };
-
-
-
-
-
-
 
   const handleToggleJobActive = async (id: string, currentStatus: boolean) => {
     if (userRole === 'editor') {
@@ -725,8 +734,6 @@ const handleUploadMedia = async (e: FormEvent) => {
     }
   };
 
-
-
   const handleDeleteMedia = async (id: string) => {
     if (!confirm("Are you sure you want to purge this image from media library?")) return;
 
@@ -917,6 +924,79 @@ const handleUploadMedia = async (e: FormEvent) => {
     return parsedArray;
   };
 
+  // ✅ SHOW LOGIN FORM IF NOT AUTHENTICATED
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-md"
+        >
+          <form onSubmit={handleLogin} className="p-8 bg-white/[0.01] border border-white/5 rounded-3xl space-y-5">
+            <div className="text-center space-y-2 mb-6">
+              <div className="flex items-center justify-center gap-2">
+                <Shield size={24} className="text-blue-500" />
+                <h2 className="text-xl font-black text-white uppercase tracking-widest">Admin Login</h2>
+              </div>
+              <p className="text-[10px] text-gray-500 font-mono uppercase tracking-wider">
+                JobsReport.online Telemetry Console
+              </p>
+            </div>
+            
+            {loginError && (
+              <motion.div 
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-2"
+              >
+                <AlertCircle size={14} className="text-red-400 flex-shrink-0" />
+                <span className="text-red-400 text-xs">{loginError}</span>
+              </motion.div>
+            )}
+            
+            <div className="space-y-1">
+              <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Email</label>
+              <input
+                type="email"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                placeholder="admin@jobsreport.online"
+                className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                required
+                autoFocus
+              />
+            </div>
+            
+            <div className="space-y-1">
+              <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Password</label>
+              <input
+                type="password"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                required
+              />
+            </div>
+            
+            <button
+              type="submit"
+              className="w-full py-3.5 bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-500 hover:to-violet-500 text-stone-100 font-extrabold text-[11px] uppercase tracking-widest rounded-2xl transition-all shadow-lg shadow-blue-500/10 active:scale-95 cursor-pointer"
+            >
+              Authenticate to Console
+            </button>
+            
+            <p className="text-[9px] text-gray-600 text-center font-mono uppercase tracking-wider">
+              Secure Telemetry Access • Session Persists 30 Days
+            </p>
+          </form>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // ✅ MAIN ADMIN DASHBOARD (shown only when authenticated)
   return (
     <div className="space-y-8 pb-12 mt-4 text-white">
       
@@ -991,6 +1071,18 @@ const handleUploadMedia = async (e: FormEvent) => {
             <span className="px-2 py-0.5 rounded text-[8px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono tracking-widest uppercase">
               {userRole === 'admin' ? 'ADMIN ACCESS' : 'EDITOR MODE'}
             </span>
+            
+            {/* ✅ ADD LOGOUT BUTTON */}
+            <button
+              onClick={() => {
+                triggerLogout();
+                showFeedback('success', 'Logged out successfully');
+              }}
+              className="px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all ml-4"
+            >
+              <LogOut size={12} />
+              Logout
+            </button>
           </div>
 
           <p className="text-xs text-gray-500 mt-2 max-w-xl font-mono leading-relaxed">
@@ -1794,9 +1886,6 @@ const handleUploadMedia = async (e: FormEvent) => {
         </motion.div>
       )}
 
-      {/* ---------------------------------------------------- */}
-      {/* 📰 TAB 5: REPORT CREATION SYSTEM */}
-      {/* ---------------------------------------------------- */}
       {/* ---------------------------------------------------- */}
       {/* 📰 TAB 5: REPORT CREATION SYSTEM */}
       {/* ---------------------------------------------------- */}
