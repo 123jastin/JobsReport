@@ -633,53 +633,76 @@ export default function AdminPage() {
   };
 
   // 5. Action: Media Assets Catalog Upload
+
 const handleUploadMedia = async (e: FormEvent) => {
     e.preventDefault();
-    if (!selectedFileBase64 && !fileInputRef.current?.files?.[0]) {
+    if (!selectedFileBase64) {
       showFeedback('error', 'Select or drop an image file first.');
       return;
     }
 
     setActionLoading(true);
     try {
-      // Get the actual file from input
-      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+      // Get the file input element
+      const fileInput = document.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement;
       const file = fileInput?.files?.[0];
       
       if (!file) {
-        showFeedback('error', 'No file selected');
-        setActionLoading(false);
-        return;
-      }
+        // Fallback: use base64 if no file in input
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: mediaForm.name || 'image.png',
+            type: 'image/png',
+            dataUrl: selectedFileBase64,
+            size: selectedFileSize || '150KB',
+            altText: mediaForm.altText || 'Custom image upload'
+          })
+        });
 
-      // Create FormData for upload
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('name', mediaForm.name || file.name);
-      formData.append('altText', mediaForm.altText || file.name);
-
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData
-      });
-
-      if (res.ok) {
-        const added = await res.json();
-        setMediaAssets(prev => [added, ...prev]);
-        showFeedback('success', `Uploaded "${added.name}" to media.jobsreport.online`);
-        setMediaForm({ name: '', altText: '' });
-        setSelectedFileBase64(null);
-        fetchSystemData();
+        if (res.ok) {
+          const added = await res.json();
+          setMediaAssets(prev => [added, ...prev]);
+          showFeedback('success', `Saved asset "${mediaForm.name}" to media vault.`);
+          setMediaForm({ name: '', altText: '' });
+          setSelectedFileBase64(null);
+          fetchSystemData();
+        } else {
+          showFeedback('error', 'Failed to upload media.');
+        }
       } else {
-        const errData = await res.json();
-        showFeedback('error', errData.error || 'Upload failed');
+        // Upload actual file
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('name', mediaForm.name || file.name);
+        formData.append('altText', mediaForm.altText || file.name);
+
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (res.ok) {
+          const added = await res.json();
+          setMediaAssets(prev => [added, ...prev]);
+          showFeedback('success', `Uploaded "${added.name}" to media.jobsreport.online`);
+          setMediaForm({ name: '', altText: '' });
+          setSelectedFileBase64(null);
+          fetchSystemData();
+        } else {
+          const errData = await res.json();
+          showFeedback('error', errData.error || 'Upload failed');
+        }
       }
     } catch (err) {
       showFeedback('error', 'Error uploading to media server.');
+      console.error('Upload error:', err);
     } finally {
       setActionLoading(false);
     }
   };
+
 
 
       if (res.ok) {
