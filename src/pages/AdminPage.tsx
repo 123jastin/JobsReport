@@ -633,26 +633,54 @@ export default function AdminPage() {
   };
 
   // 5. Action: Media Assets Catalog Upload
-  const handleUploadMedia = async (e: FormEvent) => {
+const handleUploadMedia = async (e: FormEvent) => {
     e.preventDefault();
-    if (!selectedFileBase64) {
+    if (!selectedFileBase64 && !fileInputRef.current?.files?.[0]) {
       showFeedback('error', 'Select or drop an image file first.');
       return;
     }
 
     setActionLoading(true);
     try {
-      const res = await fetch('/api/media', {
+      // Get the actual file from input
+      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+      const file = fileInput?.files?.[0];
+      
+      if (!file) {
+        showFeedback('error', 'No file selected');
+        setActionLoading(false);
+        return;
+      }
+
+      // Create FormData for upload
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('name', mediaForm.name || file.name);
+      formData.append('altText', mediaForm.altText || file.name);
+
+      const res = await fetch('/api/upload', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: mediaForm.name || 'custom-image.png',
-          type: 'image/jpeg',
-          dataUrl: selectedFileBase64,
-          size: selectedFileSize || '150KB',
-          altText: mediaForm.altText || 'Custom dynamic image upload'
-        })
+        body: formData
       });
+
+      if (res.ok) {
+        const added = await res.json();
+        setMediaAssets(prev => [added, ...prev]);
+        showFeedback('success', `Uploaded "${added.name}" to media.jobsreport.online`);
+        setMediaForm({ name: '', altText: '' });
+        setSelectedFileBase64(null);
+        fetchSystemData();
+      } else {
+        const errData = await res.json();
+        showFeedback('error', errData.error || 'Upload failed');
+      }
+    } catch (err) {
+      showFeedback('error', 'Error uploading to media server.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
 
       if (res.ok) {
         const added = await res.json();
