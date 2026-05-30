@@ -2,10 +2,10 @@ import { PagesFunction } from '@cloudflare/workers-types';
 
 type Env = {
   DB: D1Database;
-  MEDIA_BUCKET: R2Bucket; // If using R2 storage
+  MEDIA_BUCKET: R2Bucket;
 };
 
-// POST /api/upload - Upload image to media.jobsreport.online
+// POST /api/upload
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { DB, MEDIA_BUCKET } = context.env;
 
@@ -16,31 +16,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const name = formData.get('name') as string || file?.name || 'unnamed-image';
 
     if (!file) {
-      return new Response(JSON.stringify({ 
-        error: 'No file provided' 
-      }), { 
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
-    if (!allowedTypes.includes(file.type)) {
-      return new Response(JSON.stringify({ 
-        error: 'Invalid file type. Allowed: JPEG, PNG, GIF, WebP, SVG' 
-      }), { 
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    // Validate file size (max 10MB)
-    const maxSize = 10 * 1024 * 1024; // 10MB
-    if (file.size > maxSize) {
-      return new Response(JSON.stringify({ 
-        error: 'File too large. Maximum size is 10MB' 
-      }), { 
+      return new Response(JSON.stringify({ error: 'No file provided' }), { 
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       });
@@ -53,39 +29,30 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const filename = `${timestamp}-${randomString}.${extension}`;
     const id = `media-${timestamp}-${randomString}`;
 
-    let publicUrl: string;
-    let storageType: 'r2' | 'base64' | 'local';
+    // Upload to R2
+    const arrayBuffer = await file.arrayBuffer();
+    await MEDIA_BUCKET.put(filename, arrayBuffer, {
+      httpMetadata: {
+        contentType: file.type,
+      },
+      customMetadata: {
+        originalName: file.name,
+        altText: altText,
+        uploadedAt: new Date().toISOString()
+      }
+    });
 
-    // Try R2 storage first, fallback to base64
-    if (MEDIA_BUCKET) {
-      // Upload to R2
-      const arrayBuffer = await file.arrayBuffer();
-      await MEDIA_BUCKET.put(filename, arrayBuffer, {
-        httpMetadata: {
-          contentType: file.type,
-        },
-      });
-      
-      publicUrl = `https://media.jobsreport.online/${filename}`;
-      storageType = 'r2';
-    } else {
-      // Fallback: Convert to base64 and store in D1
-      const arrayBuffer = await file.arrayBuffer();
-      const base64String = btoa(
-        new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-      );
-      publicUrl = `data:${file.type};base64,${base64String}`;
-      storageType = 'base64';
-    }
+    // Generate public URL
+    const publicUrl = `https://media.jobsreport.online/${filename}`;
 
     // Calculate file size
     const sizeInKB = Math.round(file.size / 1024);
     const size = sizeInKB > 1024 ? `${Math.round(sizeInKB / 1024)}MB` : `${sizeInKB}KB`;
 
-    // Save metadata to D1 database
+    // Save metadata to D1
     await DB.prepare(`
       INSERT INTO media (id, name, type, url, size, alt_text, storage_type, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, 'r2', ?)
     `).bind(
       id,
       name,
@@ -93,11 +60,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       publicUrl,
       size,
       altText || name,
-      storageType,
       new Date().toISOString()
     ).run();
 
-    // Return success response
     return new Response(JSON.stringify({
       id,
       name,
@@ -106,7 +71,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       url: publicUrl,
       size,
       altText: altText || name,
-      storageType,
+      storageType: 'r2',
       uploadedAt: new Date().toISOString().split('T')[0]
     }), {
       status: 201,
@@ -131,7 +96,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
 };
 
-// GET /api/upload - List all uploaded media
+// GET /api/upload
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
 
@@ -162,9 +127,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     });
 
   } catch (err) {
-    console.error('Media List Error:', err);
     return new Response(JSON.stringify([]), {
-      status: 200,
       headers: { 
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*'
@@ -173,7 +136,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   }
 };
 
-// DELETE /api/upload/:id - Delete media
+// DELETE /api/upload/:id
 export const onRequestDelete: PagesFunction<Env> = async (context) => {
   const { DB, MEDIA_BUCKET } = context.env;
   const url = new URL(context.request.url);
@@ -187,7 +150,6 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
   }
 
   try {
-    // Get media record first
     const media = await DB.prepare('SELECT * FROM media WHERE id = ?').bind(id).first();
     
     if (!media) {
@@ -197,15 +159,13 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
       });
     }
 
-    // Delete from R2 if stored there
-    if (media.storage_type === 'r2' && MEDIA_BUCKET) {
-      const filename = media.url.split('/').pop();
-      if (filename) {
-        await MEDIA_BUCKET.delete(filename);
-      }
+    // Delete from R2
+    const filename = media.url.split('/').pop();
+    if (filename) {
+      await MEDIA_BUCKET.delete(filename);
     }
 
-    // Delete from database
+    // Delete from D1
     await DB.prepare('DELETE FROM media WHERE id = ?').bind(id).run();
 
     return new Response(JSON.stringify({ success: true }), {
@@ -216,7 +176,6 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
     });
 
   } catch (err) {
-    console.error('Media Delete Error:', err);
     return new Response(JSON.stringify({ error: 'Failed to delete media' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
@@ -224,7 +183,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
   }
 };
 
-// Handle OPTIONS for CORS
+// CORS OPTIONS
 export const onRequestOptions: PagesFunction<Env> = async () => {
   return new Response(null, {
     headers: {
