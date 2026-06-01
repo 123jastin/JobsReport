@@ -227,15 +227,16 @@ export default function AdminPage() {
     }
   }, [jobForm.title, jobForm.companySelected, jobForm.companyNewName, jobForm.location, isCreatingNewCompanyInline, jobs, rolesState]);
 
-  const fetchSystemData = async () => {
+const fetchSystemData = async () => {
     setLoading(true);
     try {
-      // ✅ Use /api/market instead of /api/jobs for jobs data
-      const [statsRes, marketRes, rolesRes, reportsRes] = await Promise.all([
+      // ✅ Fetch companies separately to ensure they load
+      const [statsRes, marketRes, rolesRes, reportsRes, companiesRes] = await Promise.all([
         fetch('/api/admin/stats'),
-        fetch('/api/market'),        // ✅ Changed from /api/jobs
+        fetch('/api/market'),
         fetch('/api/admin/roles'),
-        fetch('/api/reports')
+        fetch('/api/reports'),
+        fetch('/api/companies')  // ✅ ADD THIS - Fetch companies directly
       ]);
 
       if (statsRes.ok) {
@@ -252,10 +253,13 @@ export default function AdminPage() {
       if (marketRes.ok) {
         const marketData = await marketRes.json();
         setJobs(marketData.jobs || []);
-        setCompaniesState(marketData.companies || []);
-        // ✅ Also set roles from market data
+        
+        // ✅ Set companies from market data OR from direct companies API
+        if (marketData.companies && marketData.companies.length > 0) {
+          setCompaniesState(marketData.companies);
+        }
+        
         if (marketData.roles && marketData.roles.length > 0) {
-          // Map to RoleDefinition format
           const roleDefinitions = marketData.roles.map((name: string, idx: number) => ({
             id: `role-${idx}`,
             title: name,
@@ -266,14 +270,36 @@ export default function AdminPage() {
         }
       }
 
+      // ✅ ALWAYS load companies directly as fallback
+      if (companiesRes.ok) {
+        const companiesData = await companiesRes.json();
+        if (companiesData && companiesData.length > 0) {
+          setCompaniesState(companiesData);
+        }
+      }
+
       if (rolesRes.ok) setRolesState(await rolesRes.json());
       if (reportsRes.ok) setReportsState(await reportsRes.json());
+      
+      // ✅ Debug log
+      console.log('System data loaded:', {
+        jobs: jobs.length,
+        companies: companiesState.length,
+        roles: rolesState.length,
+        reports: reportsState.length
+      });
+      
     } catch (err) {
       console.error("Failed to sync system parameters", err);
     } finally {
       setLoading(false);
     }
   };
+
+
+
+  
+  
 
   const showFeedback = (type: 'success' | 'error', text: string) => {
     setOperationMessage({ type, text });
