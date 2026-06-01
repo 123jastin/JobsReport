@@ -427,7 +427,8 @@ const handleIngestJob = async (e: FormEvent) => {
   };
 
   // 2. Action: Corporate Node Management
-  const handleCreateCompany = async (e: FormEvent) => {
+// 2. Action: Corporate Node Management
+const handleCreateCompany = async (e: FormEvent) => {
     e.preventDefault();
     if (!companyForm.name) return;
 
@@ -436,13 +437,23 @@ const handleIngestJob = async (e: FormEvent) => {
       return;
     }
 
+    // ✅ Check for duplicate company
+    const duplicateExists = companiesState.some(
+      c => c.name.toLowerCase() === companyForm.name.toLowerCase().trim()
+    );
+
+    if (duplicateExists) {
+      showFeedback('error', `Company "${companyForm.name}" already exists in the corporate catalog.`);
+      return;
+    }
+
     setActionLoading(true);
     try {
-      const res = await fetch('/api/companies', {
+      const res = await fetch('/api/admin/companies', {  // ✅ Changed to /api/admin/companies
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: companyForm.name,
+          name: companyForm.name.trim(),
           url: companyForm.url,
           logoUrl: companyForm.logoUrl
         })
@@ -452,8 +463,11 @@ const handleIngestJob = async (e: FormEvent) => {
         const added = await res.json();
         setCompaniesState(prev => [...prev, added]);
         setCompanyForm({ name: '', url: '', logoUrl: '' });
-        showFeedback('success', `Created target profile record for ${companyForm.name}.`);
-        fetchSystemData();
+        showFeedback('success', `Created corporate profile for ${companyForm.name}.`);
+        fetchSystemData(); // Refresh to get updated list
+      } else {
+        const errData = await res.json();
+        showFeedback('error', errData.error || 'Failed to create company');
       }
     } catch (err) {
       showFeedback('error', 'Error establishing corporate database reference.');
@@ -461,6 +475,31 @@ const handleIngestJob = async (e: FormEvent) => {
       setActionLoading(false);
     }
   };
+
+  const handleDeleteCompany = async (id: string) => {
+    if (userRole === 'editor') {
+      showFeedback('error', 'PERMISSION DENIED: Purge request rejected.');
+      return;
+    }
+
+    if (!confirm("Remove this company and its associated index metadata?")) return;
+
+    try {
+      const res = await fetch(`/api/admin/companies/${id}`, { method: 'DELETE' });  // ✅ Changed endpoint
+      if (res.ok) {
+        setCompaniesState(prev => prev.filter(c => c.id !== id));
+        showFeedback('success', 'Corporate node removed from active inventory.');
+        fetchSystemData();
+      }
+    } catch (err) {
+      showFeedback('error', 'Could not delete company profile.');
+    }
+  };
+  
+    
+    
+                                               
+
 
   const handleDeleteCompany = async (id: string) => {
     if (userRole === 'editor') {
