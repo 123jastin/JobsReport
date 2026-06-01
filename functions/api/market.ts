@@ -30,7 +30,6 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       LIMIT 100
     `).all();
 
-    // 2. Map to frontend-expected format
     const jobs = jobsResult.results.map((job: any) => ({
       id: job.id,
       title: job.title,
@@ -46,22 +45,16 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       country: 'Tanzania'
     }));
 
-    // 3. Get all roles
+    // 2. Get all roles
     const rolesResult = await DB.prepare(`
       SELECT name FROM roles ORDER BY name
     `).all();
     
     const roles = rolesResult.results.map((r: any) => r.name);
 
-    // 4. Get all companies with their logos
+    // 3. Get all companies with website_url ✅
     const companiesResult = await DB.prepare(`
-      SELECT 
-        id,
-        name,
-        logo_url,
-        website_url
-      FROM companies 
-      ORDER BY name
+      SELECT id, name, logo_url, website_url FROM companies ORDER BY name
     `).all();
 
     const companies = companiesResult.results.map((c: any) => ({
@@ -71,13 +64,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       url: c.website_url || ''
     }));
 
-    // 5. Get recent activity (last 10 jobs added)
+    // 4. Get recent activity
     const activityResult = await DB.prepare(`
-      SELECT 
-        j.id,
-        j.title,
-        c.name as company,
-        j.posted_at
+      SELECT j.id, j.title, c.name as company, j.posted_at
       FROM jobs j
       JOIN companies c ON j.company_id = c.id
       ORDER BY j.posted_at DESC
@@ -91,7 +80,6 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       timestamp: activity.posted_at
     }));
 
-    // 6. Return everything in one response
     return new Response(JSON.stringify({
       jobs,
       roles,
@@ -114,7 +102,6 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   } catch (err) {
     console.error('Market API Error:', err);
     
-    // Return empty data with error message
     return new Response(JSON.stringify({
       jobs: [],
       roles: [],
@@ -128,7 +115,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       },
       error: err instanceof Error ? err.message : 'Failed to load market data'
     }), { 
-      status: 200, // Return 200 with empty data instead of 500 to prevent blank page
+      status: 200,
       headers: { 
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*'
