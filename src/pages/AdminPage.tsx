@@ -1600,14 +1600,27 @@ const handleUploadMedia = async (e: FormEvent) => {
             </div>
           </div>
 
-          {/* Recently Added Job postings catalog preview */}
-          <div className="lg:col-span-7 space-y-4">
-            <div className="flex items-center justify-between px-1">
-              <span className="text-xs font-bold text-white uppercase tracking-widest font-mono flex items-center gap-2">
-                <Database size={13} className="text-blue-500" /> Real-Time placements directory ({jobs.length} total)
-              </span>
-              <span className="text-[10px] text-gray-500 font-mono">DEDUPLICATED STREAM</span>
-            </div>
+
+  {/* Recently Added Job postings catalog preview */}
+<div className="lg:col-span-7 space-y-4">
+  <div className="flex items-center justify-between px-1">
+    <span className="text-xs font-bold text-white uppercase tracking-widest font-mono flex items-center gap-2">
+      <Database size={13} className="text-blue-500" /> Real-Time placements directory ({jobs.length} total)
+    </span>
+    <span className="text-[10px] text-gray-500 font-mono">
+      {/* ✅ ADD REFRESH BUTTON */}
+      <button
+        onClick={fetchSystemData}
+        className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all"
+      >
+        <RefreshCw size={12} />
+        Refresh
+      </button>
+    </span>
+  </div>
+
+                                                     
+      
 
             <div className="bg-white/[0.01] border border-white/5 rounded-3xl overflow-hidden divide-y divide-white/5 max-h-[600px] overflow-y-auto scrollbar-none">
               
