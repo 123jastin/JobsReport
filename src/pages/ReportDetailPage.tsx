@@ -31,10 +31,6 @@ import { useCareerRedirect } from '../context/CareerRedirectContext';
 
 const COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b'];
 
-// ✅ Default empty data to prevent crashes
-const emptyChartData = [{ name: 'No Data', demand: 0 }];
-const emptyDistribution = [{ name: 'No Data', value: 1 }];
-
 export default function ReportDetailPage() {
   const { slug } = useParams<{ slug: string }>();
   const [report, setReport] = useState<Report | null>(null);
@@ -49,7 +45,7 @@ export default function ReportDetailPage() {
         
         if (response.ok) {
           const data = await response.json();
-          console.log('Report data:', data); // Debug
+          console.log('Report data:', data);
           setReport(data);
           setJobs(data.jobs || []);
         } else if (response.status === 404) {
@@ -92,11 +88,12 @@ export default function ReportDetailPage() {
     );
   }
 
-  // ✅ Safe data with fallbacks
-  const stats = report.stats || { companies: jobs.length, growth: 0 };
-  const chartData = report.chartData?.length ? report.chartData : emptyChartData;
-  const distribution = report.distribution?.length ? report.distribution : emptyDistribution;
+  // Safe data with fallbacks
+  const stats = report.stats || { companies: 0, growth: 0 };
+  const chartData = report.chartData?.length ? report.chartData : [{ name: 'No Data', demand: 0 }];
+  const distribution = report.distribution?.length ? report.distribution : [{ name: 'No Data', value: 1 }];
   const companies = report.companies || [];
+  const hasChartData = chartData.length > 0 && chartData[0]?.demand > 0;
 
   return (
     <div className="space-y-8 pb-12">
@@ -137,7 +134,7 @@ export default function ReportDetailPage() {
         </div>
         
         <h1 className="text-4xl md:text-6xl font-black text-white mb-6 leading-[1.1] tracking-tighter">
-          {report.title}
+          {report.title || 'Untitled Report'}
         </h1>
         <div className="flex items-center gap-4 text-[10px] text-gray-500 mb-12 border-l border-white/10 pl-6 h-4">
           <div className="flex items-center gap-1.5">
@@ -174,8 +171,8 @@ export default function ReportDetailPage() {
         </div>
       </div>
 
-      {/* 📈 Charts Section - Only show if data exists */}
-      {chartData.length > 0 && chartData[0]?.name !== 'No Data' && (
+      {/* 📈 Charts Section */}
+      {hasChartData ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 p-6 rounded-3xl bg-white/[0.01] border border-white/5">
             <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
@@ -193,7 +190,7 @@ export default function ReportDetailPage() {
                     itemStyle={{ color: '#8b5cf6' }}
                   />
                   <Bar dataKey="demand" radius={[6, 6, 0, 0]}>
-                    {chartData.map((_entry: any, index: number) => (
+                    {chartData.map((entry: any, index: number) => (
                       <Cell key={`cell-${index}`} fill={index === chartData.length - 1 ? '#8b5cf6' : '#27272a'} />
                     ))}
                   </Bar>
@@ -208,7 +205,7 @@ export default function ReportDetailPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie data={distribution} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                    {distribution.map((_entry: any, index: number) => (
+                    {distribution.map((entry: any, index: number) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
@@ -216,21 +213,40 @@ export default function ReportDetailPage() {
                 </PieChart>
               </ResponsiveContainer>
             </div>
+            <div className="mt-4 space-y-2">
+              {distribution.map((item: any, index: number) => (
+                <div key={item.name || index} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2 text-gray-400">
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                    {item.name}
+                  </div>
+                  <span className="text-white font-mono">{item.value}</span>
+                </div>
+              ))}
+            </div>
           </div>
+        </div>
+      ) : (
+        <div className="p-8 rounded-3xl bg-white/[0.01] border border-white/5 text-center">
+          <TrendingUp size={24} className="text-gray-600 mx-auto mb-3" />
+          <p className="text-gray-500 text-xs font-mono uppercase tracking-wider">
+            Chart data will populate as jobs are added for this role
+          </p>
         </div>
       )}
 
-      {/* ✍️ Article Content */}
+      {/* ✍️ Article Content & Companies */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 mt-12">
-        <div className="lg:col-span-2">
-          <div className="p-6 rounded-3xl bg-white/[0.01] border border-white/5 mb-8">
+        <div className="lg:col-span-2 space-y-8">
+          {/* Report Content */}
+          <div className="p-6 rounded-3xl bg-white/[0.01] border border-white/5">
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
               <Sparkles size={24} className="text-blue-500" />
               Key Insights & Market Analysis
             </h2>
             {report.content ? (
               <div 
-                className="space-y-4 text-stone-300 text-sm leading-relaxed" 
+                className="space-y-4 text-stone-300 text-sm leading-relaxed excerpt-rich-content" 
                 dangerouslySetInnerHTML={{ __html: report.content }} 
               />
             ) : report.excerpt ? (
@@ -242,23 +258,153 @@ export default function ReportDetailPage() {
             )}
           </div>
 
-          {companies.length > 0 && (
-            <div className="p-6 rounded-3xl bg-white/[0.01] border border-white/5">
-              <h3 className="text-xl font-black text-white mb-4 uppercase tracking-tight">
-                Hiring Companies
-              </h3>
+          {/* Jobs Section */}
+          <div>
+            <h3 className="text-xl font-black text-white mb-6 uppercase tracking-tight flex items-center gap-2">
+              <Briefcase size={18} className="text-blue-500" />
+              Active Placements for {report.role || 'this role'}
+            </h3>
+
+            <div className="space-y-4">
+              {(() => {
+                const isJobExpired = (job: RawJob) => {
+                  if (!job.active) return true;
+                  if (job.expiresAt) {
+                    const today = new Date().toISOString().split('T')[0];
+                    return job.expiresAt < today;
+                  }
+                  return false;
+                };
+
+                const sortedJobs = [...jobs].sort((a, b) => {
+                  const aExpired = isJobExpired(a);
+                  const bExpired = isJobExpired(b);
+                  if (aExpired && !bExpired) return 1;
+                  if (!aExpired && bExpired) return -1;
+                  return new Date(b.postedAt || '').getTime() - new Date(a.postedAt || '').getTime();
+                });
+
+                if (sortedJobs.length === 0) {
+                  return (
+                    <div className="p-8 text-center rounded-3xl bg-white/[0.01] border border-white/5">
+                      <p className="text-xs text-gray-500 font-mono">NO ACTIVE PLACEMENTS TRACKED IN THIS QUARTER</p>
+                    </div>
+                  );
+                }
+
+                return sortedJobs.map((job) => {
+                  const expired = isJobExpired(job);
+                  return (
+                    <div 
+                      key={job.id}
+                      onClick={() => !expired && job.url && triggerRedirect(job.url, job.company, job.title)}
+                      className={`group relative p-5 bg-white/[0.01] border border-white/5 rounded-3xl transition-all duration-300 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                        expired ? 'opacity-60 cursor-not-allowed' : 'hover:bg-white/[0.03] cursor-pointer'
+                      }`}
+                    >
+                      <div className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-blue-500 to-indigo-500 rounded-l-full opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                      <div className="space-y-1.5 min-w-0">
+                        <div className="flex items-center gap-2.5 flex-wrap">
+                          <span className="text-base font-bold text-stone-100 group-hover:text-blue-400 transition-colors">
+                            {job.title}
+                          </span>
+                          
+                          <span className={`px-2 py-0.5 rounded text-[8px] font-mono tracking-widest font-extrabold uppercase ${
+                            expired 
+                              ? 'bg-red-500/10 text-red-500/95 border border-red-500/10' 
+                              : 'bg-green-500/10 text-green-400 border border-green-400/10'
+                          }`}>
+                            {expired ? 'Expired' : 'Active'}
+                          </span>
+
+                          {job.salary && (
+                            <span className="text-[10px] text-emerald-400 font-mono font-bold">
+                              {job.salary}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
+                          <span className="flex items-center gap-1">
+                            <Building2 size={13} className="text-stone-400" />
+                            <span className="text-gray-400 font-medium">{job.company}</span>
+                          </span>
+
+                          <span className="flex items-center gap-1">
+                            <MapPin size={13} className="text-stone-400" />
+                            <span className="text-gray-400">{job.location}</span>
+                          </span>
+
+                          {job.postedAt && (
+                            <span className="flex items-center gap-1 font-mono text-[10px]">
+                              <Calendar size={13} className="text-stone-400" />
+                              Posted: <span className="text-gray-400">{job.postedAt}</span>
+                            </span>
+                          )}
+
+                          {job.expiresAt && (
+                            <span className={`flex items-center gap-1 font-mono text-[10px] ${
+                              expired ? 'text-red-400/80 font-bold' : 'text-violet-400/80 font-bold'
+                            }`}>
+                              <Clock size={13} />
+                              {expired ? 'Expired' : 'Expires'}: {job.expiresAt}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center self-start sm:self-auto">
+                        <button 
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!expired && job.url) {
+                              triggerRedirect(job.url, job.company, job.title);
+                            }
+                          }}
+                          disabled={expired || !job.url}
+                          className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${
+                            expired || !job.url
+                              ? 'bg-white/5 text-gray-500 cursor-not-allowed' 
+                              : 'bg-blue-600 hover:bg-blue-500 text-stone-100 shadow-md shadow-blue-500/15 group-hover:scale-105'
+                          }`}
+                        >
+                          <span>{expired ? 'Archived' : 'Careers Portal'}</span>
+                          <ExternalLink size={10} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+        </div>
+
+        {/* Sidebar */}
+        <div className="space-y-6">
+          {/* Hiring Companies */}
+          <div>
+            <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-4">
+              Hiring Companies
+            </h3>
+            {companies.length > 0 ? (
               <div className="space-y-3">
                 {companies.map((company: any) => (
-                  <div key={company.name} className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 flex items-center justify-between">
+                  <div 
+                    key={company.name} 
+                    className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 flex items-center justify-between group hover:border-blue-500/30 transition-all"
+                  >
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center font-bold text-white">
                         {(company.name || '?')[0]}
                       </div>
-                      <span className="font-bold text-white">{company.name}</span>
+                      <span className="font-bold text-white text-sm">{company.name}</span>
                     </div>
                     {company.url && (
                       <button 
-                        onClick={() => triggerRedirect(company.url, company.name, 'Careers Page')}
+                        onClick={() => triggerRedirect(company.url, company.name, 'Official Careers Page')}
                         className="p-2 rounded-full bg-white/5 text-gray-400 hover:bg-blue-600 hover:text-white transition-all"
                       >
                         <ExternalLink size={18} />
@@ -267,25 +413,37 @@ export default function ReportDetailPage() {
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-        </div>
+            ) : (
+              <p className="text-xs text-gray-500 text-center py-8 bg-white/[0.01] rounded-2xl border border-white/5">
+                No hiring companies tracked for this role yet
+              </p>
+            )}
+            <p className="text-xs text-gray-500 italic p-4 bg-white/5 rounded-xl border border-dashed border-white/10 mt-4">
+              * We link directly to official company career pages. JobsReport does not host internal applications.
+            </p>
+          </div>
 
-        <div className="space-y-6">
-          <div className="p-6 rounded-3xl bg-white/[0.01] border border-white/5">
-            <h3 className="text-sm font-bold text-white uppercase tracking-widest mb-4">Report Info</h3>
-            <div className="space-y-3 text-xs text-gray-400">
+          {/* Report Info Card */}
+          <div className="p-5 rounded-3xl bg-white/[0.01] border border-white/5">
+            <h3 className="text-xs font-bold text-white uppercase tracking-widest mb-4 border-b border-white/5 pb-2">
+              Report Details
+            </h3>
+            <div className="space-y-3 text-xs">
               <div className="flex justify-between">
-                <span>Role</span>
+                <span className="text-gray-500">Role</span>
                 <span className="text-white font-bold">{report.role || 'N/A'}</span>
               </div>
               <div className="flex justify-between">
-                <span>Period</span>
+                <span className="text-gray-500">Period</span>
                 <span className="text-white font-bold">{report.monthYear || 'N/A'}</span>
               </div>
               <div className="flex justify-between">
-                <span>Country</span>
+                <span className="text-gray-500">Country</span>
                 <span className="text-white font-bold">{report.country || 'Tanzania'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Report ID</span>
+                <span className="text-white font-mono text-[10px]">{(report.id || '').slice(0, 8)}</span>
               </div>
             </div>
           </div>
