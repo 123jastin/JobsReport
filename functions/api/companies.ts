@@ -9,14 +9,14 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
   try {
     const result = await DB.prepare(
-      'SELECT id, name, logo_url, website_url FROM companies ORDER BY name'
+      'SELECT id, name, logo_url, website FROM companies ORDER BY name'
     ).all();
     
     const companies = result.results.map((c: any) => ({
       id: c.id,
       name: c.name,
       logoUrl: c.logo_url || '',
-      url: c.website_url || ''
+      url: c.website || ''
     }));
 
     return new Response(JSON.stringify(companies), {
@@ -44,7 +44,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       });
     }
 
-    // Check for duplicate
     const existing = await DB.prepare(
       'SELECT id FROM companies WHERE LOWER(name) = LOWER(?)'
     ).bind(name).first();
@@ -59,7 +58,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const id = 'comp-' + Date.now().toString(36) + Math.random().toString(36).substring(2, 4);
 
     await DB.prepare(
-      'INSERT INTO companies (id, name, logo_url, website_url) VALUES (?, ?, ?, ?)'
+      'INSERT INTO companies (id, name, logo_url, website) VALUES (?, ?, ?, ?)'
     ).bind(id, name, body.logoUrl || '', body.url || '').run();
 
     return new Response(JSON.stringify({
