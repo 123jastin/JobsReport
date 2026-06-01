@@ -346,7 +346,6 @@ const fetchSystemData = async () => {
 const handleIngestJob = async (e: FormEvent) => {
     e.preventDefault();
     
-    // ✅ ADD THIS - Define targetCompany
     const targetCompany = isCreatingNewCompanyInline 
       ? jobForm.companyNewName 
       : jobForm.companySelected;
@@ -386,9 +385,14 @@ const handleIngestJob = async (e: FormEvent) => {
 
       if (res.ok) {
         const addedJob = await res.json();
+        console.log('Job added:', addedJob); // ✅ Debug log
+        
+        // ✅ Add to local state immediately
         setJobs(prev => [addedJob, ...prev]);
+        
         showFeedback('success', `Ingested "${jobForm.title}" for ${targetCompany} successfully.`);
         
+        // Reset form
         setJobForm({
           title: '',
           roleSelected: 'Software Developer',
@@ -403,6 +407,7 @@ const handleIngestJob = async (e: FormEvent) => {
         });
         setIsCreatingNewCompanyInline(false);
         
+        // ✅ Refresh system data to get updated counts
         await fetchSystemData();
       } else {
         const errObj = await res.json();
@@ -410,10 +415,17 @@ const handleIngestJob = async (e: FormEvent) => {
       }
     } catch (err) {
       showFeedback('error', 'Failed to communicate with job ingestion stream.');
+      console.error('Job ingestion error:', err);
     } finally {
       setActionLoading(false);
     }
   };
+
+
+
+
+
+                                                            
 
   const handleToggleJobActive = async (id: string, currentStatus: boolean) => {
     if (userRole === 'editor') {
