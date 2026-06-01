@@ -1961,167 +1961,145 @@ const handleUploadMedia = async (e: FormEvent) => {
         </motion.div>
       )}
 
-
-{/* ---------------------------------------------------- */}
-{/* 📰 TAB 5: REPORT CREATION SYSTEM - EDITOR FIRST, THEN REPORTS */}
-{/* ---------------------------------------------------- */}
-{activeTab === 'reports' && (
-  <motion.div 
-    initial={{ opacity: 0 }}
-    animate={{ opacity: 1 }}
-    className="space-y-8 font-sans"
-  >
-    {/* ========== 1. TINYMCE EDITOR (TOP) ========== */}
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-      {/* Left - Report Settings */}
-      <div className="lg:col-span-4 space-y-6">
-        <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
-          <div>
-            <h3 className="text-base font-extrabold uppercase tracking-widest flex items-center gap-1.5 text-stone-100">
-              <FileText size={16} className="text-blue-500" />
-              {editingReportId ? "Edit Report Scope" : "Publish Scope Key"}
-            </h3>
-            <p className="text-xs text-gray-500 mt-1">Specify report parameters.</p>
-          </div>
-
-          <div className="space-y-4">
-            <div className="space-y-1">
-              <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Title</label>
-              <input type="text" value={reportForm.title} onChange={(e) => setReportForm(prev => ({ ...prev, title: e.target.value }))} placeholder="e.g. Software Developer Demand — June 2026" className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500" required />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Role</label>
-                <select value={reportForm.roleSelected} onChange={(e) => setReportForm(prev => ({ ...prev, roleSelected: e.target.value }))} className="w-full bg-black/40 border border-white/15 px-3 py-2.5 rounded-2xl text-xs text-white">
-                  {rolesState.map(r => (<option key={r.id} value={r.title}>{r.title}</option>))}
-                </select>
+      {/* ---------------------------------------------------- */}
+      {/* 📰 TAB 5: REPORT CREATION SYSTEM */}
+      {/* ---------------------------------------------------- */}
+      {activeTab === 'reports' && (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="grid grid-cols-1 lg:grid-cols-12 gap-8 font-sans"
+        >
+          {/* Editorial Settings Form & Published Reports */}
+          <div className="lg:col-span-4 space-y-6">
+            <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
+              <div>
+                <h3 className="text-base font-extrabold uppercase tracking-widest flex items-center gap-1.5 text-stone-100">
+                  <FileText size={16} className="text-blue-500" />
+                  {editingReportId ? "Edit Report Scope" : "Publish Scope Key"}
+                </h3>
+                <p className="text-xs text-gray-500 mt-1">Specify report parameters. Automatic charts and matching corporate listings will map dynamically.</p>
               </div>
-              <div className="space-y-1">
-                <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Period</label>
-                <input type="text" value={reportForm.monthYear} onChange={(e) => setReportForm(prev => ({ ...prev, monthYear: e.target.value }))} placeholder="June 2026" className="w-full bg-black/40 border border-white/15 px-3 py-2 rounded-2xl text-xs text-white" />
+
+              <div className="space-y-4">
+                
+                <div className="space-y-1">
+                  <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Analysis Document Title</label>
+                  <input 
+                    type="text" 
+                    value={reportForm.title}
+                    onChange={(e) => setReportForm(prev => ({ ...prev, title: e.target.value }))}
+                    placeholder="e.g. Software Developer Demand — June 2026"
+                    className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Role targeting</label>
+                    <select
+                      value={reportForm.roleSelected}
+                      onChange={(e) => setReportForm(prev => ({ ...prev, roleSelected: e.target.value }))}
+                      className="w-full bg-black/40 border border-white/15 px-3 py-2.5 rounded-2xl text-xs text-white focus:outline-none"
+                    >
+                      {rolesState.map(r => (
+                        <option key={r.id} value={r.title}>{r.title}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Period Scope</label>
+                    <input 
+                      type="text" 
+                      value={reportForm.monthYear}
+                      onChange={(e) => setReportForm(prev => ({ ...prev, monthYear: e.target.value }))}
+                      placeholder="e.g. June 2026"
+                      className="w-full bg-black/40 border border-white/15 px-3 py-2 rounded-2xl text-xs text-white focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Country scope */}
+                <div className="p-3 bg-white/[0.02] border border-white/5 rounded-2xl flex items-center justify-between">
+                  <span className="text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Country Segment</span>
+                  <span className="text-xs font-bold text-blue-400 uppercase bg-blue-500/10 px-2.5 py-1 rounded-lg border border-blue-500/15">{selectedCountry}</span>
+                </div>
+
+                {/* Automation info box detailing dynamic injection */}
+                <div className="p-3.5 bg-blue-950/20 border border-blue-500/20 rounded-2xl text-[10px] font-mono text-gray-400 leading-relaxed">
+                  <span className="text-blue-400 uppercase font-extrabold block mb-1">✓ DYNAMIC DATA INJECTION</span>
+                  Our CMS automatically crawls active jobs to inject: <b>hiring companies vectors</b> with website linkages, <b>growth indexes</b>, and <b>demand metrics</b>.
+                </div>
+
+                <div className="flex gap-2">
+                  {editingReportId && (
+                    <button
+                      type="button"
+                      onClick={handleCancelEdit}
+                      className="flex-1 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-stone-300 font-extrabold text-[11px] uppercase tracking-widest rounded-2xl transition-all cursor-pointer"
+                    >
+                      Cancel Edit
+                    </button>
+                  )}
+                  <button
+                    onClick={handlePostReport}
+                    disabled={actionLoading || !reportForm.title}
+                    className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-500 hover:to-violet-500 text-stone-100 font-extrabold text-[11px] uppercase tracking-widest rounded-2xl shadow-xl transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {actionLoading ? "Saving Draft..." : (editingReportId ? "UPDATE REPORT" : "PUBLISH REPORT")}
+                  </button>
+                </div>
+
               </div>
             </div>
 
-            <div className="flex gap-2">
-              {editingReportId && (
-                <button type="button" onClick={handleCancelEdit} className="flex-1 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-stone-300 font-extrabold text-[11px] uppercase tracking-widest rounded-2xl">Cancel Edit</button>
-              )}
-              <button onClick={handlePostReport} disabled={actionLoading || !reportForm.title} className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-500 hover:to-violet-500 text-stone-100 font-extrabold text-[11px] uppercase tracking-widest rounded-2xl shadow-xl transition-all disabled:opacity-50">
-                {actionLoading ? "Saving..." : (editingReportId ? "UPDATE" : "PUBLISH")}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Right - Editor */}
-      <div className="lg:col-span-8">
-        <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4">
-            <div>
-              <h3 className="text-base font-extrabold uppercase tracking-widest flex items-center gap-1.5 text-stone-100">
-                <Sparkles size={16} className="text-blue-500 animate-pulse" /> TinyMCE Editor
-              </h3>
-            </div>
-            <div className="flex bg-black/60 p-1 border border-white/5 rounded-2xl font-mono text-[10px] font-bold">
-              {(['visual', 'code', 'preview'] as const).map(mode => (
-                <button key={mode} type="button" onClick={() => setEditorMode(mode)} className={`px-3 py-1.5 rounded-xl uppercase transition-all ${editorMode === mode ? 'bg-blue-600 text-stone-100 font-extrabold shadow' : 'text-gray-400 hover:text-white'}`}>
-                  {mode === 'visual' && "Visual"}{mode === 'code' && "HTML"}{mode === 'preview' && "Preview"}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Toolbar with IMAGE UPLOAD button */}
-          <div className="p-2 bg-black/50 border border-white/10 rounded-2xl flex flex-wrap items-center gap-1 text-gray-300">
-            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleToolbarClick('bold', '', '<strong>', '</strong>')} className="p-2 hover:bg-white/10 hover:text-white rounded-lg flex items-center gap-1 text-[10px] font-bold"><Bold size={13} /> Bold</button>
-            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleToolbarClick('italic', '', '<em>', '</em>')} className="p-2 hover:bg-white/10 hover:text-white rounded-lg flex items-center gap-1 text-[10px] font-bold"><Italic size={13} /> Italic</button>
-            
-            {/* ✅ IMAGE UPLOAD BUTTON - like WordPress */}
-            <label className="p-2 hover:bg-white/10 hover:text-white rounded-lg flex items-center gap-1 text-[10px] font-bold cursor-pointer" title="Upload Image">
-              <Upload size={13} />
-              Image
-              <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, 'article')} className="hidden" />
-            </label>
-
-            <span className="w-px h-6 bg-white/10 mx-1" />
-            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleToolbarClick('formatBlock', 'H2', '<h2>', '</h2>')} className="p-2 hover:bg-white/10 hover:text-white rounded-lg text-xs font-extrabold">H2</button>
-            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleToolbarClick('formatBlock', 'H3', '<h3>', '</h3>')} className="p-2 hover:bg-white/10 hover:text-white rounded-lg text-xs font-bold">H3</button>
-            <span className="w-px h-6 bg-white/10 mx-1" />
-            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleToolbarClick('insertUnorderedList', '', '<ul><li>', '</li></ul>')} className="p-2 hover:bg-white/10 hover:text-white rounded-lg flex items-center gap-1 text-[10px] font-bold"><List size={13} /> List</button>
-            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleToolbarClick('formatBlock', 'BLOCKQUOTE', '<blockquote>', '</blockquote>')} className="p-2 hover:bg-white/10 hover:text-white text-[10px] font-bold rounded-lg">Quote</button>
-            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => handleToolbarClick('highlight', '', '<span class="text-blue-400 font-extrabold">', '</span>')} className="p-2 hover:bg-white/10 hover:text-white text-[10px] font-bold text-blue-400 rounded-lg">Highlight</button>
-          </div>
-
-          {/* Editor Viewport */}
-          <div className="relative border border-white/10 rounded-2xl overflow-hidden bg-black/45">
-            {editorMode === 'visual' && (
-              <div className="p-5 bg-black/20 min-h-[400px]">
-                <div ref={visualEditorRef} contentEditable={true} onInput={handleVisualEditorInput} onBlur={handleVisualEditorBlur} className="w-full min-h-[350px] bg-transparent text-stone-200 text-sm leading-relaxed overflow-y-auto focus:outline-none" id="excerpt-editor-visual" />
+            {/* Published reports management panel */}
+            <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
+              <div>
+                <h3 className="text-sm font-extrabold uppercase tracking-widest flex items-center gap-1.5 text-stone-100">
+                  <Layers size={14} className="text-violet-500" /> Published Reports ({reportsState.length})
+                </h3>
+                <p className="text-[11px] text-gray-500 mt-1">Select any published document below to load into the rich formatted editor or withdraw.</p>
               </div>
-            )}
-            {editorMode === 'code' && (
-              <div className="p-4 min-h-[400px]">
-                <textarea id="excerpt-editor-textarea" value={reportForm.excerpt} onChange={(e) => setReportForm(prev => ({ ...prev, excerpt: e.target.value }))} className="w-full min-h-[350px] bg-transparent text-blue-400 text-xs font-mono leading-relaxed focus:outline-none resize-none" />
-              </div>
-            )}
-            {editorMode === 'preview' && (
-              <div className="p-6 min-h-[400px] overflow-y-auto bg-stone-900/10">
-                {reportForm.excerpt ? (
-                  <div className="prose prose-invert max-w-none text-stone-300" dangerouslySetInnerHTML={{ __html: reportForm.excerpt }} />
-                ) : (
-                  <div className="text-center py-20 text-gray-500 font-mono text-xs">NO CONTENT YET</div>
+
+              <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1 select-scrollbar">
+                {reportsState.map(rep => (
+                  <div 
+                    key={rep.id} 
+                    className={`p-3 bg-black/30 border rounded-2xl flex items-center justify-between gap-3 transition-all hover:bg-white/[0.02] ${editingReportId === rep.id ? 'border-blue-500/50 bg-blue-500/[0.03]' : 'border-white/5'}`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-white truncate">{rep.title}</p>
+                      <span className="inline-block text-[9px] text-gray-500 font-mono mt-0.5">{rep.monthYear} • {rep.role}</span>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleLoadReportToEdit(rep)}
+                        className="p-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg text-[9px] font-black uppercase tracking-wider transition-colors"
+                        title="Edit Report description via the TinyMCE rich editor"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteReport(rep.id)}
+                        className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg text-[9px] font-black uppercase tracking-wider transition-colors"
+                        title="Delete Report permanently"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {reportsState.length === 0 && (
+                  <p className="text-xs text-gray-500 font-mono text-center py-6">No published intelligence documents.</p>
                 )}
               </div>
-            )}
-          </div>
-
-          {/* Templates */}
-          <div className="flex gap-2">
-            <button onClick={() => handleInsertTemplate('insights')} className="px-3 py-2 bg-black/40 hover:bg-black/60 border border-white/5 rounded-xl text-[10px] font-bold text-white">Key Insights</button>
-            <button onClick={() => handleInsertTemplate('segmented')} className="px-3 py-2 bg-black/40 hover:bg-black/60 border border-white/5 rounded-xl text-[10px] font-bold text-white">Segment Analysis</button>
-            <button onClick={() => handleInsertTemplate('standard')} className="px-3 py-2 bg-black/40 hover:bg-black/60 border border-white/5 rounded-xl text-[10px] font-bold text-white">Clean Summary</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    {/* ========== 2. PUBLISHED REPORTS LIST (BELOW EDITOR) ========== */}
-    <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-extrabold uppercase tracking-widest flex items-center gap-1.5 text-stone-100">
-          <Layers size={14} className="text-violet-500" /> Published Reports ({reportsState.length})
-        </h3>
-        <button onClick={fetchSystemData} className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white text-[10px] font-bold uppercase flex items-center gap-1.5">
-          <RefreshCw size={12} /> Refresh
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[400px] overflow-y-auto pr-1">
-        {reportsState.map(rep => (
-          <div key={rep.id} className={`p-3 bg-black/30 border rounded-2xl flex items-center justify-between gap-3 transition-all hover:bg-white/[0.02] ${editingReportId === rep.id ? 'border-blue-500/50 bg-blue-500/[0.03]' : 'border-white/5'}`}>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-bold text-white truncate">{rep.title}</p>
-              <span className="text-[9px] text-gray-500 font-mono">{rep.monthYear} • {rep.role}</span>
-            </div>
-            <div className="flex items-center gap-1 shrink-0">
-              <button type="button" onClick={() => handleLoadReportToEdit(rep)} className="p-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg text-[9px] font-black uppercase">Edit</button>
-              <button type="button" onClick={() => handleDeleteReport(rep.id)} className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg text-[9px] font-black uppercase">Del</button>
             </div>
           </div>
-        ))}
-        {reportsState.length === 0 && (
-          <div className="col-span-full text-center py-8 text-gray-500 font-mono text-xs">No published intelligence documents.</div>
-        )}
-      </div>
-    </div>
-  </motion.div>
-)}
-
-
-
-          
 
           {/* Premium Visual Dynamic Article & Excerpt Multi-Mode Composer */}
           <div className="lg:col-span-8 space-y-6">
