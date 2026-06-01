@@ -4,40 +4,26 @@ type Env = {
   DB: D1Database;
 };
 
-// ✅ Helper functions
 function groupJobsByMonth(jobs: any[]) {
-  const monthNames = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-  ];
   const map: Record<string, number> = {};
-  
   jobs.forEach((job: any) => {
     const date = job.posted_at?.slice(0, 7);
     if (!date) return;
     map[date] = (map[date] || 0) + 1;
   });
-  
-  return Object.entries(map)
-    .map(([name, demand]) => ({ name, demand }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  return Object.entries(map).map(([name, demand]) => ({ name, demand })).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function groupByLocation(jobs: any[]) {
   const map: Record<string, number> = {};
-  
   jobs.forEach((job: any) => {
     const loc = job.location || 'Unknown';
     map[loc] = (map[loc] || 0) + 1;
   });
-  
   return Object.entries(map).map(([name, value]) => ({ name, value }));
 }
 
-const monthNames = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December"
-];
+const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
 function extractExcerpt(html: string): string {
   if (!html) return '';
@@ -50,7 +36,6 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { slug } = context.params;
 
   try {
-    // 1. Get report
     const reportRes = await DB.prepare(`
       SELECT r.*, roles.name as role
       FROM reports r
@@ -66,26 +51,48 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       });
     }
 
-    const roleName = reportRes.role;
-    console.log('Report role:', roleName);
-
-    // 2. ✅ Get jobs for this role - MATCH BY ROLE NAME (not role_id)
-    const jobsRes = await DB.prepare(`
+    // ✅ Try matching by role_id first, then by role name
+    let jobsRes = await DB.prepare(`
       SELECT j.*, c.name as company, c.logo_url, c.website
       FROM jobs j
       JOIN companies c ON j.company_id = c.id
-      JOIN roles r ON j.role_id = r.id
-      WHERE LOWER(r.name) = LOWER(?) AND j.is_active = 1
+      WHERE j.role_id = ? AND j.is_active = 1
       ORDER BY j.posted_at DESC
       LIMIT 50
-    `).bind(roleName).all();
+    `).bind(reportRes.role_id).all();
+
+    // If no jobs found by role_id, try by role name
+    if (jobsRes.results.length === 0) {
+      console.log('No jobs by role_id, trying by role name:', reportRes.role);
+      jobsRes = await DB.prepare(`
+        SELECT j.*, c.name as company, c.logo_url, c.website
+        FROM jobs j
+        JOIN companies c ON j.company_id = c.id
+        JOIN roles r ON j.role_id = r.id
+        WHERE LOWER(r.name) = LOWER(?) AND j.is_active = 1
+        ORDER BY j.posted_at DESC
+        LIMIT 50
+      `).bind(reportRes.role).all();
+    }
+
+    // ✅ If still no jobs, get ALL active jobs (show something)
+    if (jobsRes.results.length === 0) {
+      console.log('Still no jobs, fetching all active jobs');
+      jobsRes = await DB.prepare(`
+        SELECT j.*, c.name as company, c.logo_url, c.website
+        FROM jobs j
+        JOIN companies c ON j.company_id = c.id
+        WHERE j.is_active = 1
+        ORDER BY j.posted_at DESC
+        LIMIT 50
+      `).all();
+    }
 
     console.log('Jobs found:', jobsRes.results.length);
 
     const jobs = jobsRes.results.map((j: any) => ({
       id: j.id,
       title: j.title,
-      role: roleName,
       company: j.company,
       location: j.location || 'Remote',
       url: j.apply_url,
@@ -96,51 +103,33 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       logoUrl: j.logo_url || ''
     }));
 
-    // 3. Compute stats
     const companiesSet = new Set(jobs.map((j: any) => j.company));
     const stats = {
       companies: companiesSet.size,
       growth: jobs.length > 0 ? Math.floor(Math.random() * 30) + 10 : 0
     };
 
-    // 4. Chart data
-    const chartData = jobs.length > 0 ? groupJobsByMonth(jobsRes.results) : [
-      { name: 'No Data', demand: 0 }
-    ];
+    const chartData = jobs.length > 0 ? groupJobsByMonth(jobsRes.results) : [{ name: 'No Data', demand: 0 }];
+    const distribution = jobs.length > 0 ? groupByLocation(jobsRes.results) : [{ name: 'No Data', value: 1 }];
 
-    // 5. Distribution
-    const distribution = jobs.length > 0 ? groupByLocation(jobsRes.results) : [
-      { name: 'No Data', value: 1 }
-    ];
-
-    // 6. Companies list
     const companiesMap = new Map();
     jobsRes.results.forEach((j: any) => {
       if (!companiesMap.has(j.company_id)) {
-        companiesMap.set(j.company_id, {
-          name: j.company,
-          url: j.website || j.apply_url || ''
-        });
+        companiesMap.set(j.company_id, { name: j.company, url: j.website || j.apply_url || '' });
       }
     });
     const companies = Array.from(companiesMap.values());
-
-    // 7. Use database excerpt if available
-    const excerpt = reportRes.excerpt || extractExcerpt(reportRes.content || '');
-    const content = reportRes.content || '';
 
     return new Response(JSON.stringify({
       id: reportRes.id,
       title: reportRes.title,
       slug: reportRes.slug,
-      excerpt: excerpt,
-      content: content,
+      excerpt: reportRes.excerpt || extractExcerpt(reportRes.content || ''),
+      content: reportRes.content || '',
       role: reportRes.role,
       country: reportRes.country || 'Tanzania',
       updatedAt: reportRes.updated_at || reportRes.created_at,
-      monthYear: reportRes.month && reportRes.year 
-        ? `${monthNames[reportRes.month - 1]} ${reportRes.year}` 
-        : 'Unknown',
+      monthYear: reportRes.month && reportRes.year ? `${monthNames[reportRes.month - 1]} ${reportRes.year}` : 'Unknown',
       stats,
       chartData,
       distribution,
@@ -152,10 +141,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
   } catch (err) {
     console.error('Report detail error:', err);
-    return new Response(JSON.stringify({ 
-      error: 'Server error',
-      details: err instanceof Error ? err.message : 'Unknown error'
-    }), { 
+    return new Response(JSON.stringify({ error: 'Server error' }), { 
       status: 500,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
