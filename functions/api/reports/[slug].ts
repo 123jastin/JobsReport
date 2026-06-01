@@ -4,7 +4,7 @@ type Env = {
   DB: D1Database;
 };
 
-// ✅ Add helper functions
+// ✅ Helper functions
 function groupJobsByMonth(jobs: any[]) {
   const monthNames = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -13,7 +13,7 @@ function groupJobsByMonth(jobs: any[]) {
   const map: Record<string, number> = {};
   
   jobs.forEach((job: any) => {
-    const date = job.posted_at?.slice(0, 7); // YYYY-MM
+    const date = job.posted_at?.slice(0, 7);
     if (!date) return;
     map[date] = (map[date] || 0) + 1;
   });
@@ -39,7 +39,6 @@ const monthNames = [
   "July", "August", "September", "October", "November", "December"
 ];
 
-// ✅ Helper to extract plain text from HTML
 function extractExcerpt(html: string): string {
   if (!html) return '';
   const text = html.replace(/<[^>]*>?/gm, '');
@@ -67,21 +66,26 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       });
     }
 
-    const roleId = reportRes.role_id;
+    const roleName = reportRes.role;
+    console.log('Report role:', roleName);
 
-    // 2. Get jobs for this role
+    // 2. ✅ Get jobs for this role - MATCH BY ROLE NAME (not role_id)
     const jobsRes = await DB.prepare(`
       SELECT j.*, c.name as company, c.logo_url, c.website
       FROM jobs j
       JOIN companies c ON j.company_id = c.id
-      WHERE j.role_id = ? AND j.is_active = 1
+      JOIN roles r ON j.role_id = r.id
+      WHERE LOWER(r.name) = LOWER(?) AND j.is_active = 1
       ORDER BY j.posted_at DESC
       LIMIT 50
-    `).bind(roleId).all();
+    `).bind(roleName).all();
+
+    console.log('Jobs found:', jobsRes.results.length);
 
     const jobs = jobsRes.results.map((j: any) => ({
       id: j.id,
       title: j.title,
+      role: roleName,
       company: j.company,
       location: j.location || 'Remote',
       url: j.apply_url,
@@ -121,7 +125,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     });
     const companies = Array.from(companiesMap.values());
 
-    // ✅ Use database excerpt if available, otherwise extract from content
+    // 7. Use database excerpt if available
     const excerpt = reportRes.excerpt || extractExcerpt(reportRes.content || '');
     const content = reportRes.content || '';
 
