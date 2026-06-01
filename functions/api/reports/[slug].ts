@@ -1,3 +1,4 @@
+
 import { PagesFunction } from '@cloudflare/workers-types';
 
 type Env = {
@@ -51,44 +52,16 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       });
     }
 
-    // ✅ Try matching by role_id first, then by role name
-    let jobsRes = await DB.prepare(`
+    // ✅ MATCH JOBS BY ROLE NAME (not role_id)
+    const jobsRes = await DB.prepare(`
       SELECT j.*, c.name as company, c.logo_url, c.website
       FROM jobs j
       JOIN companies c ON j.company_id = c.id
-      WHERE j.role_id = ? AND j.is_active = 1
+      JOIN roles r ON j.role_id = r.id
+      WHERE LOWER(r.name) = LOWER(?) AND j.is_active = 1
       ORDER BY j.posted_at DESC
       LIMIT 50
-    `).bind(reportRes.role_id).all();
-
-    // If no jobs found by role_id, try by role name
-    if (jobsRes.results.length === 0) {
-      console.log('No jobs by role_id, trying by role name:', reportRes.role);
-      jobsRes = await DB.prepare(`
-        SELECT j.*, c.name as company, c.logo_url, c.website
-        FROM jobs j
-        JOIN companies c ON j.company_id = c.id
-        JOIN roles r ON j.role_id = r.id
-        WHERE LOWER(r.name) = LOWER(?) AND j.is_active = 1
-        ORDER BY j.posted_at DESC
-        LIMIT 50
-      `).bind(reportRes.role).all();
-    }
-
-    // ✅ If still no jobs, get ALL active jobs (show something)
-    if (jobsRes.results.length === 0) {
-      console.log('Still no jobs, fetching all active jobs');
-      jobsRes = await DB.prepare(`
-        SELECT j.*, c.name as company, c.logo_url, c.website
-        FROM jobs j
-        JOIN companies c ON j.company_id = c.id
-        WHERE j.is_active = 1
-        ORDER BY j.posted_at DESC
-        LIMIT 50
-      `).all();
-    }
-
-    console.log('Jobs found:', jobsRes.results.length);
+    `).bind(reportRes.role).all();
 
     const jobs = jobsRes.results.map((j: any) => ({
       id: j.id,
