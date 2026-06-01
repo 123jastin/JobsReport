@@ -14,7 +14,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { RawJob, Company } from '../types';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useParams } from 'react-router-dom';
 import { useCountry } from '../context/CountryContext';
 import { useCareerRedirect } from '../context/CareerRedirectContext';
 
@@ -32,6 +32,15 @@ export default function MarketPage() {
   
   const { selectedCountry, setSelectedCountry, currentFlag } = useCountry();
   const { triggerRedirect } = useCareerRedirect();
+  const { query } = useParams<{ query?: string }>();
+  
+  // ✅ Load search query from URL path on page load
+  useEffect(() => {
+    if (query) {
+      const decodedQuery = decodeURIComponent(query).replace(/-/g, ' ');
+      setSearchQuery(decodedQuery);
+    }
+  }, [query]);
   
   useEffect(() => {
     async function loadMarketData() {
@@ -211,7 +220,18 @@ export default function MarketPage() {
             type="text" 
             placeholder="Search title, company, or sector..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              const value = e.target.value;
+              setSearchQuery(value);
+              
+              // Update URL with clean path
+              if (value) {
+                const cleanQuery = value.trim().toLowerCase().replace(/\s+/g, '-');
+                window.history.replaceState(null, '', `/market/search/${encodeURIComponent(cleanQuery)}`);
+              } else {
+                window.history.replaceState(null, '', '/market');
+              }
+            }}
             className="w-full bg-white/5 border border-white/10 rounded-2xl pl-11 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors font-mono"
           />
         </div>
@@ -268,6 +288,7 @@ export default function MarketPage() {
                   setSearchQuery('');
                   setSelectedRole('All');
                   setSelectedCountry('Worldwide');
+                  window.history.replaceState(null, '', '/market');
                 }}
                 className="px-4 py-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all"
               >
