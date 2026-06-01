@@ -9,32 +9,45 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
   try {
     const body: any = await context.request.json();
-    const id = 'job-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    
+    console.log('Creating job:', body);
+
+    // Generate unique ID
+    const id = 'job-' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
 
     // Find or create role
-    let roleResult = await DB.prepare('SELECT id FROM roles WHERE name = ?').bind(body.role).first();
+    let roleResult = await DB.prepare('SELECT id FROM roles WHERE LOWER(name) = LOWER(?)')
+      .bind(body.role?.trim())
+      .first();
+    
     if (!roleResult) {
       const roleId = 'role-' + Date.now().toString(36);
-      await DB.prepare('INSERT INTO roles (id, name) VALUES (?, ?)').bind(roleId, body.role).run();
+      await DB.prepare('INSERT INTO roles (id, name) VALUES (?, ?)')
+        .bind(roleId, body.role?.trim())
+        .run();
       roleResult = { id: roleId };
     }
 
     // Find or create company
-    let companyResult = await DB.prepare('SELECT id FROM companies WHERE name = ?').bind(body.company).first();
+    let companyResult = await DB.prepare('SELECT id FROM companies WHERE LOWER(name) = LOWER(?)')
+      .bind(body.company?.trim())
+      .first();
+    
     if (!companyResult) {
       const companyId = 'comp-' + Date.now().toString(36);
       await DB.prepare('INSERT INTO companies (id, name, logo_url, website_url) VALUES (?, ?, ?, ?)')
-        .bind(companyId, body.company, '', body.url || '')
+        .bind(companyId, body.company?.trim(), '', body.url || '')
         .run();
       companyResult = { id: companyId };
     }
 
+    // Insert job
     await DB.prepare(`
       INSERT INTO jobs (id, title, role_id, company_id, location, apply_url, salary, posted_at, expires_at, is_active)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
     `).bind(
       id,
-      body.title,
+      body.title?.trim(),
       roleResult.id,
       companyResult.id,
       body.location || 'Remote',
@@ -44,20 +57,25 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       body.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     ).run();
 
-    return new Response(JSON.stringify({
+    // Return the created job with role and company names
+    const createdJob = {
       id,
-      title: body.title,
-      role: body.role,
-      company: body.company,
-      location: body.location,
-      url: body.url,
-      salary: body.salary,
+      title: body.title?.trim(),
+      role: body.role?.trim(),
+      company: body.company?.trim(),
+      location: body.location || 'Remote',
+      url: body.url || '',
+      salary: body.salary || '',
       postedAt: new Date().toISOString().split('T')[0],
-      expiresAt: body.expiresAt,
+      expiresAt: body.expiresAt || '',
       active: true
-    }), {
+    };
+
+    console.log('Job created:', createdJob);
+
+    return new Response(JSON.stringify(createdJob), {
       status: 201,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
 
   } catch (err) {
@@ -67,7 +85,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       error: err instanceof Error ? err.message : 'Unknown error'
     }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
   }
 };
