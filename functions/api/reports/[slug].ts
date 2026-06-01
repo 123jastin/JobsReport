@@ -39,6 +39,13 @@ const monthNames = [
   "July", "August", "September", "October", "November", "December"
 ];
 
+// ✅ Helper to extract plain text from HTML
+function extractExcerpt(html: string): string {
+  if (!html) return '';
+  const text = html.replace(/<[^>]*>?/gm, '');
+  return text.substring(0, 200).trim() + (text.length > 200 ? '...' : '');
+}
+
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
   const { slug } = context.params;
@@ -114,12 +121,16 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     });
     const companies = Array.from(companiesMap.values());
 
+    // ✅ Use database excerpt if available, otherwise extract from content
+    const excerpt = reportRes.excerpt || extractExcerpt(reportRes.content || '');
+    const content = reportRes.content || '';
+
     return new Response(JSON.stringify({
       id: reportRes.id,
       title: reportRes.title,
       slug: reportRes.slug,
-      excerpt: extractExcerpt(reportRes.content),
-      content: reportRes.content,
+      excerpt: excerpt,
+      content: content,
       role: reportRes.role,
       country: reportRes.country || 'Tanzania',
       updatedAt: reportRes.updated_at || reportRes.created_at,
@@ -146,9 +157,3 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     });
   }
 };
-
-function extractExcerpt(html: string) {
-  if (!html) return '';
-  const text = html.replace(/<[^>]*>?/gm, '');
-  return text.substring(0, 120) + '...';
-}
