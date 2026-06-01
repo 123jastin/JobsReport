@@ -4,12 +4,13 @@ type Env = {
   DB: D1Database;
 };
 
-// GET /api/companies - Used by HomePage, MarketPage, and other pages
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
 
   try {
-    const result = await DB.prepare('SELECT * FROM companies ORDER BY name').all();
+    const result = await DB.prepare(
+      'SELECT id, name, logo_url, website_url FROM companies ORDER BY name'
+    ).all();
     
     const companies = result.results.map((c: any) => ({
       id: c.id,
@@ -22,13 +23,13 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       headers: { 'Content-Type': 'application/json' }
     });
   } catch (err) {
+    console.error('Companies API Error:', err);
     return new Response(JSON.stringify([]), {
       headers: { 'Content-Type': 'application/json' }
     });
   }
 };
 
-// POST /api/companies - Used by AdminPage for creating companies
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
 
@@ -43,7 +44,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       });
     }
 
-    // ✅ Check for duplicate
+    // Check for duplicate
     const existing = await DB.prepare(
       'SELECT id FROM companies WHERE LOWER(name) = LOWER(?)'
     ).bind(name).first();
@@ -79,7 +80,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
 };
 
-// DELETE /api/companies/:id
 export const onRequestDelete: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
   const url = new URL(context.request.url);
