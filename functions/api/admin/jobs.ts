@@ -35,7 +35,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     
     if (!companyResult) {
       const companyId = 'comp-' + Date.now().toString(36);
-      await DB.prepare('INSERT INTO companies (id, name, logo_url, website_url) VALUES (?, ?, ?, ?)')
+      // ✅ FIXED: website not website_url
+      await DB.prepare('INSERT INTO companies (id, name, logo_url, website) VALUES (?, ?, ?, ?)')
         .bind(companyId, body.company?.trim(), '', body.url || '')
         .run();
       companyResult = { id: companyId };
