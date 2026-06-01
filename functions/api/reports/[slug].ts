@@ -31,7 +31,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
   try {
     const reportRes = await DB.prepare(`
-      SELECT r.*, roles.name as role, roles.id as role_id
+      SELECT r.*, roles.name as role
       FROM reports r
       JOIN roles ON r.role_id = roles.id
       WHERE r.slug = ?
@@ -45,46 +45,16 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       });
     }
 
-    console.log('Report role:', reportRes.role, 'role_id:', reportRes.role_id);
-
-    // ✅ Strategy 1: Try by role_id first
-    let jobsRes = await DB.prepare(`
+    // GET JOBS - MATCH BY ROLE NAME
+    const jobsRes = await DB.prepare(`
       SELECT j.*, c.name as company, c.logo_url, c.website
       FROM jobs j
       JOIN companies c ON j.company_id = c.id
-      WHERE j.role_id = ? AND j.is_active = 1
+      JOIN roles r ON j.role_id = r.id
+      WHERE LOWER(r.name) = LOWER(?) AND j.is_active = 1
       ORDER BY j.posted_at DESC
       LIMIT 50
-    `).bind(reportRes.role_id).all();
-
-    console.log('Strategy 1 (role_id) jobs found:', jobsRes.results.length);
-
-    // ✅ Strategy 2: If no jobs, try by role NAME
-    if (jobsRes.results.length === 0) {
-      jobsRes = await DB.prepare(`
-        SELECT j.*, c.name as company, c.logo_url, c.website
-        FROM jobs j
-        JOIN companies c ON j.company_id = c.id
-        JOIN roles r ON j.role_id = r.id
-        WHERE LOWER(r.name) = LOWER(?) AND j.is_active = 1
-        ORDER BY j.posted_at DESC
-        LIMIT 50
-      `).bind(reportRes.role).all();
-      console.log('Strategy 2 (role name) jobs found:', jobsRes.results.length);
-    }
-
-    // ✅ Strategy 3: If still no jobs, get ALL active jobs
-    if (jobsRes.results.length === 0) {
-      jobsRes = await DB.prepare(`
-        SELECT j.*, c.name as company, c.logo_url, c.website
-        FROM jobs j
-        JOIN companies c ON j.company_id = c.id
-        WHERE j.is_active = 1
-        ORDER BY j.posted_at DESC
-        LIMIT 50
-      `).all();
-      console.log('Strategy 3 (all jobs) found:', jobsRes.results.length);
-    }
+    `).bind(reportRes.role).all();
 
     const jobs = jobsRes.results.map((j: any) => ({
       id: j.id,
@@ -120,7 +90,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       id: reportRes.id,
       title: reportRes.title,
       slug: reportRes.slug,
-      excerpt: reportRes.excerpt || (reportRes.content ? reportRes.content.replace(/<[^>]*>/g, '').substring(0, 200) : ''),
+      excerpt: reportRes.excerpt || (reportRes.content || '').replace(/<[^>]*>/g, '').substring(0, 200),
       content: reportRes.content || '',
       role: reportRes.role,
       country: reportRes.country || 'Tanzania',
@@ -137,14 +107,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
   } catch (err) {
     console.error('Report detail error:', err);
-    return new Response(JSON.stringify({ 
-      error: 'Server error',
-      jobs: [],
-      companies: [],
-      stats: { companies: 0, growth: 0 },
-      chartData: [],
-      distribution: []
-    }), { 
+    return new Response(JSON.stringify({ error: 'Server error' }), { 
       status: 500,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
