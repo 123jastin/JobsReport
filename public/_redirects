@@ -1,0 +1,2 @@
+# Allow SPA routing for market search
+/market/search/*  /index.html  200
