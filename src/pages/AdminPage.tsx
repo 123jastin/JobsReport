@@ -501,26 +501,6 @@ const handleCreateCompany = async (e: FormEvent) => {
                                                
 
 
-  const handleDeleteCompany = async (id: string) => {
-    if (userRole === 'editor') {
-      showFeedback('error', 'PERMISSION DENIED: Purge request rejected.');
-      return;
-    }
-
-    if (!confirm("Remove this company and its associated index metadata? All active listings remain but will display default style marks.")) return;
-
-    try {
-      const res = await fetch(`/api/companies/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setCompaniesState(prev => prev.filter(c => c.id !== id));
-        showFeedback('success', 'Corporate node excised from active inventory.');
-        fetchSystemData();
-      }
-    } catch (err) {
-      showFeedback('error', 'Could not delete company profile.');
-    }
-  };
-
   // 3. Action: Roles Management
   const handleAddKeywordToRole = () => {
     if (!roleForm.keywordInput.trim()) return;
