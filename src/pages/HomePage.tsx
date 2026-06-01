@@ -1,6 +1,6 @@
+import { Sparkles, TrendingUp, ChevronRight, Globe, RefreshCw, ArrowRight, Zap, BarChart3, Building2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Sparkles, TrendingUp, ChevronRight, Globe, RefreshCw, ArrowRight, Zap, BarChart3 } from 'lucide-react';
 import { Trend, Report } from '../types';
 import TrendingCard from '../components/TrendingCard';
 import ReportCard from '../components/ReportCard';
@@ -270,5 +270,4 @@ export default function HomePage() {
   );
 }
 
-// Missing import added
-import { Building2 } from 'lucide-react';
+
