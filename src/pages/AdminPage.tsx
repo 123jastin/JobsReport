@@ -652,7 +652,7 @@ const handleCreateCompany = async (e: FormEvent) => {
     setNewRichSubItem('');
   };
 
-  const handlePostReport = async (e: FormEvent) => {
+const handlePostReport = async (e: FormEvent) => {
     e.preventDefault();
     if (!reportForm.title || !reportForm.roleSelected) {
       showFeedback('error', 'Report title and target role categorizations are required.');
@@ -661,23 +661,56 @@ const handleCreateCompany = async (e: FormEvent) => {
 
     setActionLoading(true);
     try {
-      // Compile rich list to HTML structures automatically!
-      let compiledHtml = '';
-      for (const line of richLines) {
-        if (line.type === 'h2') {
-          compiledHtml += `<h2 class="text-xl font-bold text-white mt-6 mb-3 border-b border-white/5 pb-2 uppercase tracking-wide font-sans">${line.text}</h2>`;
-        } else if (line.type === 'p') {
-          compiledHtml += `<p class="text-gray-400 text-sm leading-relaxed mb-4">${line.text}</p>`;
-        } else if (line.type === 'list') {
-          compiledHtml += `<div class="bg-white/[0.01] border border-white/5 p-4 rounded-2xl mb-4"><span class="text-white text-xs font-bold uppercase tracking-wider">${line.text}</span><ul class="list-disc pl-5 mt-2 space-y-1 text-xs text-gray-400">`;
-          line.subItems?.forEach(item => {
-            compiledHtml += `<li>${item}</li>`;
-          });
-          compiledHtml += `</ul></div>`;
-        } else if (line.type === 'image') {
-          compiledHtml += `<div class="my-6 rounded-3xl overflow-hidden border border-white/10 relative"><img src="${line.mediaUrl}" alt="${line.text}" referrerPolicy="no-referrer" class="w-full object-cover max-h-72" /><div class="absolute bottom-3 left-4 px-2.5 py-1 bg-black/80 backdrop-blur text-[9px] text-gray-400 font-mono tracking-widest uppercase rounded-lg">ALT TAG: ${line.text}</div></div>`;
-        }
+      // Get the TinyMCE HTML content directly from the visual editor or code view
+      let finalContent = '';
+      
+      // If using visual editor, get HTML from contentEditable div
+      if (editorMode === 'visual' && visualEditorRef.current) {
+        finalContent = visualEditorRef.current.innerHTML;
+      } 
+      // If using code view, get from textarea
+      else if (editorMode === 'code') {
+        finalContent = reportForm.excerpt;
       }
+      // Fallback: use excerpt or compile from richLines
+      else {
+        finalContent = reportForm.excerpt;
+      }
+
+      // If no content from editor, compile from richLines (legacy)
+      if (!finalContent || finalContent === '<br>' || finalContent === '') {
+        let compiledHtml = '';
+        for (const line of richLines) {
+          if (line.type === 'h2') {
+            compiledHtml += `<h2 class="text-xl font-bold text-white mt-6 mb-3 border-b border-white/5 pb-2 uppercase tracking-wide font-sans">${line.text}</h2>`;
+          } else if (line.type === 'p') {
+            compiledHtml += `<p class="text-gray-400 text-sm leading-relaxed mb-4">${line.text}</p>`;
+          } else if (line.type === 'list') {
+            compiledHtml += `<div class="bg-white/[0.01] border border-white/5 p-4 rounded-2xl mb-4"><span class="text-white text-xs font-bold uppercase tracking-wider">${line.text}</span><ul class="list-disc pl-5 mt-2 space-y-1 text-xs text-gray-400">`;
+            line.subItems?.forEach(item => {
+              compiledHtml += `<li>${item}</li>`;
+            });
+            compiledHtml += `</ul></div>`;
+          } else if (line.type === 'image') {
+            compiledHtml += `<div class="my-6 rounded-3xl overflow-hidden border border-white/10 relative"><img src="${line.mediaUrl}" alt="${line.text}" referrerPolicy="no-referrer" class="w-full object-cover max-h-72" /><div class="absolute bottom-3 left-4 px-2.5 py-1 bg-black/80 backdrop-blur text-[9px] text-gray-400 font-mono tracking-widest uppercase rounded-lg">ALT TAG: ${line.text}</div></div>`;
+          }
+        }
+        finalContent = compiledHtml;
+      }
+
+      // Generate excerpt from HTML (strip tags, limit length)
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = finalContent;
+      const plainText = tempDiv.textContent || tempDiv.innerText || '';
+      const excerpt = plainText.substring(0, 200).trim() + (plainText.length > 200 ? '...' : '');
+
+      // Debug log
+      console.log('Publishing report:', {
+        title: reportForm.title,
+        role: reportForm.roleSelected,
+        contentLength: finalContent.length,
+        excerpt
+      });
 
       const url = editingReportId ? `/api/reports/${editingReportId}` : '/api/reports';
       const method = editingReportId ? 'PUT' : 'POST';
@@ -689,18 +722,22 @@ const handleCreateCompany = async (e: FormEvent) => {
           title: reportForm.title,
           role: reportForm.roleSelected,
           monthYear: reportForm.monthYear,
-          excerpt: reportForm.excerpt || reportForm.title,
-          content: compiledHtml,
+          excerpt: excerpt,
+          content: finalContent,
           country: selectedCountry
         })
       });
 
       if (res.ok) {
+        const savedReport = await res.json();
+        console.log('Report saved:', savedReport);
+        
         const msg = editingReportId 
           ? `Insight Report "${reportForm.title}" updated successfully!` 
-          : `Insight Report "${reportForm.title}" published! All charts and corporate mappings are automatically injected.`;
+          : `Insight Report "${reportForm.title}" published!`;
         showFeedback('success', msg);
         
+        // Reset form
         setReportForm({
           title: '',
           roleSelected: 'Software Developer',
@@ -713,17 +750,29 @@ const handleCreateCompany = async (e: FormEvent) => {
           { type: 'p', text: 'Telemetry analysis validates rising hiring volume across leading enterprise hubs.' }
         ]);
         setEditingReportId(null);
-        fetchSystemData();
+        
+        // Clear visual editor
+        if (visualEditorRef.current) {
+          visualEditorRef.current.innerHTML = '';
+        }
+        
+        // Refresh data
+        await fetchSystemData();
         setActiveTab('dashboard');
       } else {
-        showFeedback('error', 'Error saving report.');
+        const errData = await res.json();
+        showFeedback('error', errData.error || 'Error saving report.');
       }
     } catch (err) {
+      console.error('Report save error:', err);
       showFeedback('error', 'Network failure.');
     } finally {
       setActionLoading(false);
     }
   };
+
+
+
 
   // 5. Action: Media Assets Catalog Upload
 
