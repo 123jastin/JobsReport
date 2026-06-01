@@ -8,23 +8,35 @@ import { useCountry } from '../context/CountryContext';
 export default function ReportsPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null); // ✅ Add error state
   const [searchQuery, setSearchQuery] = useState('');
   const { selectedCountry, setSelectedCountry, currentFlag } = useCountry();
 
   useEffect(() => {
     const fetchReports = async () => {
       try {
+        setError(null);
         const response = await fetch('/api/reports');
-        if (response.ok) {
-          const data = await response.json();
-          // Backend already sorts by updated_at DESC, but we sort again for safety
+        
+        if (!response.ok) {
+          throw new Error(`API returned ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('Reports loaded:', data); // Debug log
+        
+        if (Array.isArray(data)) {
           const sorted = data.sort((a: Report, b: Report) => {
             return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
           });
           setReports(sorted);
+        } else {
+          setReports([]);
         }
       } catch (err) {
         console.error("Failed to load reports:", err);
+        setError(err instanceof Error ? err.message : 'Failed to load reports');
+        setReports([]);
       } finally {
         setLoading(false);
       }
@@ -40,16 +52,21 @@ export default function ReportsPage() {
   };
 
   const filteredReports = reports.filter(report => {
-    const matchesSearch = 
-      report.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      report.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      report.excerpt.toLowerCase().includes(searchQuery.toLowerCase());
+    try {
+      const matchesSearch = 
+        (report.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (report.role || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (report.excerpt || '').toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesCountry = 
-      selectedCountry === 'Worldwide' || 
-      report.country?.toLowerCase() === selectedCountry.toLowerCase();
+      const matchesCountry = 
+        selectedCountry === 'Worldwide' || 
+        (report.country || '').toLowerCase() === selectedCountry.toLowerCase();
 
-    return matchesSearch && matchesCountry;
+      return matchesSearch && matchesCountry;
+    } catch (err) {
+      console.error('Filter error for report:', report, err);
+      return false;
+    }
   });
 
   if (loading) {
@@ -59,6 +76,23 @@ export default function ReportsPage() {
         <span className="text-[10px] font-mono text-gray-500 tracking-widest uppercase">
           Compiling market intelligence...
         </span>
+      </div>
+    );
+  }
+
+  // ✅ Show error state
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
+        <Globe size={32} className="text-red-500 animate-pulse" />
+        <p className="text-white font-bold">Error Loading Reports</p>
+        <p className="text-xs text-gray-500">{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="px-4 py-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all"
+        >
+          Retry
+        </button>
       </div>
     );
   }
@@ -196,9 +230,8 @@ export default function ReportsPage() {
                   className="relative group"
                 >
                   <ReportCard report={report} />
-                  {/* Subtle chronological indicator using backend-formatted monthYear */}
                   <span className="absolute top-3 right-3 text-[8px] font-mono text-gray-500 bg-black/40 px-1.5 py-0.5 rounded pointer-events-none">
-                    {report.monthYear}
+                    {report.monthYear || 'Unknown'}
                   </span>
                 </motion.div>
               ))}
