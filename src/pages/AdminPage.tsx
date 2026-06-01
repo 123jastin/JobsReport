@@ -230,35 +230,41 @@ export default function AdminPage() {
 const fetchSystemData = async () => {
     setLoading(true);
     try {
-      // ✅ Fetch companies separately to ensure they load
       const [statsRes, marketRes, rolesRes, reportsRes, companiesRes] = await Promise.all([
         fetch('/api/admin/stats'),
         fetch('/api/market'),
         fetch('/api/admin/roles'),
         fetch('/api/reports'),
-        fetch('/api/companies')  // ✅ ADD THIS - Fetch companies directly
+        fetch('/api/companies')
       ]);
 
       if (statsRes.ok) {
         const statsData = await statsRes.json();
         setStats({
-          addedToday: statsData.addedToday,
-          activeJobs: statsData.activeJobs,
-          totalCompanies: statsData.totalCompanies,
-          lastUpdated: statsData.lastUpdated
+          addedToday: statsData.addedToday || 0,
+          activeJobs: statsData.activeJobs || 0,
+          totalCompanies: statsData.totalCompanies || 0,
+          lastUpdated: statsData.lastUpdated || 'Today'
         });
         setActivityLogs(statsData.recentActivity || []);
       }
 
       if (marketRes.ok) {
         const marketData = await marketRes.json();
-        setJobs(marketData.jobs || []);
+        console.log('Market data loaded:', marketData); // ✅ Debug log
         
-        // ✅ Set companies from market data OR from direct companies API
+        // ✅ Set jobs
+        if (marketData.jobs && Array.isArray(marketData.jobs)) {
+          setJobs(marketData.jobs);
+          console.log('Jobs loaded:', marketData.jobs.length); // ✅ Debug log
+        }
+        
+        // Set companies
         if (marketData.companies && marketData.companies.length > 0) {
           setCompaniesState(marketData.companies);
         }
         
+        // Set roles
         if (marketData.roles && marketData.roles.length > 0) {
           const roleDefinitions = marketData.roles.map((name: string, idx: number) => ({
             id: `role-${idx}`,
@@ -270,24 +276,22 @@ const fetchSystemData = async () => {
         }
       }
 
-      // ✅ ALWAYS load companies directly as fallback
-      if (companiesRes.ok) {
+      // Fallback: Load companies directly if not loaded
+      if (companiesRes.ok && companiesState.length === 0) {
         const companiesData = await companiesRes.json();
         if (companiesData && companiesData.length > 0) {
           setCompaniesState(companiesData);
         }
       }
 
-      if (rolesRes.ok) setRolesState(await rolesRes.json());
-      if (reportsRes.ok) setReportsState(await reportsRes.json());
+      if (rolesRes.ok) {
+        const rolesData = await rolesRes.json();
+        if (rolesData && rolesData.length > 0) {
+          setRolesState(rolesData);
+        }
+      }
       
-      // ✅ Debug log
-      console.log('System data loaded:', {
-        jobs: jobs.length,
-        companies: companiesState.length,
-        roles: rolesState.length,
-        reports: reportsState.length
-      });
+      if (reportsRes.ok) setReportsState(await reportsRes.json());
       
     } catch (err) {
       console.error("Failed to sync system parameters", err);
@@ -295,11 +299,12 @@ const fetchSystemData = async () => {
       setLoading(false);
     }
   };
-
-
+  
+    
+      
 
   
-  
+
 
   const showFeedback = (type: 'success' | 'error', text: string) => {
     setOperationMessage({ type, text });
