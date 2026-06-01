@@ -52,16 +52,16 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     
     const roles = rolesResult.results.map((r: any) => r.name);
 
-    // 3. Get all companies with website_url ✅
+    // 3. Get all companies with website (correct column)
     const companiesResult = await DB.prepare(`
-      SELECT id, name, logo_url, website_url FROM companies ORDER BY name
+      SELECT id, name, logo_url, website FROM companies ORDER BY name
     `).all();
 
     const companies = companiesResult.results.map((c: any) => ({
       id: c.id,
       name: c.name,
       logoUrl: c.logo_url || '',
-      url: c.website_url || ''
+      url: c.website || ''  // ✅ website, not website_url
     }));
 
     // 4. Get recent activity
