@@ -35,7 +35,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     
     if (!companyResult) {
       const companyId = 'comp-' + Date.now().toString(36);
-      // ✅ FIXED: website not website_url
       await DB.prepare('INSERT INTO companies (id, name, logo_url, website) VALUES (?, ?, ?, ?)')
         .bind(companyId, body.company?.trim(), '', body.url || '')
         .run();
@@ -58,7 +57,25 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       body.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     ).run();
 
-    // Return the created job with role and company names
+    // ✅ SAVE JOB IMAGES TO DATABASE
+    if (body.images && Array.isArray(body.images) && body.images.length > 0) {
+      console.log(`Saving ${body.images.length} images for job ${id}`);
+      for (let i = 0; i < body.images.length; i++) {
+        const img = body.images[i];
+        const imageId = 'img-' + Date.now().toString(36) + '-' + i + '-' + Math.random().toString(36).substring(2, 4);
+        try {
+          await DB.prepare(`
+            INSERT INTO job_images (id, job_id, url, name, sort_order)
+            VALUES (?, ?, ?, ?, ?)
+          `).bind(imageId, id, img.url, img.name, i).run();
+          console.log(`Saved image ${i + 1}: ${img.name}`);
+        } catch (imgErr) {
+          console.error(`Failed to save image ${i}:`, imgErr);
+        }
+      }
+    }
+
+    // Return the created job with images
     const createdJob = {
       id,
       title: body.title?.trim(),
@@ -69,7 +86,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       salary: body.salary || '',
       postedAt: new Date().toISOString().split('T')[0],
       expiresAt: body.expiresAt || '',
-      active: true
+      active: true,
+      images: body.images || []
     };
 
     console.log('Job created:', createdJob);
