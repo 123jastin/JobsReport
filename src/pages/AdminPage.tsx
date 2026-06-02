@@ -1547,15 +1547,16 @@ const handleDeleteJob = async (id: string) => {
                   </PieChart>
                 </ResponsiveContainer>
               </div>
+      
+<div className="grid grid-cols-2 gap-2 pt-2">
+  {getDynamicPieChartData().map((item, idx) => (
+    <div key={item.name} className="flex items-center gap-2 text-[10px] text-gray-400">
+      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: CHART_COLORS[idx % CHART_COLORS.length] }}></span>
+      <span className="truncate">{item.name} ({item.value})</span>
+    </div>
+  ))}
+</div>
               
-              <div className="grid grid-cols-2 gap-2 pt-2">
-                {getDynamicPieChartData().map((item, idx) => (
-                  <div key={item.name} className="flex items-center gap-2 text-[10px] text-gray-400">
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: CHART_COLORS[idx % CHAT_COLORS.length] }}></span>
-                    <span className="truncate">{item.name} ({item.value})</span>
-                  </div>
-                ))}
-              </div>
             </div>
 
           </div>
