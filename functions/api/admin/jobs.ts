@@ -2,11 +2,10 @@ import { PagesFunction } from '@cloudflare/workers-types';
 
 type Env = {
   DB: D1Database;
-  MEDIA_BUCKET: R2Bucket;
 };
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
-  const { DB, MEDIA_BUCKET } = context.env;
+  const { DB } = context.env;
 
   try {
     const body: any = await context.request.json();
@@ -57,59 +56,30 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       body.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     ).run();
 
-    // ✅ SAVE JOB IMAGES - Upload base64 to R2, save URLs to DB
+    // ✅ SAVE JOB IMAGES - URLs are already R2 URLs from /api/upload
     const savedImages: any[] = [];
     if (body.images && Array.isArray(body.images) && body.images.length > 0) {
-      console.log(`Processing ${body.images.length} images for job ${id}`);
+      console.log(`Saving ${body.images.length} images for job ${id}`);
       
       for (let i = 0; i < body.images.length; i++) {
         const img = body.images[i];
-        const imageId = 'img-' + Date.now().toString(36) + '-' + i;
+        const imageId = 'img-' + Date.now().toString(36) + '-' + i + '-' + Math.random().toString(36).substring(2, 4);
         
-        let originalUrl = img.url;
-        let thumbnailUrl = img.thumbnail || img.url;
+        const imageUrl = img.url || '';
+        const thumbnailUrl = img.thumbnail || img.url || '';
         
-        // Upload original to R2 if it's base64
-        if (img.url && img.url.startsWith('data:image')) {
-          try {
-            const base64Data = img.url.split(',')[1] || img.url;
-            const binaryData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
-            const filename = `job-original-${Date.now()}-${i}.webp`;
-            await MEDIA_BUCKET.put(filename, binaryData, {
-              httpMetadata: { contentType: 'image/webp' }
-            });
-            originalUrl = `https://media.jobsreport.online/${filename}`;
-            console.log(`Uploaded original to R2: ${filename}`);
-          } catch (r2Err) {
-            console.error('R2 original upload failed:', r2Err);
-          }
-        }
-        
-        // Upload thumbnail to R2 if it's base64
-        if (img.thumbnail && img.thumbnail.startsWith('data:image')) {
-          try {
-            const thumbData = img.thumbnail.split(',')[1] || img.thumbnail;
-            const thumbBinary = Uint8Array.from(atob(thumbData), c => c.charCodeAt(0));
-            const thumbFilename = `job-thumb-${Date.now()}-${i}.webp`;
-            await MEDIA_BUCKET.put(thumbFilename, thumbBinary, {
-              httpMetadata: { contentType: 'image/webp' }
-            });
-            thumbnailUrl = `https://media.jobsreport.online/${thumbFilename}`;
-            console.log(`Uploaded thumbnail to R2: ${thumbFilename}`);
-          } catch (r2Err) {
-            console.error('R2 thumbnail upload failed:', r2Err);
-          }
-        }
-        
-        // Save to database
         try {
           await DB.prepare(`
             INSERT INTO job_images (id, job_id, url, thumbnail_url, name, sort_order)
             VALUES (?, ?, ?, ?, ?, ?)
-          `).bind(imageId, id, originalUrl, thumbnailUrl, img.name, i).run();
+          `).bind(imageId, id, imageUrl, thumbnailUrl, img.name || 'image', i).run();
           
-          savedImages.push({ url: originalUrl, thumbnail: thumbnailUrl, name: img.name });
-          console.log(`Saved image ${i + 1} to DB: ${img.name}`);
+          savedImages.push({ 
+            url: imageUrl, 
+            thumbnail: thumbnailUrl, 
+            name: img.name || 'image' 
+          });
+          console.log(`Saved image ${i + 1}: ${img.name}`);
         } catch (dbErr) {
           console.error(`Failed to save image ${i}:`, dbErr);
         }
