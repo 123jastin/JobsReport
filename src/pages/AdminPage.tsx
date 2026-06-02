@@ -507,7 +507,6 @@ export default function AdminPage() {
   };
 
   // 1. Ingest Job Telemetry
-
 const handleIngestJob = async (e: FormEvent) => {
     e.preventDefault();
     
@@ -516,7 +515,7 @@ const handleIngestJob = async (e: FormEvent) => {
       : jobForm.companySelected;
 
     if (userRole === 'editor') {
-      showFeedback('error', 'PERMISSION DENIED: Editor permissions are strict. Editors cannot change the job index.');
+      showFeedback('error', 'PERMISSION DENIED.');
       return;
     }
 
@@ -528,19 +527,46 @@ const handleIngestJob = async (e: FormEvent) => {
     setActionLoading(true);
     try {
       if (duplicateWarning) {
-        showFeedback('error', 'Duplicate insertion blocked to ensure dynamic list purity.');
+        showFeedback('error', 'Duplicate insertion blocked.');
         setActionLoading(false);
         return;
       }
 
-      // ✅ Prepare images - send base64 data directly (backend will upload to R2)
-      const uploadedImages = uploadedJobImages.map(img => ({
-        url: img.url,           // Original base64
-        thumbnail: img.thumbnail, // Thumbnail base64
-        name: img.name
-      }));
+      // ✅ Upload images to R2 first using /api/upload
+      const uploadedImages: {url: string, thumbnail: string, name: string}[] = [];
+      
+      for (const img of uploadedJobImages) {
+        const imageData: {url: string, thumbnail: string, name: string} = {
+          url: img.url,
+          thumbnail: img.thumbnail,
+          name: img.name
+        };
 
-      console.log('Sending job with images:', uploadedImages.length);
+        // Upload original if it's a file
+        if (img.file) {
+          const originalFormData = new FormData();
+          originalFormData.append('file', img.file, img.name);
+          
+          const originalRes = await fetch('/api/upload', { method: 'POST', body: originalFormData });
+          if (originalRes.ok) {
+            const originalData = await originalRes.json();
+            imageData.url = originalData.url; // R2 URL
+          }
+          
+          // Upload thumbnail (convert base64 to blob)
+          const thumbBlob = await fetch(img.thumbnail).then(r => r.blob());
+          const thumbFormData = new FormData();
+          thumbFormData.append('file', thumbBlob, `thumb-${img.name}`);
+          
+          const thumbRes = await fetch('/api/upload', { method: 'POST', body: thumbFormData });
+          if (thumbRes.ok) {
+            const thumbData = await thumbRes.json();
+            imageData.thumbnail = thumbData.url; // R2 URL
+          }
+        }
+        
+        uploadedImages.push(imageData);
+      }
 
       const url = editingJobId ? `/api/admin/jobs/${editingJobId}` : '/api/admin/jobs';
       const method = editingJobId ? 'PUT' : 'POST';
@@ -557,13 +583,12 @@ const handleIngestJob = async (e: FormEvent) => {
           salary: jobForm.salary,
           country: selectedCountry,
           expiresAt: jobForm.expiresAt,
-          images: uploadedImages  // ✅ Send base64 images to backend
+          images: uploadedImages  // ✅ R2 URLs
         })
       });
 
       if (res.ok) {
         const addedJob = await res.json();
-        console.log('Job saved:', addedJob);
         
         if (editingJobId) {
           setJobs(prev => prev.map(j => j.id === editingJobId ? { ...j, ...addedJob } : j));
@@ -573,7 +598,6 @@ const handleIngestJob = async (e: FormEvent) => {
           showFeedback('success', `Ingested "${jobForm.title}" for ${targetCompany} successfully.`);
         }
         
-        // Reset form
         setJobForm({
           title: '',
           roleSelected: 'Software Developer',
@@ -594,7 +618,7 @@ const handleIngestJob = async (e: FormEvent) => {
         await fetchSystemData();
       } else {
         const errObj = await res.json();
-        showFeedback('error', `Operation block: ${errObj.message || 'Validation error'}`);
+        showFeedback('error', errObj.message || 'Validation error');
       }
     } catch (err) {
       showFeedback('error', 'Failed to communicate with job stream.');
@@ -603,9 +627,6 @@ const handleIngestJob = async (e: FormEvent) => {
       setActionLoading(false);
     }
   };
-
-
-
 
 
 
