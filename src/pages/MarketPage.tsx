@@ -307,6 +307,7 @@ export default function MarketPage() {
                 // ✅ Cast job to any to access images property
                 const jobWithImages = job as any;
                 const hasImages = jobWithImages.images && jobWithImages.images.length > 0;
+                const companyLogo = getCompanyLogo(job.company);
                 
                 return (
                   <motion.div
@@ -332,6 +333,10 @@ export default function MarketPage() {
                           src={jobWithImages.images[0].url} 
                           alt={jobWithImages.images[0].name || job.title || 'Job image'} 
                           className="w-full h-full object-cover group-hover/ad:scale-105 transition-transform duration-300"
+                          onError={(e) => {
+                            // Fallback if image fails to load
+                            (e.target as HTMLImageElement).src = 'https://via.placeholder.com/600x400?text=Image+Not+Available';
+                          }}
                         />
                         
                         {/* Show +N badge if multiple images */}
@@ -349,13 +354,26 @@ export default function MarketPage() {
                     )}
 
                     <div className="flex gap-4 items-start">
+                      {/* ✅ Company Logo Display with fallback */}
                       <div className="flex-shrink-0 w-12 h-12 rounded-2xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center p-0.5 mt-0.5">
-                        {getCompanyLogo(job.company) ? (
+                        {companyLogo ? (
                           <img 
-                            src={getCompanyLogo(job.company)} 
+                            src={companyLogo} 
                             alt={`${job.company} logo`} 
                             referrerPolicy="no-referrer"
                             className="w-full h-full object-cover rounded-xl"
+                            onError={(e) => {
+                              // Fallback if image fails to load (corrupt URL, broken link, etc.)
+                              (e.target as HTMLImageElement).style.display = 'none';
+                              // Show fallback text
+                              const parent = (e.target as HTMLImageElement).parentElement;
+                              if (parent) {
+                                const fallback = document.createElement('div');
+                                fallback.className = 'w-full h-full bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400 font-mono';
+                                fallback.textContent = job.company?.charAt(0).toUpperCase() || '?';
+                                parent.appendChild(fallback);
+                              }
+                            }}
                           />
                         ) : (
                           <div className="w-full h-full bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400 font-mono">
@@ -445,7 +463,7 @@ export default function MarketPage() {
         </Link>
       </div>
 
-      {/* ✅ Fullscreen Image Viewer (like Facebook) */}
+      {/* ✅ Fullscreen Image Viewer */}
       {selectedImage && (
         <div 
           className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center"
@@ -496,6 +514,10 @@ export default function MarketPage() {
             alt="Job listing" 
             className="max-w-full max-h-[85vh] object-contain"
             onClick={(e) => e.stopPropagation()}
+            onError={(e) => {
+              // Fallback if image fails in viewer
+              (e.target as HTMLImageElement).src = 'https://via.placeholder.com/800x600?text=Image+Load+Failed';
+            }}
           />
 
           {/* Next button */}
@@ -534,7 +556,7 @@ export default function MarketPage() {
             ))}
           </div>
 
-          {/* Swipe instruction */}
+          {/* Navigation instruction */}
           {imageList.length > 1 && (
             <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-50 text-white/50 text-xs font-mono">
               Tap arrows to navigate
