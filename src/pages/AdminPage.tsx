@@ -658,19 +658,26 @@ const handleIngestJob = async (e: FormEvent) => {
       return;
     }
 
-    if (!confirm("Are you sure you want to suspend this career telemetry listing?")) return;
+    if (!confirm("Are you sure you want to delete this job listing?")) return;
 
     try {
-      const res = await fetch(`/api/jobs/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/admin/jobs/${id}`, { method: 'DELETE' });  // ✅ Use admin endpoint
       if (res.ok) {
         setJobs(prev => prev.filter(j => j.id !== id));
-        showFeedback('success', 'Job record successfully purged from live indexes.');
+        showFeedback('success', 'Job record successfully purged.');
         fetchSystemData();
+      } else {
+        const errData = await res.json();
+        showFeedback('error', errData.message || 'Delete failed');
       }
     } catch (err) {
       showFeedback('error', 'Failed delete operation.');
     }
   };
+
+  
+        
+  
 
   // 2. Action: Corporate Node Management
   const handleCreateCompany = async (e: FormEvent) => {
