@@ -12,7 +12,7 @@ import {
   Filter,
   ArrowUpRight,
   AlertTriangle,
-  Eye  // ✅ Added Eye icon
+  Eye
 } from 'lucide-react';
 import { RawJob, Company } from '../types';
 import { Link, useSearchParams, useParams } from 'react-router-dom';
@@ -303,120 +303,128 @@ export default function MarketPage() {
             </motion.div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredJobs.map((job, idx) => (
-                <motion.div
-                  layout
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0, transition: { delay: Math.min(idx * 0.04, 0.4) } }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  key={job.id || idx}
-                  className="group p-5 bg-white/[0.01] border hover:bg-white/[0.03] border-white/5 rounded-3xl transition-all duration-300 flex flex-col justify-between"
-                >
-                  {/* ✅ Ad Banner / Image Carousel */}
-                  <div 
-                    className="relative w-full h-48 mb-3 rounded-2xl overflow-hidden bg-gradient-to-r from-blue-600/20 to-violet-600/20 border border-white/5 cursor-pointer group/ad"
-                    onClick={() => {
-                      // Example ad images - replace with real ad images
-                      const ads = [
-                        'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600',
-                        'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=600',
-                        'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=600'
-                      ];
-                      setImageList(ads);
-                      setCurrentImageIndex(0);
-                      setSelectedImage(ads[0]);
-                    }}
+              {filteredJobs.map((job, idx) => {
+                // ✅ Cast job to any to access images property
+                const jobWithImages = job as any;
+                const hasImages = jobWithImages.images && jobWithImages.images.length > 0;
+                
+                return (
+                  <motion.div
+                    layout
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0, transition: { delay: Math.min(idx * 0.04, 0.4) } }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    key={job.id || idx}
+                    className="group p-5 bg-white/[0.01] border hover:bg-white/[0.03] border-white/5 rounded-3xl transition-all duration-300 flex flex-col justify-between"
                   >
-                    <img 
-                      src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600" 
-                      alt="Advertisement" 
-                      className="w-full h-full object-cover group-hover/ad:scale-105 transition-transform duration-300"
-                    />
-                    <div className="absolute top-2 right-2 px-2 py-0.5 bg-black/60 backdrop-blur rounded-lg text-[8px] font-mono text-gray-300 uppercase tracking-wider">
-                      Sponsored
-                    </div>
-                    <div className="absolute bottom-2 left-2 px-2 py-0.5 bg-black/60 backdrop-blur rounded-lg text-[8px] font-mono text-blue-400 flex items-center gap-1">
-                      <Eye size={10} />
-                      Tap to view
-                    </div>
-                  </div>
-
-                  <div className="flex gap-4 items-start">
-                    <div className="flex-shrink-0 w-12 h-12 rounded-2xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center p-0.5 mt-0.5">
-                      {getCompanyLogo(job.company) ? (
+                    {/* ✅ Job Images from R2 - Only show if images exist */}
+                    {hasImages && (
+                      <div 
+                        className="relative w-full h-48 mb-3 rounded-2xl overflow-hidden bg-gradient-to-r from-blue-600/20 to-violet-600/20 border border-white/5 cursor-pointer group/ad"
+                        onClick={() => {
+                          const imgs = jobWithImages.images.map((img: any) => img.url);
+                          setImageList(imgs);
+                          setCurrentImageIndex(0);
+                          setSelectedImage(imgs[0]);
+                        }}
+                      >
                         <img 
-                          src={getCompanyLogo(job.company)} 
-                          alt={`${job.company} logo`} 
-                          referrerPolicy="no-referrer"
-                          className="w-full h-full object-cover rounded-xl"
+                          src={jobWithImages.images[0].url} 
+                          alt={jobWithImages.images[0].name || job.title || 'Job image'} 
+                          className="w-full h-full object-cover group-hover/ad:scale-105 transition-transform duration-300"
                         />
-                      ) : (
-                        <div className="w-full h-full bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400 font-mono">
-                          {job.company?.charAt(0).toUpperCase() || '?'}
+                        
+                        {/* Show +N badge if multiple images */}
+                        {jobWithImages.images.length > 1 && (
+                          <div className="absolute top-2 right-2 px-2 py-0.5 bg-black/60 backdrop-blur rounded-lg text-[8px] font-mono text-white font-bold">
+                            +{jobWithImages.images.length - 1}
+                          </div>
+                        )}
+                        
+                        <div className="absolute bottom-2 left-2 px-2 py-0.5 bg-black/60 backdrop-blur rounded-lg text-[8px] font-mono text-blue-400 flex items-center gap-1">
+                          <Eye size={10} />
+                          {`View ${jobWithImages.images.length > 1 ? jobWithImages.images.length + ' images' : 'image'}`}
                         </div>
-                      )}
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2 mb-2">
-                        <span className="px-2 py-0.5 rounded text-[8px] font-bold bg-blue-500/10 text-blue-400 font-mono tracking-widest uppercase">
-                          {job.role || 'Unknown'}
-                        </span>
-                        <span className="text-[10px] text-gray-500 font-mono flex items-center gap-1">
-                          <Clock size={11} />
-                          {job.postedAt || 'Recent'}
-                        </span>
                       </div>
+                    )}
 
-                      <h3 className="font-bold text-white text-base leading-tight group-hover:text-blue-400 transition-colors">
-                        {job.title}
-                      </h3>
-                      
-                      <div className="flex items-center gap-2 mt-2">
-                        <span className="text-xs text-gray-400 font-medium">{job.company}</span>
-                        {job.location && (
-                          <>
-                            <span className="text-gray-600 font-mono">•</span>
-                            <span className="text-xs text-gray-500 font-medium">{job.location}</span>
-                          </>
+                    <div className="flex gap-4 items-start">
+                      <div className="flex-shrink-0 w-12 h-12 rounded-2xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center p-0.5 mt-0.5">
+                        {getCompanyLogo(job.company) ? (
+                          <img 
+                            src={getCompanyLogo(job.company)} 
+                            alt={`${job.company} logo`} 
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover rounded-xl"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400 font-mono">
+                            {job.company?.charAt(0).toUpperCase() || '?'}
+                          </div>
                         )}
                       </div>
 
-                      {job.salary && (
-                        <span className="text-[10px] text-emerald-400 font-mono mt-1 block">
-                          {job.salary}
-                        </span>
-                      )}
-                    </div>
-                  </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <span className="px-2 py-0.5 rounded text-[8px] font-bold bg-blue-500/10 text-blue-400 font-mono tracking-widest uppercase">
+                            {job.role || 'Unknown'}
+                          </span>
+                          <span className="text-[10px] text-gray-500 font-mono flex items-center gap-1">
+                            <Clock size={11} />
+                            {job.postedAt || 'Recent'}
+                          </span>
+                        </div>
 
-                  <div className="flex items-center justify-between border-t border-white/5 pt-4 mt-6">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[10px] text-gray-500 font-mono uppercase tracking-widest">
-                        SIGNAL: JR-{job.id?.toString().slice(0, 4).toUpperCase() || '????'}
-                      </span>
-                      {job.expiresAt && (
-                        <span className="text-[9px] text-gray-500 font-mono">
-                          Expires: {job.expiresAt}
-                        </span>
-                      )}
+                        <h3 className="font-bold text-white text-base leading-tight group-hover:text-blue-400 transition-colors">
+                          {job.title}
+                        </h3>
+                        
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className="text-xs text-gray-400 font-medium">{job.company}</span>
+                          {job.location && (
+                            <>
+                              <span className="text-gray-600 font-mono">•</span>
+                              <span className="text-xs text-gray-500 font-medium">{job.location}</span>
+                            </>
+                          )}
+                        </div>
+
+                        {job.salary && (
+                          <span className="text-[10px] text-emerald-400 font-mono mt-1 block">
+                            {job.salary}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    
-                    <button 
-                      onClick={() => job.url && triggerRedirect(job.url, job.company, job.title)}
-                      disabled={!job.url}
-                      className={`px-3.5 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all border ${
-                        job.url 
-                          ? 'bg-blue-600/10 hover:bg-blue-600 text-blue-400 hover:text-white border-blue-500/20 hover:border-blue-500 cursor-pointer' 
-                          : 'bg-white/5 text-gray-600 border-white/5 cursor-not-allowed'
-                      }`}
-                    >
-                      <span>View Signal</span>
-                      <ExternalLink size={10} />
-                    </button>
-                  </div>
-                </motion.div>
-              ))}
+
+                    <div className="flex items-center justify-between border-t border-white/5 pt-4 mt-6">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[10px] text-gray-500 font-mono uppercase tracking-widest">
+                          SIGNAL: JR-{job.id?.toString().slice(0, 4).toUpperCase() || '????'}
+                        </span>
+                        {job.expiresAt && (
+                          <span className="text-[9px] text-gray-500 font-mono">
+                            Expires: {job.expiresAt}
+                          </span>
+                        )}
+                      </div>
+                      
+                      <button 
+                        onClick={() => job.url && triggerRedirect(job.url, job.company, job.title)}
+                        disabled={!job.url}
+                        className={`px-3.5 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all border ${
+                          job.url 
+                            ? 'bg-blue-600/10 hover:bg-blue-600 text-blue-400 hover:text-white border-blue-500/20 hover:border-blue-500 cursor-pointer' 
+                            : 'bg-white/5 text-gray-600 border-white/5 cursor-not-allowed'
+                        }`}
+                      >
+                        <span>View Signal</span>
+                        <ExternalLink size={10} />
+                      </button>
+                    </div>
+                  </motion.div>
+                );
+              })}
             </div>
           )}
         </AnimatePresence>
@@ -485,7 +493,7 @@ export default function MarketPage() {
           {/* Main Image */}
           <img 
             src={selectedImage} 
-            alt="Advertisement" 
+            alt="Job listing" 
             className="max-w-full max-h-[85vh] object-contain"
             onClick={(e) => e.stopPropagation()}
           />
@@ -529,7 +537,7 @@ export default function MarketPage() {
           {/* Swipe instruction */}
           {imageList.length > 1 && (
             <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-50 text-white/50 text-xs font-mono">
-              Scroll or tap arrows to navigate
+              Tap arrows to navigate
             </div>
           )}
         </div>
