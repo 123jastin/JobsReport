@@ -644,6 +644,11 @@ const handleToggleJobActive = async (id: string, currentStatus: boolean) => {
         setJobs(prev => prev.map(j => j.id === id ? { ...j, active: !currentStatus } : j));
         showFeedback('success', `Toggled job status.`);
         fetchSystemData();
+      }
+    } catch (err) {
+      showFeedback('error', 'Could not sync active parameter.');
+    }
+  };
  
 
 const handleDeleteJob = async (id: string) => {
