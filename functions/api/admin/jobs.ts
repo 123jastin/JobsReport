@@ -57,7 +57,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       body.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     ).run();
 
-    // ✅ SAVE JOB IMAGES WITH THUMBNAILS
+    // ✅ SAVE JOB IMAGES TO DATABASE
     if (body.images && Array.isArray(body.images) && body.images.length > 0) {
       console.log(`Saving ${body.images.length} images for job ${id}`);
       for (let i = 0; i < body.images.length; i++) {
@@ -65,16 +65,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         const imageId = 'img-' + Date.now().toString(36) + '-' + i + '-' + Math.random().toString(36).substring(2, 4);
         try {
           await DB.prepare(`
-            INSERT INTO job_images (id, job_id, url, thumbnail_url, name, sort_order)
-            VALUES (?, ?, ?, ?, ?, ?)
-          `).bind(
-            imageId, 
-            id, 
-            img.url,                          // Original R2 URL
-            img.thumbnail || img.url,         // ✅ Thumbnail R2 URL (falls back to original)
-            img.name, 
-            i
-          ).run();
+            INSERT INTO job_images (id, job_id, url, name, sort_order)
+            VALUES (?, ?, ?, ?, ?)
+          `).bind(imageId, id, img.url, img.name, i).run();
           console.log(`Saved image ${i + 1}: ${img.name}`);
         } catch (imgErr) {
           console.error(`Failed to save image ${i}:`, imgErr);
