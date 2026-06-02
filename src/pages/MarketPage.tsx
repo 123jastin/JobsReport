@@ -11,7 +11,8 @@ import {
   RefreshCw,
   Filter,
   ArrowUpRight,
-  AlertTriangle
+  AlertTriangle,
+  Eye  // ✅ Added Eye icon
 } from 'lucide-react';
 import { RawJob, Company } from '../types';
 import { Link, useSearchParams, useParams } from 'react-router-dom';
@@ -33,6 +34,11 @@ export default function MarketPage() {
   const { selectedCountry, setSelectedCountry, currentFlag } = useCountry();
   const { triggerRedirect } = useCareerRedirect();
   const { query } = useParams<{ query?: string }>();
+  
+  // ✅ Image viewer state
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [imageList, setImageList] = useState<string[]>([]);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
   
   // ✅ Load search query from URL path on page load
   useEffect(() => {
@@ -306,6 +312,35 @@ export default function MarketPage() {
                   key={job.id || idx}
                   className="group p-5 bg-white/[0.01] border hover:bg-white/[0.03] border-white/5 rounded-3xl transition-all duration-300 flex flex-col justify-between"
                 >
+                  {/* ✅ Ad Banner / Image Carousel */}
+                  <div 
+                    className="relative w-full h-48 mb-3 rounded-2xl overflow-hidden bg-gradient-to-r from-blue-600/20 to-violet-600/20 border border-white/5 cursor-pointer group/ad"
+                    onClick={() => {
+                      // Example ad images - replace with real ad images
+                      const ads = [
+                        'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600',
+                        'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=600',
+                        'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=600'
+                      ];
+                      setImageList(ads);
+                      setCurrentImageIndex(0);
+                      setSelectedImage(ads[0]);
+                    }}
+                  >
+                    <img 
+                      src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600" 
+                      alt="Advertisement" 
+                      className="w-full h-full object-cover group-hover/ad:scale-105 transition-transform duration-300"
+                    />
+                    <div className="absolute top-2 right-2 px-2 py-0.5 bg-black/60 backdrop-blur rounded-lg text-[8px] font-mono text-gray-300 uppercase tracking-wider">
+                      Sponsored
+                    </div>
+                    <div className="absolute bottom-2 left-2 px-2 py-0.5 bg-black/60 backdrop-blur rounded-lg text-[8px] font-mono text-blue-400 flex items-center gap-1">
+                      <Eye size={10} />
+                      Tap to view
+                    </div>
+                  </div>
+
                   <div className="flex gap-4 items-start">
                     <div className="flex-shrink-0 w-12 h-12 rounded-2xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center p-0.5 mt-0.5">
                       {getCompanyLogo(job.company) ? (
@@ -401,6 +436,104 @@ export default function MarketPage() {
           <ArrowUpRight size={12} />
         </Link>
       </div>
+
+      {/* ✅ Fullscreen Image Viewer (like Facebook) */}
+      {selectedImage && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center"
+          onClick={() => {
+            setSelectedImage(null);
+            setImageList([]);
+          }}
+        >
+          {/* Close button */}
+          <button 
+            onClick={() => {
+              setSelectedImage(null);
+              setImageList([]);
+            }}
+            className="absolute top-4 right-4 z-50 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+
+          {/* Image counter */}
+          <div className="absolute top-4 left-4 z-50 px-3 py-1.5 bg-black/60 backdrop-blur rounded-full text-white text-xs font-mono">
+            {currentImageIndex + 1} / {imageList.length}
+          </div>
+
+          {/* Previous button */}
+          {currentImageIndex > 0 && (
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                const newIndex = currentImageIndex - 1;
+                setCurrentImageIndex(newIndex);
+                setSelectedImage(imageList[newIndex]);
+              }}
+              className="absolute left-4 top-1/2 -translate-y-1/2 z-50 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="15 18 9 12 15 6"></polyline>
+              </svg>
+            </button>
+          )}
+
+          {/* Main Image */}
+          <img 
+            src={selectedImage} 
+            alt="Advertisement" 
+            className="max-w-full max-h-[85vh] object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+
+          {/* Next button */}
+          {currentImageIndex < imageList.length - 1 && (
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                const newIndex = currentImageIndex + 1;
+                setCurrentImageIndex(newIndex);
+                setSelectedImage(imageList[newIndex]);
+              }}
+              className="absolute right-4 top-1/2 -translate-y-1/2 z-50 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </button>
+          )}
+
+          {/* Dot indicators */}
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50 flex gap-2">
+            {imageList.map((_, index) => (
+              <button
+                key={index}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCurrentImageIndex(index);
+                  setSelectedImage(imageList[index]);
+                }}
+                className={`w-2 h-2 rounded-full transition-all ${
+                  index === currentImageIndex 
+                    ? 'bg-blue-500 w-4' 
+                    : 'bg-white/40 hover:bg-white/60'
+                }`}
+              />
+            ))}
+          </div>
+
+          {/* Swipe instruction */}
+          {imageList.length > 1 && (
+            <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-50 text-white/50 text-xs font-mono">
+              Scroll or tap arrows to navigate
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
