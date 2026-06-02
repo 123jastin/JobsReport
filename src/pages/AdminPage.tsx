@@ -344,11 +344,10 @@ export default function AdminPage() {
   };
 
   // --- LOGO / IMAGE LOCAL FILE UPLOADER TO BASE64 ---
-  const handleFileChange = (e: ChangeEvent<HTMLInputElement>, target: 'media' | 'company' | 'article') => {
+const handleFileChange = (e: ChangeEvent<HTMLInputElement>, target: 'media' | 'company' | 'article') => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Get approximate sizing
     const sizeKb = Math.round(file.size / 1024) + 'KB';
 
     const reader = new FileReader();
@@ -359,9 +358,10 @@ export default function AdminPage() {
         setSelectedFileSize(sizeKb);
         setMediaForm(prev => ({ ...prev, name: file.name }));
       } else if (target === 'company') {
+        // ✅ Store file reference for later compression
         setJobForm(prev => ({ ...prev, companyNewLogo: base64String }));
         setCompanyForm(prev => ({ ...prev, logoUrl: base64String }));
-        showFeedback('success', `Logo "${file.name}" cached successfully as inline Base64 artifact.`);
+        showFeedback('success', `Logo "${file.name}" cached. Will be compressed to WebP on save.`);
       } else if (target === 'article') {
         setNewRichMediaUrl(base64String);
         showFeedback('success', 'Article inline graphic cached to image buffer.');
@@ -369,6 +369,10 @@ export default function AdminPage() {
     };
     reader.readAsDataURL(file);
   };
+
+
+  
+
 
   // --- ACTION HANDLERS ---
 
