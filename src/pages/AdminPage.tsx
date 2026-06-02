@@ -2424,15 +2424,47 @@ export default function AdminPage() {
                 </div>
               ))}
 
-              {mediaAssets.length === 0 && (
-                <div className="col-span-3 text-center py-12 text-gray-500 font-mono text-xs">
-                  NO MEDIA IN INVENTORY VAULT Yet
-                </div>
-              )}
+      {/* REPORTS TAB */}
+      {activeTab === 'reports' && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
+          {/* Reports content here */}
+        </motion.div>
+      )}
+
+      {/* MEDIA TAB */}
+      {activeTab === 'media' && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            {/* Media form column */}
+            <div className="lg:col-span-5 space-y-6">
+              {/* Media form content */}
+            </div>
+
+            {/* Media catalog column */}
+            <div className="lg:col-span-7 space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {mediaAssets.map((asset) => (
+                  <div key={asset.id} className="...">
+                    {/* Media card content */}
+                  </div>
+                ))}
+
+                {mediaAssets.length === 0 && (
+                  <div className="col-span-3 text-center py-12 text-gray-500 font-mono text-xs">
+                    NO MEDIA IN INVENTORY VAULT Yet
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </motion.div>
       )}
-    </div>
-  );
-}
+    </div>  
+  );        
+}           
+
+
+
+
+
+
