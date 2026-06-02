@@ -65,9 +65,9 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'jobs' | 'companies' | 'roles' | 'reports' | 'media'>('dashboard');
   
   // Authentication Simulated Permission level
-  const [userRole, setUserRole] = useState<'admin' | 'editor'>('admin'); // admin = read/write anything, editor = read-only on jobs/companies/roles but full access on reports/media
+  const [userRole, setUserRole] = useState<'admin' | 'editor'>('admin');
 
-  // ✅ ADD THESE - Login form states
+  // Login form states
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -104,9 +104,9 @@ export default function AdminPage() {
     expiresAt: ''
   });
   
-  // ✅ JOB IMAGES STATES
+  // JOB IMAGES STATES
   const [jobImages, setJobImages] = useState<string[]>([]);
-  const [uploadedJobImages, setUploadedJobImages] = useState<{url: string, name: string, file?: File}[]>([]);
+  const [uploadedJobImages, setUploadedJobImages] = useState<{url: string, thumbnail: string, name: string, file: File}[]>([]);
   
   const [isCreatingNewCompanyInline, setIsCreatingNewCompanyInline] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
@@ -152,6 +152,10 @@ export default function AdminPage() {
   const [editingReportId, setEditingReportId] = useState<string | null>(null);
   const [editorMode, setEditorMode] = useState<'visual' | 'code' | 'preview'>('visual');
 
+  // ✅ EDIT STATES
+  const [editingCompanyId, setEditingCompanyId] = useState<string | null>(null);
+  const [editingJobId, setEditingJobId] = useState<string | null>(null);
+
   const isEditingRef = useRef(false);
   const visualEditorRef = useRef<HTMLDivElement>(null);
 
@@ -172,6 +176,37 @@ export default function AdminPage() {
 
   // --- PIPELINE RUN STATE ---
   const [pipelineFinishedInfo, setPipelineFinishedInfo] = useState<{ original: number; deduplicated: number } | null>(null);
+
+  // ✅ Generate thumbnail from image file
+  const generateThumbnail = (file: File, maxWidth: number = 400): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width;
+            width = maxWidth;
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx!.drawImage(img, 0, 0, width, height);
+          
+          const thumbnail = canvas.toDataURL('image/webp', 0.7);
+          resolve(thumbnail);
+        };
+        img.onerror = reject;
+        img.src = e.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
@@ -195,7 +230,6 @@ export default function AdminPage() {
     if (jobForm.title) {
       const lowerTitle = jobForm.title.toLowerCase().trim();
       
-      // Look up if any of our roles maps this
       let foundMatchingRole = '';
       for (const r of rolesState) {
         if (r.title.toLowerCase() === lowerTitle) {
@@ -215,7 +249,6 @@ export default function AdminPage() {
         setJobForm(prev => ({ ...prev, roleSelected: foundMatchingRole }));
       }
 
-      // Inline Duplicate warning check
       const duplicateExists = jobs.some(j => 
         j.title.toLowerCase().trim() === lowerTitle &&
         j.company.toLowerCase().trim() === (isCreatingNewCompanyInline ? jobForm.companyNewName.toLowerCase().trim() : jobForm.companySelected.toLowerCase().trim()) &&
@@ -308,29 +341,33 @@ export default function AdminPage() {
     }, 5000);
   };
 
-  // ✅ Handle multiple image upload for jobs
+  // ✅ Handle multiple image upload for jobs with thumbnails
   const handleJobImageUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
     setActionLoading(true);
-    const newImages: {url: string, name: string, file: File}[] = [];
+    const newImages: {url: string, thumbnail: string, name: string, file: File}[] = [];
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       
-      // Convert to base64 for preview
+      const thumbnail = await generateThumbnail(file, 400);
+      
       const reader = new FileReader();
       reader.onloadend = () => {
-        const base64String = reader.result as string;
-        newImages.push({ url: base64String, name: file.name, file });
+        const originalUrl = reader.result as string;
+        newImages.push({ 
+          url: originalUrl, 
+          thumbnail: thumbnail,
+          name: file.name, 
+          file 
+        });
         
-        // When all files processed
         if (newImages.length === files.length) {
           setUploadedJobImages(prev => [...prev, ...newImages]);
-          setJobImages(prev => [...prev, ...newImages.map(img => img.url)]);
           setActionLoading(false);
-          showFeedback('success', `${files.length} image(s) added to job listing`);
+          showFeedback('success', `${files.length} image(s) with thumbnails ready`);
         }
       };
       reader.readAsDataURL(file);
@@ -343,8 +380,62 @@ export default function AdminPage() {
     setJobImages(prev => prev.filter((_, i) => i !== index));
   };
 
+  // ✅ Load job for editing
+  const handleEditJob = (job: RawJob) => {
+    setEditingJobId(job.id);
+    setJobForm({
+      title: job.title,
+      roleSelected: job.role,
+      companySelected: job.company,
+      companyNewName: '',
+      companyNewUrl: '',
+      companyNewLogo: '',
+      location: job.location || '',
+      url: job.url || '',
+      salary: job.salary || '',
+      expiresAt: job.expiresAt || ''
+    });
+    window.scrollTo({ top: 300, behavior: 'smooth' });
+  };
+
+  // ✅ Cancel editing job
+  const handleCancelEditJob = () => {
+    setEditingJobId(null);
+    setJobForm({
+      title: '',
+      roleSelected: 'Software Developer',
+      companySelected: '',
+      companyNewName: '',
+      companyNewUrl: '',
+      companyNewLogo: '',
+      location: '',
+      url: '',
+      salary: '',
+      expiresAt: ''
+    });
+    setUploadedJobImages([]);
+    setJobImages([]);
+  };
+
+  // ✅ Load company for editing
+  const handleEditCompany = (company: Company) => {
+    setEditingCompanyId(company.id);
+    setCompanyForm({
+      name: company.name,
+      url: company.url || '',
+      logoUrl: company.logoUrl || ''
+    });
+    window.scrollTo({ top: 300, behavior: 'smooth' });
+  };
+
+  // ✅ Cancel editing company
+  const handleCancelEditCompany = () => {
+    setEditingCompanyId(null);
+    setCompanyForm({ name: '', url: '', logoUrl: '' });
+  };
+
   // --- LOGO / IMAGE LOCAL FILE UPLOADER TO BASE64 ---
-const handleFileChange = (e: ChangeEvent<HTMLInputElement>, target: 'media' | 'company' | 'article') => {
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>, target: 'media' | 'company' | 'article') => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -358,10 +449,9 @@ const handleFileChange = (e: ChangeEvent<HTMLInputElement>, target: 'media' | 'c
         setSelectedFileSize(sizeKb);
         setMediaForm(prev => ({ ...prev, name: file.name }));
       } else if (target === 'company') {
-        // ✅ Store file reference for later compression
         setJobForm(prev => ({ ...prev, companyNewLogo: base64String }));
         setCompanyForm(prev => ({ ...prev, logoUrl: base64String }));
-        showFeedback('success', `Logo "${file.name}" cached. Will be compressed to WebP on save.`);
+        showFeedback('success', `Logo "${file.name}" cached successfully as inline Base64 artifact.`);
       } else if (target === 'article') {
         setNewRichMediaUrl(base64String);
         showFeedback('success', 'Article inline graphic cached to image buffer.');
@@ -369,12 +459,6 @@ const handleFileChange = (e: ChangeEvent<HTMLInputElement>, target: 'media' | 'c
     };
     reader.readAsDataURL(file);
   };
-
-
-  
-
-
-  // --- ACTION HANDLERS ---
 
   // 1. Ingest Job Telemetry
   const handleIngestJob = async (e: FormEvent) => {
@@ -396,14 +480,47 @@ const handleFileChange = (e: ChangeEvent<HTMLInputElement>, target: 'media' | 'c
 
     setActionLoading(true);
     try {
-      if (duplicateWarning) {
+      if (duplicateWarning && !editingJobId) {
         showFeedback('error', 'Duplicate insertion blocked to ensure dynamic list purity.');
         setActionLoading(false);
         return;
       }
 
-      const res = await fetch('/api/admin/jobs', {
-        method: 'POST',
+      // Upload images to R2 and get URLs
+      const uploadedImages = [];
+      for (const img of uploadedJobImages) {
+        try {
+          const originalFormData = new FormData();
+          const originalBlob = await fetch(img.url).then(r => r.blob());
+          originalFormData.append('file', originalBlob, img.name);
+          originalFormData.append('name', `job-original-${Date.now()}-${img.name}`);
+          
+          const originalRes = await fetch('/api/upload', { method: 'POST', body: originalFormData });
+          const originalData = await originalRes.json();
+          
+          const thumbFormData = new FormData();
+          const thumbBlob = await fetch(img.thumbnail).then(r => r.blob());
+          thumbFormData.append('file', thumbBlob, `thumb-${img.name}`);
+          thumbFormData.append('name', `job-thumb-${Date.now()}-${img.name}`);
+          
+          const thumbRes = await fetch('/api/upload', { method: 'POST', body: thumbFormData });
+          const thumbData = await thumbRes.json();
+          
+          uploadedImages.push({
+            url: originalData.url,
+            thumbnail: thumbData.url,
+            name: img.name
+          });
+        } catch (uploadErr) {
+          console.error('Failed to upload image:', uploadErr);
+        }
+      }
+
+      const url = editingJobId ? `/api/admin/jobs/${editingJobId}` : '/api/admin/jobs';
+      const method = editingJobId ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: jobForm.title,
@@ -414,18 +531,22 @@ const handleFileChange = (e: ChangeEvent<HTMLInputElement>, target: 'media' | 'c
           salary: jobForm.salary,
           country: selectedCountry,
           expiresAt: jobForm.expiresAt,
-          images: uploadedJobImages  // ✅ Add images to submission
+          images: uploadedImages
         })
       });
 
       if (res.ok) {
-        const addedJob = await res.json();
-        console.log('Job added:', addedJob);
+        const savedJob = await res.json();
+        console.log('Job saved:', savedJob);
         
-        setJobs(prev => [addedJob, ...prev]);
-        showFeedback('success', `Ingested "${jobForm.title}" for ${targetCompany} successfully.`);
+        if (editingJobId) {
+          setJobs(prev => prev.map(j => j.id === editingJobId ? savedJob : j));
+          showFeedback('success', `Updated "${jobForm.title}" successfully.`);
+        } else {
+          setJobs(prev => [savedJob, ...prev]);
+          showFeedback('success', `Ingested "${jobForm.title}" for ${targetCompany} successfully.`);
+        }
         
-        // Reset form
         setJobForm({
           title: '',
           roleSelected: 'Software Developer',
@@ -439,10 +560,9 @@ const handleFileChange = (e: ChangeEvent<HTMLInputElement>, target: 'media' | 'c
           expiresAt: ''
         });
         setIsCreatingNewCompanyInline(false);
-        
-        // ✅ Reset images
         setUploadedJobImages([]);
         setJobImages([]);
+        setEditingJobId(null);
         
         await fetchSystemData();
       } else {
@@ -500,42 +620,7 @@ const handleFileChange = (e: ChangeEvent<HTMLInputElement>, target: 'media' | 'c
   };
 
   // 2. Action: Corporate Node Management
-
-// ✅ Compress image to WebP format
-const compressToWebP = (file: File, maxWidth: number = 200): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-        
-        // Resize if too large
-        if (width > maxWidth) {
-          height = (height * maxWidth) / width;
-          width = maxWidth;
-        }
-        
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx!.drawImage(img, 0, 0, width, height);
-        
-        // Convert to WebP with 0.8 quality
-        const webpBase64 = canvas.toDataURL('image/webp', 0.8);
-        resolve(webpBase64);
-      };
-      img.onerror = reject;
-      img.src = e.target?.result as string;
-    };
-    reader.readAsDataURL(file);
-  });
-};
-
-// ✅ Updated handleCreateCompany with WebP compression
-const handleCreateCompany = async (e: FormEvent) => {
+  const handleCreateCompany = async (e: FormEvent) => {
     e.preventDefault();
     if (!companyForm.name) return;
 
@@ -544,48 +629,50 @@ const handleCreateCompany = async (e: FormEvent) => {
       return;
     }
 
-    const duplicateExists = companiesState.some(
-      c => c.name.toLowerCase() === companyForm.name.toLowerCase().trim()
-    );
-
-    if (duplicateExists) {
-      showFeedback('error', `Company "${companyForm.name}" already exists in the corporate catalog.`);
-      return;
+    if (!editingCompanyId) {
+      const duplicateExists = companiesState.some(
+        c => c.name.toLowerCase() === companyForm.name.toLowerCase().trim()
+      );
+      if (duplicateExists) {
+        showFeedback('error', `Company "${companyForm.name}" already exists.`);
+        return;
+      }
     }
 
     setActionLoading(true);
     try {
-      // ✅ Compress logo to WebP if it's a file
       let logoUrl = companyForm.logoUrl;
-      if (logoUrl && logoUrl.startsWith('data:image')) {
-        // Get the original file from the input
-        const fileInput = document.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement;
-        const file = fileInput?.files?.[0];
-        if (file) {
-          // Compress silently
-          logoUrl = await compressToWebP(file, 200);
-        }
-      }
 
-      const res = await fetch('/api/admin/companies', {
-        method: 'POST',
+      const url = editingCompanyId 
+        ? `/api/admin/companies/${editingCompanyId}` 
+        : '/api/admin/companies';
+      const method = editingCompanyId ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: companyForm.name.trim(),
           url: companyForm.url,
-          logoUrl: logoUrl  // ✅ Send compressed WebP
+          logoUrl: logoUrl
         })
       });
       
       if (res.ok) {
-        const added = await res.json();
-        setCompaniesState(prev => [...prev, added]);
+        const data = await res.json();
+        if (editingCompanyId) {
+          setCompaniesState(prev => prev.map(c => c.id === editingCompanyId ? { ...c, ...data } : c));
+          showFeedback('success', `Updated ${companyForm.name}.`);
+        } else {
+          setCompaniesState(prev => [...prev, data]);
+          showFeedback('success', `Created ${companyForm.name}.`);
+        }
         setCompanyForm({ name: '', url: '', logoUrl: '' });
-        showFeedback('success', `Created corporate profile for ${companyForm.name}.`);
+        setEditingCompanyId(null);
         fetchSystemData();
       } else {
         const errData = await res.json();
-        showFeedback('error', errData.error || 'Failed to create company');
+        showFeedback('error', errData.error || 'Failed to save company');
       }
     } catch (err) {
       showFeedback('error', 'Error establishing corporate database reference.');
@@ -593,12 +680,6 @@ const handleCreateCompany = async (e: FormEvent) => {
       setActionLoading(false);
     }
   };
-
-
-
-
-
-    
 
   const handleDeleteCompany = async (id: string) => {
     if (userRole === 'editor') {
@@ -912,8 +993,7 @@ const handleCreateCompany = async (e: FormEvent) => {
     }
   };
 
-  // --- REPORTS MANAGER ACTIONS ---
-  const handleLoadReportToEdit = (rep: Report) => {
+  // --- REPORTS MANAGER ACTIONS ---  const handleLoadReportToEdit = (rep: Report) => {
     setEditingReportId(rep.id);
     setReportForm({
       title: rep.title,
@@ -1085,7 +1165,7 @@ const handleCreateCompany = async (e: FormEvent) => {
     return parsedArray;
   };
 
-  // ✅ SHOW LOGIN FORM IF NOT AUTHENTICATED
+  // SHOW LOGIN FORM IF NOT AUTHENTICATED
   if (!isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
@@ -1157,11 +1237,11 @@ const handleCreateCompany = async (e: FormEvent) => {
     );
   }
 
-  // ✅ MAIN ADMIN DASHBOARD (shown only when authenticated)
+  // MAIN ADMIN DASHBOARD (shown only when authenticated)
   return (
     <div className="space-y-8 pb-12 mt-4 text-white">
       
-      {/* 🔐 Admin & Editor Permissions Banner Toggle */}
+      {/* Admin & Editor Permissions Banner Toggle */}
       <div className="p-4 bg-orange-950/20 border border-orange-500/20 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="p-2 h-10 w-10 flex items-center justify-center bg-orange-500/10 text-orange-400 rounded-full border border-orange-500/25">
@@ -1199,7 +1279,7 @@ const handleCreateCompany = async (e: FormEvent) => {
         </div>
       </div>
 
-      {/* 🔮 Active Feedback Toast Marker */}
+      {/* Active Feedback Toast Marker */}
       <AnimatePresence>
         {operationMessage && (
           <motion.div 
@@ -1354,7 +1434,6 @@ const handleCreateCompany = async (e: FormEvent) => {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            
             <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl lg:col-span-8 space-y-4">
               <p className="text-xs font-bold text-white uppercase tracking-widest font-mono flex items-center gap-2">
                 <span className="w-1.5 h-3 bg-blue-500"></span> Sector Ingestion distribution (Live Telemetry Indices)
@@ -1408,11 +1487,9 @@ const handleCreateCompany = async (e: FormEvent) => {
                 ))}
               </div>
             </div>
-
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            
             <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
               <p className="text-xs font-bold text-white uppercase tracking-widest font-mono flex items-center gap-2">
                 <Flame size={14} className="text-amber-500" /> Active Trending roles (Automatic priority Matrix)
@@ -1481,14 +1558,12 @@ const handleCreateCompany = async (e: FormEvent) => {
                 </button>
               </div>
             </div>
-
           </div>
-
         </motion.div>
       )}
 
       {/* ---------------------------------------------------- */}
-      {/* 📥 TAB 2: JOB INPUT SYSTEM WITH IMAGE UPLOAD */}
+      {/* 📥 TAB 2: JOB INPUT SYSTEM WITH IMAGE UPLOAD & EDIT */}
       {/* ---------------------------------------------------- */}
       {activeTab === 'jobs' && (
         <motion.div 
@@ -1496,19 +1571,17 @@ const handleCreateCompany = async (e: FormEvent) => {
           animate={{ opacity: 1 }}
           className="grid grid-cols-1 lg:grid-cols-12 gap-8"
         >
-          {/* Main insertion form */}
           <div className="lg:col-span-5 space-y-6">
             <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-5">
               <div>
                 <h3 className="text-base font-extrabold uppercase tracking-widest flex items-center gap-1.5 font-sans text-stone-100">
-                  <Briefcase size={16} className="text-blue-500" /> Ingest Real-Time Placement
+                  <Briefcase size={16} className="text-blue-500" /> 
+                  {editingJobId ? "Edit Placement" : "Ingest Real-Time Placement"}
                 </h3>
                 <p className="text-xs text-gray-500 mt-1">Automatic categorizations are applied based on keyword matching logic.</p>
               </div>
 
               <form onSubmit={handleIngestJob} className="space-y-4">
-                
-                {/* Job title */}
                 <div className="space-y-1">
                   <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Job Title</label>
                   <input 
@@ -1521,7 +1594,6 @@ const handleCreateCompany = async (e: FormEvent) => {
                   />
                 </div>
 
-                {/* Automation highlight indicator */}
                 {jobForm.title && (
                   <div className="p-3 rounded-xl bg-blue-950/20 border border-blue-500/20 text-[10px] font-mono leading-relaxed space-y-1">
                     <div className="flex items-center gap-1.5 text-blue-400 uppercase font-extrabold">
@@ -1533,8 +1605,7 @@ const handleCreateCompany = async (e: FormEvent) => {
                   </div>
                 )}
 
-                {/* Duplicate block status */}
-                {duplicateWarning && (
+                {duplicateWarning && !editingJobId && (
                   <div className="p-3 rounded-xl bg-red-950/20 border border-red-500/20 text-[10px] font-mono leading-relaxed space-y-1">
                     <div className="flex items-center gap-1.5 text-red-400 uppercase font-extrabold">
                       <AlertCircle size={12} /> DUPLICATE WARNING MATCH
@@ -1543,19 +1614,20 @@ const handleCreateCompany = async (e: FormEvent) => {
                   </div>
                 )}
 
-                {/* Company Selection Mode Toggle */}
                 <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-2">
                   <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Company Source</label>
-                  <button 
-                    type="button" 
-                    onClick={() => setIsCreatingNewCompanyInline(!isCreatingNewCompanyInline)}
-                    className="text-[9px] font-mono font-bold text-blue-500 uppercase flex items-center gap-1 hover:text-blue-400"
-                  >
-                    {isCreatingNewCompanyInline ? "Select Existing Node" : "Create New Corporate Spot inline"}
-                  </button>
+                  {!editingJobId && (
+                    <button 
+                      type="button" 
+                      onClick={() => setIsCreatingNewCompanyInline(!isCreatingNewCompanyInline)}
+                      className="text-[9px] font-mono font-bold text-blue-500 uppercase flex items-center gap-1 hover:text-blue-400"
+                    >
+                      {isCreatingNewCompanyInline ? "Select Existing Node" : "Create New Corporate Spot inline"}
+                    </button>
+                  )}
                 </div>
 
-                {isCreatingNewCompanyInline ? (
+                {isCreatingNewCompanyInline && !editingJobId ? (
                   <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl space-y-4">
                     <div className="space-y-1">
                       <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">New Company Name</label>
@@ -1612,7 +1684,6 @@ const handleCreateCompany = async (e: FormEvent) => {
                   </div>
                 )}
 
-                {/* Category overriding */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Default Role Match</label>
@@ -1675,13 +1746,12 @@ const handleCreateCompany = async (e: FormEvent) => {
                   />
                 </div>
 
-                {/* ✅ Job Images Upload Section */}
+                {/* Job Images Upload Section */}
                 <div className="space-y-2 border-t border-white/5 pt-4 mt-2">
                   <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">
                     Job Listing Images / Ad Banners
                   </label>
                   
-                  {/* Upload Button */}
                   <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-white/10 hover:border-blue-500/30 rounded-2xl cursor-pointer transition-all group">
                     <input 
                       type="file" 
@@ -1698,13 +1768,12 @@ const handleCreateCompany = async (e: FormEvent) => {
                     </span>
                   </label>
 
-                  {/* Image Preview Grid */}
                   {uploadedJobImages.length > 0 && (
                     <div className="grid grid-cols-3 gap-2 mt-2">
                       {uploadedJobImages.map((img, index) => (
                         <div key={index} className="relative group/img rounded-xl overflow-hidden border border-white/5">
                           <img 
-                            src={img.url} 
+                            src={img.thumbnail} 
                             alt={img.name} 
                             className="w-full h-20 object-cover"
                           />
@@ -1722,20 +1791,26 @@ const handleCreateCompany = async (e: FormEvent) => {
                       ))}
                     </div>
                   )}
-                  
-                  <p className="text-[9px] text-gray-500 font-mono">
-                    Upload banner images for this job listing. First image will be the main banner.
-                  </p>
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={actionLoading || !!duplicateWarning}
-                  className="w-full py-3.5 mt-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-500 text-stone-100 font-extrabold text-[11px] uppercase tracking-widest rounded-2xl transition-all shadow-md shadow-blue-500/10 cursor-pointer"
-                >
-                  {actionLoading ? "Processing Database insertion..." : "COMMIT PLACEMENT TELEMETRY"}
-                </button>
-
+                <div className="flex gap-2">
+                  {editingJobId && (
+                    <button
+                      type="button"
+                      onClick={handleCancelEditJob}
+                      className="flex-1 py-3 bg-white/5 border border-white/10 text-stone-300 font-extrabold text-[11px] uppercase rounded-2xl"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={actionLoading || (!!duplicateWarning && !editingJobId)}
+                    className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-500 text-stone-100 font-extrabold text-[11px] uppercase rounded-2xl"
+                  >
+                    {actionLoading ? "Processing..." : editingJobId ? "UPDATE" : "PUBLISH"}
+                  </button>
+                </div>
               </form>
             </div>
           </div>
@@ -1746,106 +1821,115 @@ const handleCreateCompany = async (e: FormEvent) => {
               <span className="text-xs font-bold text-white uppercase tracking-widest font-mono flex items-center gap-2">
                 <Database size={13} className="text-blue-500" /> Real-Time placements directory ({jobs.length} total)
               </span>
-              <span className="text-[10px] text-gray-500 font-mono">
-                <button
-                  onClick={fetchSystemData}
-                  className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all"
-                >
-                  <RefreshCw size={12} />
-                  Refresh
-                </button>
-              </span>
+              <button
+                onClick={fetchSystemData}
+                className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all"
+              >
+                <RefreshCw size={12} />
+                Refresh
+              </button>
             </div>
 
-            <div className="bg-white/[0.01] border border-white/5 rounded-3xl overflow-hidden divide-y divide-white/5 max-h-[600px] overflow-y-auto scrollbar-none">
-              
-              {jobs.map((job) => (
-                <div 
-                  key={job.id}
-                  className="p-4 flex items-center justify-between gap-4 hover:bg-white/[0.02] transition-colors"
-                >
-                  <div className="space-y-1 min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-xs font-bold text-stone-100 truncate">{job.title}</span>
-                      <span className="px-1.5 py-0.5 rounded text-[8px] bg-white/5 text-gray-400 font-mono">
-                        {job.role}
-                      </span>
-                      {job.salary && (
-                        <span className="text-[9px] text-emerald-400 font-mono font-bold">
-                          {job.salary}
+            <div className="bg-white/[0.01] border border-white/5 rounded-3xl overflow-hidden divide-y divide-white/5 max-h-[600px] overflow-y-auto">
+              {jobs.map((job) => {
+                const jobWithImages = job as any;
+                const hasImages = jobWithImages.images && jobWithImages.images.length > 0;
+                
+                return (
+                  <div 
+                    key={job.id}
+                    className="p-4 flex items-center justify-between gap-4 hover:bg-white/[0.02] transition-colors"
+                  >
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs font-bold text-stone-100 truncate">{job.title}</span>
+                        <span className="px-1.5 py-0.5 rounded text-[8px] bg-white/5 text-gray-400 font-mono">
+                          {job.role}
                         </span>
-                      )}
-                    </div>
-                    
-                    <div className="flex items-center gap-3 text-[10px] text-gray-500 flex-wrap">
-                      <span className="flex items-center gap-1">
-                        <Building2 size={11} />
-                        {job.company}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <MapPin size={11} />
-                        {job.location}
-                      </span>
-                      <span className="font-mono text-[9px] bg-blue-500/10 text-blue-400 px-1 rounded">
-                        JR-{job.id.toUpperCase().slice(0, 4)}
-                      </span>
-                      {job.expiresAt && (
-                        <span className={`font-mono text-[9px] px-1 rounded ${
-                          job.expiresAt < new Date().toISOString().split('T')[0]
-                            ? 'bg-red-500/10 text-red-500/90 font-bold' 
-                            : 'bg-violet-500/10 text-violet-400 font-bold'
-                        }`}>
-                          Expires: {job.expiresAt}
-                        </span>
-                      )}
-                    </div>
-                    
-                    {/* Show image count if available */}
-                    {(job as any).images && (job as any).images.length > 0 && (
-                      <div className="flex items-center gap-1 mt-1">
-                        <ImageIcon size={10} className="text-blue-400" />
-                        <span className="text-[8px] text-gray-500 font-mono">
-                          {(job as any).images.length} image(s)
-                        </span>
+                        {job.salary && (
+                          <span className="text-[9px] text-emerald-400 font-mono font-bold">
+                            {job.salary}
+                          </span>
+                        )}
                       </div>
-                    )}
-                  </div>
+                      
+                      <div className="flex items-center gap-3 text-[10px] text-gray-500 flex-wrap">
+                        <span className="flex items-center gap-1">
+                          <Building2 size={11} />
+                          {job.company}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <MapPin size={11} />
+                          {job.location}
+                        </span>
+                        <span className="font-mono text-[9px] bg-blue-500/10 text-blue-400 px-1 rounded">
+                          JR-{job.id?.toString().slice(0, 4).toUpperCase() || '????'}
+                        </span>
+                        {job.expiresAt && (
+                          <span className={`font-mono text-[9px] px-1 rounded ${
+                            job.expiresAt < new Date().toISOString().split('T')[0]
+                              ? 'bg-red-500/10 text-red-500/90 font-bold' 
+                              : 'bg-violet-500/10 text-violet-400 font-bold'
+                          }`}>
+                            Expires: {job.expiresAt}
+                          </span>
+                        )}
+                      </div>
+                      
+                      {hasImages && (
+                        <div className="flex items-center gap-1 mt-1">
+                          <ImageIcon size={10} className="text-blue-400" />
+                          <span className="text-[8px] text-gray-500 font-mono">
+                            {jobWithImages.images.length} image(s)
+                          </span>
+                        </div>
+                      )}
+                    </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={() => handleToggleJobActive(job.id, job.active)}
-                      className={`px-2 py-1 rounded text-[8px] font-mono tracking-widest uppercase font-bold border transition-all ${
-                        job.active 
-                          ? 'bg-green-500/10 text-green-400 border-green-500/20' 
-                          : 'bg-stone-800 text-gray-500 border-transparent'
-                      }`}
-                      title={job.active ? "Click to set Offline" : "Click to set Active"}
-                    >
-                      {job.active ? "● ACTIVE" : "○ OFFLINE"}
-                    </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => handleEditJob(job)}
+                        className="p-2 bg-blue-500/10 hover:bg-blue-500/25 text-blue-400 rounded-xl transition-colors"
+                        title="Edit Job"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                      </button>
 
-                    <button
-                      onClick={() => handleDeleteJob(job.id)}
-                      className="p-2 bg-red-500/10 hover:bg-red-500/25 text-red-400 rounded-xl transition-all"
-                      title="Purge Listing"
-                    >
-                      <Trash2 size={13} />
-                    </button>
+                      <button
+                        onClick={() => handleToggleJobActive(job.id, job.active)}
+                        className={`px-2 py-1 rounded text-[8px] font-mono tracking-widest uppercase font-bold border transition-all ${
+                          job.active 
+                            ? 'bg-green-500/10 text-green-400 border-green-500/20' 
+                            : 'bg-stone-800 text-gray-500 border-transparent'
+                        }`}
+                      >
+                        {job.active ? "● ACTIVE" : "○ OFFLINE"}
+                      </button>
+
+                      <button
+                        onClick={() => handleDeleteJob(job.id)}
+                        className="p-2 bg-red-500/10 hover:bg-red-500/25 text-red-400 rounded-xl transition-all"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
 
               {jobs.length === 0 && (
                 <p className="text-xs text-gray-500 font-mono text-center py-12">DATABASE COLD-START IN PROGRESS</p>
               )}
-
             </div>
           </div>
         </motion.div>
       )}
 
       {/* ---------------------------------------------------- */}
-      {/* 🏢 TAB 3: COMPANY MANAGEMENT */}
+      {/* 🏢 TAB 3: COMPANY MANAGEMENT WITH EDIT */}
       {/* ---------------------------------------------------- */}
       {activeTab === 'companies' && (
         <motion.div 
@@ -1857,13 +1941,13 @@ const handleCreateCompany = async (e: FormEvent) => {
             <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
               <div>
                 <h3 className="text-base font-extrabold uppercase tracking-widest flex items-center gap-1.5 font-sans text-stone-100">
-                  <Building2 size={16} className="text-blue-500" /> Establish Corporate Spotlight Node
+                  <Building2 size={16} className="text-blue-500" /> 
+                  {editingCompanyId ? "Edit Corporate Spotlight" : "Establish Corporate Spotlight Node"}
                 </h3>
                 <p className="text-xs text-gray-500 mt-1">Manual company profile initialization for Spotlight visualization panels.</p>
               </div>
 
               <form onSubmit={handleCreateCompany} className="space-y-4">
-                
                 <div className="space-y-1">
                   <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Company Title</label>
                   <input 
@@ -1903,14 +1987,24 @@ const handleCreateCompany = async (e: FormEvent) => {
                   </div>
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={actionLoading}
-                  className="w-full py-3.5 mt-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-500 text-stone-100 font-extrabold text-[11px] uppercase tracking-widest rounded-2xl transition-all cursor-pointer"
-                >
-                  {actionLoading ? "Uploading node parameters..." : "PUBLISH CORPORATE DOMAIN NODE"}
-                </button>
-
+                <div className="flex gap-2">
+                  {editingCompanyId && (
+                    <button
+                      type="button"
+                      onClick={handleCancelEditCompany}
+                      className="flex-1 py-3 bg-white/5 border border-white/10 text-stone-300 font-extrabold text-[11px] uppercase rounded-2xl"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={actionLoading}
+                    className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-stone-100 font-extrabold text-[11px] uppercase rounded-2xl"
+                  >
+                    {editingCompanyId ? 'UPDATE' : 'PUBLISH'}
+                  </button>
+                </div>
               </form>
             </div>
           </div>
@@ -1946,12 +2040,26 @@ const handleCreateCompany = async (e: FormEvent) => {
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => handleDeleteCompany(co.id)}
-                    className="p-2 bg-red-500/10 hover:bg-red-500/25 text-red-400 rounded-xl transition-colors"
-                  >
-                    <Trash2 size={13} />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => handleEditCompany(co)}
+                      className="p-2 bg-blue-500/10 hover:bg-blue-500/25 text-blue-400 rounded-xl transition-colors"
+                      title="Edit Company"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                      </svg>
+                    </button>
+                    
+                    <button
+                      onClick={() => handleDeleteCompany(co.id)}
+                      className="p-2 bg-red-500/10 hover:bg-red-500/25 text-red-400 rounded-xl transition-colors"
+                      title="Delete Company"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -1978,7 +2086,6 @@ const handleCreateCompany = async (e: FormEvent) => {
               </div>
 
               <div className="space-y-4">
-                
                 <div className="space-y-1">
                   <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Normalized Role Title</label>
                   <input 
@@ -2047,7 +2154,6 @@ const handleCreateCompany = async (e: FormEvent) => {
                 >
                   {actionLoading ? "Syncing sequence mappings..." : "COMMIT ALGORITHM Normalizations"}
                 </button>
-
               </div>
             </div>
           </div>
@@ -2219,7 +2325,6 @@ const handleCreateCompany = async (e: FormEvent) => {
               </div>
 
               <form onSubmit={handleUploadMedia} className="space-y-4">
-                
                 <div className="space-y-1">
                   <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Asset Name (Label)</label>
                   <input 
@@ -2272,7 +2377,6 @@ const handleCreateCompany = async (e: FormEvent) => {
                 >
                   {actionLoading ? "Saving static parameters..." : "PUBLISH FILE TO MEDIA CATALOG"}
                 </button>
-
               </form>
             </div>
           </div>
@@ -2329,7 +2433,6 @@ const handleCreateCompany = async (e: FormEvent) => {
           </div>
         </motion.div>
       )}
-
     </div>
   );
 }
