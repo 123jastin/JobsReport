@@ -496,7 +496,42 @@ export default function AdminPage() {
   };
 
   // 2. Action: Corporate Node Management
-  const handleCreateCompany = async (e: FormEvent) => {
+
+// ✅ Compress image to WebP format
+const compressToWebP = (file: File, maxWidth: number = 200): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        
+        // Resize if too large
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx!.drawImage(img, 0, 0, width, height);
+        
+        // Convert to WebP with 0.8 quality
+        const webpBase64 = canvas.toDataURL('image/webp', 0.8);
+        resolve(webpBase64);
+      };
+      img.onerror = reject;
+      img.src = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
+// ✅ Updated handleCreateCompany with WebP compression
+const handleCreateCompany = async (e: FormEvent) => {
     e.preventDefault();
     if (!companyForm.name) return;
 
@@ -516,13 +551,25 @@ export default function AdminPage() {
 
     setActionLoading(true);
     try {
+      // ✅ Compress logo to WebP if it's a file
+      let logoUrl = companyForm.logoUrl;
+      if (logoUrl && logoUrl.startsWith('data:image')) {
+        // Get the original file from the input
+        const fileInput = document.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement;
+        const file = fileInput?.files?.[0];
+        if (file) {
+          // Compress silently
+          logoUrl = await compressToWebP(file, 200);
+        }
+      }
+
       const res = await fetch('/api/admin/companies', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: companyForm.name.trim(),
           url: companyForm.url,
-          logoUrl: companyForm.logoUrl
+          logoUrl: logoUrl  // ✅ Send compressed WebP
         })
       });
       
@@ -542,6 +589,12 @@ export default function AdminPage() {
       setActionLoading(false);
     }
   };
+
+
+
+
+
+    
 
   const handleDeleteCompany = async (id: string) => {
     if (userRole === 'editor') {
