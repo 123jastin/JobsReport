@@ -318,37 +318,35 @@ export default function MarketPage() {
                     key={job.id || idx}
                     className="group p-5 bg-white/[0.01] border hover:bg-white/[0.03] border-white/5 rounded-3xl transition-all duration-300 flex flex-col justify-between"
                   >
-                    {/* ✅ Job Images from R2 - Only show if images exist */}
+                    {/* ✅ Job Images from R2 - Thumbnails with original on click */}
                     {hasImages && (
-                      <div 
-                        className="relative w-full h-48 mb-3 rounded-2xl overflow-hidden bg-gradient-to-r from-blue-600/20 to-violet-600/20 border border-white/5 cursor-pointer group/ad"
-                        onClick={() => {
-                          const imgs = jobWithImages.images.map((img: any) => img.url);
-                          setImageList(imgs);
-                          setCurrentImageIndex(0);
-                          setSelectedImage(imgs[0]);
-                        }}
-                      >
-                        <img 
-                          src={jobWithImages.images[0].url} 
-                          alt={jobWithImages.images[0].name || job.title || 'Job image'} 
-                          className="w-full h-full object-cover group-hover/ad:scale-105 transition-transform duration-300"
-                          onError={(e) => {
-                            // Fallback if image fails to load
-                            (e.target as HTMLImageElement).src = 'https://via.placeholder.com/600x400?text=Image+Not+Available';
-                          }}
-                        />
+                      <div className="relative w-full mb-3 rounded-2xl overflow-hidden bg-gradient-to-r from-blue-600/20 to-violet-600/20 border border-white/5">
+                        {/* Scrollable thumbnail strip */}
+                        <div className="flex overflow-x-auto gap-2 p-2 scrollbar-none">
+                          {jobWithImages.images.map((img: any, imgIndex: number) => (
+                            <div
+                              key={imgIndex}
+                              className="flex-shrink-0 w-24 h-24 rounded-xl overflow-hidden cursor-pointer group/img border border-white/5 hover:border-blue-500/50 transition-all"
+                              onClick={() => {
+                                const originals = jobWithImages.images.map((i: any) => i.url);
+                                setImageList(originals);
+                                setCurrentImageIndex(imgIndex);
+                                setSelectedImage(originals[imgIndex]);
+                              }}
+                            >
+                              <img 
+                                src={img.thumbnail || img.url}  // ✅ Show thumbnail
+                                alt={img.name || 'Job image'} 
+                                className="w-full h-full object-cover group-hover/img:scale-110 transition-transform duration-300"
+                                loading="lazy"
+                              />
+                            </div>
+                          ))}
+                        </div>
                         
-                        {/* Show +N badge if multiple images */}
-                        {jobWithImages.images.length > 1 && (
-                          <div className="absolute top-2 right-2 px-2 py-0.5 bg-black/60 backdrop-blur rounded-lg text-[8px] font-mono text-white font-bold">
-                            +{jobWithImages.images.length - 1}
-                          </div>
-                        )}
-                        
-                        <div className="absolute bottom-2 left-2 px-2 py-0.5 bg-black/60 backdrop-blur rounded-lg text-[8px] font-mono text-blue-400 flex items-center gap-1">
-                          <Eye size={10} />
-                          {`View ${jobWithImages.images.length > 1 ? jobWithImages.images.length + ' images' : 'image'}`}
+                        {/* Image count badge */}
+                        <div className="absolute top-2 right-2 px-2 py-0.5 bg-black/60 backdrop-blur rounded-lg text-[8px] font-mono text-white">
+                          {jobWithImages.images.length} {jobWithImages.images.length === 1 ? 'image' : 'images'}
                         </div>
                       </div>
                     )}
@@ -363,9 +361,8 @@ export default function MarketPage() {
                             referrerPolicy="no-referrer"
                             className="w-full h-full object-cover rounded-xl"
                             onError={(e) => {
-                              // Fallback if image fails to load (corrupt URL, broken link, etc.)
+                              // Fallback if image fails to load
                               (e.target as HTMLImageElement).style.display = 'none';
-                              // Show fallback text
                               const parent = (e.target as HTMLImageElement).parentElement;
                               if (parent) {
                                 const fallback = document.createElement('div');
@@ -430,140 +427,4 @@ export default function MarketPage() {
                       <button 
                         onClick={() => job.url && triggerRedirect(job.url, job.company, job.title)}
                         disabled={!job.url}
-                        className={`px-3.5 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all border ${
-                          job.url 
-                            ? 'bg-blue-600/10 hover:bg-blue-600 text-blue-400 hover:text-white border-blue-500/20 hover:border-blue-500 cursor-pointer' 
-                            : 'bg-white/5 text-gray-600 border-white/5 cursor-not-allowed'
-                        }`}
-                      >
-                        <span>View Signal</span>
-                        <ExternalLink size={10} />
-                      </button>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* Market Intelligence Actions */}
-      <div className="p-6 rounded-3xl bg-gradient-to-r from-blue-950/20 to-violet-950/20 border border-blue-500/10 flex flex-col md:flex-row items-center justify-between gap-4">
-        <div>
-          <h4 className="font-bold text-white text-sm">Ingest new market signals or adjust telemetry parameters?</h4>
-          <p className="text-xs text-gray-400 mt-1">Access the Admin Studio to add raw market data, update trending indices, or sync employer feeds.</p>
-        </div>
-        <Link 
-          to="/admin"
-          className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase tracking-wider transition-colors shrink-0 flex items-center gap-2"
-        >
-          <span>Admin Studio</span>
-          <ArrowUpRight size={12} />
-        </Link>
-      </div>
-
-      {/* ✅ Fullscreen Image Viewer */}
-      {selectedImage && (
-        <div 
-          className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center"
-          onClick={() => {
-            setSelectedImage(null);
-            setImageList([]);
-          }}
-        >
-          {/* Close button */}
-          <button 
-            onClick={() => {
-              setSelectedImage(null);
-              setImageList([]);
-            }}
-            className="absolute top-4 right-4 z-50 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all"
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
-
-          {/* Image counter */}
-          <div className="absolute top-4 left-4 z-50 px-3 py-1.5 bg-black/60 backdrop-blur rounded-full text-white text-xs font-mono">
-            {currentImageIndex + 1} / {imageList.length}
-          </div>
-
-          {/* Previous button */}
-          {currentImageIndex > 0 && (
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                const newIndex = currentImageIndex - 1;
-                setCurrentImageIndex(newIndex);
-                setSelectedImage(imageList[newIndex]);
-              }}
-              className="absolute left-4 top-1/2 -translate-y-1/2 z-50 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all"
-            >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="15 18 9 12 15 6"></polyline>
-              </svg>
-            </button>
-          )}
-
-          {/* Main Image */}
-          <img 
-            src={selectedImage} 
-            alt="Job listing" 
-            className="max-w-full max-h-[85vh] object-contain"
-            onClick={(e) => e.stopPropagation()}
-            onError={(e) => {
-              // Fallback if image fails in viewer
-              (e.target as HTMLImageElement).src = 'https://via.placeholder.com/800x600?text=Image+Load+Failed';
-            }}
-          />
-
-          {/* Next button */}
-          {currentImageIndex < imageList.length - 1 && (
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                const newIndex = currentImageIndex + 1;
-                setCurrentImageIndex(newIndex);
-                setSelectedImage(imageList[newIndex]);
-              }}
-              className="absolute right-4 top-1/2 -translate-y-1/2 z-50 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all"
-            >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="9 18 15 12 9 6"></polyline>
-              </svg>
-            </button>
-          )}
-
-          {/* Dot indicators */}
-          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50 flex gap-2">
-            {imageList.map((_, index) => (
-              <button
-                key={index}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setCurrentImageIndex(index);
-                  setSelectedImage(imageList[index]);
-                }}
-                className={`w-2 h-2 rounded-full transition-all ${
-                  index === currentImageIndex 
-                    ? 'bg-blue-500 w-4' 
-                    : 'bg-white/40 hover:bg-white/60'
-                }`}
-              />
-            ))}
-          </div>
-
-          {/* Navigation instruction */}
-          {imageList.length > 1 && (
-            <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-50 text-white/50 text-xs font-mono">
-              Tap arrows to navigate
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+                        className={`px-3.5 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider flex items
