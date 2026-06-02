@@ -103,6 +103,11 @@ export default function AdminPage() {
     salary: '',
     expiresAt: ''
   });
+  
+  // ✅ JOB IMAGES STATES
+  const [jobImages, setJobImages] = useState<string[]>([]);
+  const [uploadedJobImages, setUploadedJobImages] = useState<{url: string, name: string, file?: File}[]>([]);
+  
   const [isCreatingNewCompanyInline, setIsCreatingNewCompanyInline] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
 
@@ -227,7 +232,7 @@ export default function AdminPage() {
     }
   }, [jobForm.title, jobForm.companySelected, jobForm.companyNewName, jobForm.location, isCreatingNewCompanyInline, jobs, rolesState]);
 
-const fetchSystemData = async () => {
+  const fetchSystemData = async () => {
     setLoading(true);
     try {
       const [statsRes, marketRes, rolesRes, reportsRes, companiesRes] = await Promise.all([
@@ -251,20 +256,17 @@ const fetchSystemData = async () => {
 
       if (marketRes.ok) {
         const marketData = await marketRes.json();
-        console.log('Market data loaded:', marketData); // ✅ Debug log
+        console.log('Market data loaded:', marketData);
         
-        // ✅ Set jobs
         if (marketData.jobs && Array.isArray(marketData.jobs)) {
           setJobs(marketData.jobs);
-          console.log('Jobs loaded:', marketData.jobs.length); // ✅ Debug log
+          console.log('Jobs loaded:', marketData.jobs.length);
         }
         
-        // Set companies
         if (marketData.companies && marketData.companies.length > 0) {
           setCompaniesState(marketData.companies);
         }
         
-        // Set roles
         if (marketData.roles && marketData.roles.length > 0) {
           const roleDefinitions = marketData.roles.map((name: string, idx: number) => ({
             id: `role-${idx}`,
@@ -276,7 +278,6 @@ const fetchSystemData = async () => {
         }
       }
 
-      // Fallback: Load companies directly if not loaded
       if (companiesRes.ok && companiesState.length === 0) {
         const companiesData = await companiesRes.json();
         if (companiesData && companiesData.length > 0) {
@@ -299,18 +300,47 @@ const fetchSystemData = async () => {
       setLoading(false);
     }
   };
-  
-    
-      
-
-  
-
 
   const showFeedback = (type: 'success' | 'error', text: string) => {
     setOperationMessage({ type, text });
     setTimeout(() => {
       setOperationMessage(null);
     }, 5000);
+  };
+
+  // ✅ Handle multiple image upload for jobs
+  const handleJobImageUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setActionLoading(true);
+    const newImages: {url: string, name: string, file: File}[] = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      
+      // Convert to base64 for preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        newImages.push({ url: base64String, name: file.name, file });
+        
+        // When all files processed
+        if (newImages.length === files.length) {
+          setUploadedJobImages(prev => [...prev, ...newImages]);
+          setJobImages(prev => [...prev, ...newImages.map(img => img.url)]);
+          setActionLoading(false);
+          showFeedback('success', `${files.length} image(s) added to job listing`);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // ✅ Remove a job image
+  const handleRemoveJobImage = (index: number) => {
+    setUploadedJobImages(prev => prev.filter((_, i) => i !== index));
+    setJobImages(prev => prev.filter((_, i) => i !== index));
   };
 
   // --- LOGO / IMAGE LOCAL FILE UPLOADER TO BASE64 ---
@@ -343,7 +373,7 @@ const fetchSystemData = async () => {
   // --- ACTION HANDLERS ---
 
   // 1. Ingest Job Telemetry
-const handleIngestJob = async (e: FormEvent) => {
+  const handleIngestJob = async (e: FormEvent) => {
     e.preventDefault();
     
     const targetCompany = isCreatingNewCompanyInline 
@@ -379,17 +409,16 @@ const handleIngestJob = async (e: FormEvent) => {
           url: jobForm.url,
           salary: jobForm.salary,
           country: selectedCountry,
-          expiresAt: jobForm.expiresAt
+          expiresAt: jobForm.expiresAt,
+          images: uploadedJobImages  // ✅ Add images to submission
         })
       });
 
       if (res.ok) {
         const addedJob = await res.json();
-        console.log('Job added:', addedJob); // ✅ Debug log
+        console.log('Job added:', addedJob);
         
-        // ✅ Add to local state immediately
         setJobs(prev => [addedJob, ...prev]);
-        
         showFeedback('success', `Ingested "${jobForm.title}" for ${targetCompany} successfully.`);
         
         // Reset form
@@ -407,7 +436,10 @@ const handleIngestJob = async (e: FormEvent) => {
         });
         setIsCreatingNewCompanyInline(false);
         
-        // ✅ Refresh system data to get updated counts
+        // ✅ Reset images
+        setUploadedJobImages([]);
+        setJobImages([]);
+        
         await fetchSystemData();
       } else {
         const errObj = await res.json();
@@ -420,12 +452,6 @@ const handleIngestJob = async (e: FormEvent) => {
       setActionLoading(false);
     }
   };
-
-
-
-
-
-                                                            
 
   const handleToggleJobActive = async (id: string, currentStatus: boolean) => {
     if (userRole === 'editor') {
@@ -470,8 +496,7 @@ const handleIngestJob = async (e: FormEvent) => {
   };
 
   // 2. Action: Corporate Node Management
-// 2. Action: Corporate Node Management
-const handleCreateCompany = async (e: FormEvent) => {
+  const handleCreateCompany = async (e: FormEvent) => {
     e.preventDefault();
     if (!companyForm.name) return;
 
@@ -480,7 +505,6 @@ const handleCreateCompany = async (e: FormEvent) => {
       return;
     }
 
-    // ✅ Check for duplicate company
     const duplicateExists = companiesState.some(
       c => c.name.toLowerCase() === companyForm.name.toLowerCase().trim()
     );
@@ -492,7 +516,7 @@ const handleCreateCompany = async (e: FormEvent) => {
 
     setActionLoading(true);
     try {
-      const res = await fetch('/api/admin/companies', {  // ✅ Changed to /api/admin/companies
+      const res = await fetch('/api/admin/companies', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -507,7 +531,7 @@ const handleCreateCompany = async (e: FormEvent) => {
         setCompaniesState(prev => [...prev, added]);
         setCompanyForm({ name: '', url: '', logoUrl: '' });
         showFeedback('success', `Created corporate profile for ${companyForm.name}.`);
-        fetchSystemData(); // Refresh to get updated list
+        fetchSystemData();
       } else {
         const errData = await res.json();
         showFeedback('error', errData.error || 'Failed to create company');
@@ -528,7 +552,7 @@ const handleCreateCompany = async (e: FormEvent) => {
     if (!confirm("Remove this company and its associated index metadata?")) return;
 
     try {
-      const res = await fetch(`/api/admin/companies/${id}`, { method: 'DELETE' });  // ✅ Changed endpoint
+      const res = await fetch(`/api/admin/companies/${id}`, { method: 'DELETE' });
       if (res.ok) {
         setCompaniesState(prev => prev.filter(c => c.id !== id));
         showFeedback('success', 'Corporate node removed from active inventory.');
@@ -538,11 +562,6 @@ const handleCreateCompany = async (e: FormEvent) => {
       showFeedback('error', 'Could not delete company profile.');
     }
   };
-  
-    
-    
-                                               
-
 
   // 3. Action: Roles Management
   const handleAddKeywordToRole = () => {
@@ -652,7 +671,7 @@ const handleCreateCompany = async (e: FormEvent) => {
     setNewRichSubItem('');
   };
 
-const handlePostReport = async (e: FormEvent) => {
+  const handlePostReport = async (e: FormEvent) => {
     e.preventDefault();
     if (!reportForm.title || !reportForm.roleSelected) {
       showFeedback('error', 'Report title and target role categorizations are required.');
@@ -661,23 +680,18 @@ const handlePostReport = async (e: FormEvent) => {
 
     setActionLoading(true);
     try {
-      // Get the TinyMCE HTML content directly from the visual editor or code view
       let finalContent = '';
       
-      // If using visual editor, get HTML from contentEditable div
       if (editorMode === 'visual' && visualEditorRef.current) {
         finalContent = visualEditorRef.current.innerHTML;
       } 
-      // If using code view, get from textarea
       else if (editorMode === 'code') {
         finalContent = reportForm.excerpt;
       }
-      // Fallback: use excerpt or compile from richLines
       else {
         finalContent = reportForm.excerpt;
       }
 
-      // If no content from editor, compile from richLines (legacy)
       if (!finalContent || finalContent === '<br>' || finalContent === '') {
         let compiledHtml = '';
         for (const line of richLines) {
@@ -698,19 +712,10 @@ const handlePostReport = async (e: FormEvent) => {
         finalContent = compiledHtml;
       }
 
-      // Generate excerpt from HTML (strip tags, limit length)
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = finalContent;
       const plainText = tempDiv.textContent || tempDiv.innerText || '';
       const excerpt = plainText.substring(0, 200).trim() + (plainText.length > 200 ? '...' : '');
-
-      // Debug log
-      console.log('Publishing report:', {
-        title: reportForm.title,
-        role: reportForm.roleSelected,
-        contentLength: finalContent.length,
-        excerpt
-      });
 
       const url = editingReportId ? `/api/reports/${editingReportId}` : '/api/reports';
       const method = editingReportId ? 'PUT' : 'POST';
@@ -737,7 +742,6 @@ const handlePostReport = async (e: FormEvent) => {
           : `Insight Report "${reportForm.title}" published!`;
         showFeedback('success', msg);
         
-        // Reset form
         setReportForm({
           title: '',
           roleSelected: 'Software Developer',
@@ -751,12 +755,10 @@ const handlePostReport = async (e: FormEvent) => {
         ]);
         setEditingReportId(null);
         
-        // Clear visual editor
         if (visualEditorRef.current) {
           visualEditorRef.current.innerHTML = '';
         }
         
-        // Refresh data
         await fetchSystemData();
         setActiveTab('dashboard');
       } else {
@@ -771,12 +773,8 @@ const handlePostReport = async (e: FormEvent) => {
     }
   };
 
-
-
-
   // 5. Action: Media Assets Catalog Upload
-
-const handleUploadMedia = async (e: FormEvent) => {
+  const handleUploadMedia = async (e: FormEvent) => {
     e.preventDefault();
     if (!selectedFileBase64) {
       showFeedback('error', 'Select or drop an image file first.');
@@ -785,12 +783,10 @@ const handleUploadMedia = async (e: FormEvent) => {
 
     setActionLoading(true);
     try {
-      // Get the file input element
       const fileInput = document.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement;
       const file = fileInput?.files?.[0];
       
       if (!file) {
-        // Fallback: use base64 if no file in input
         const res = await fetch('/api/upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -814,7 +810,6 @@ const handleUploadMedia = async (e: FormEvent) => {
           showFeedback('error', 'Failed to upload media.');
         }
       } else {
-        // Upload actual file
         const formData = new FormData();
         formData.append('file', file);
         formData.append('name', mediaForm.name || file.name);
@@ -1007,7 +1002,6 @@ const handleUploadMedia = async (e: FormEvent) => {
 
   // Calculate dynamic charts from current live jobs list
   const getDynamicBarChartData = () => {
-    // Group active jobs counts per role
     return rolesState.map(r => {
       const activeCount = jobs.filter(j => j.role.toLowerCase() === r.title.toLowerCase() && j.active).length;
       return {
@@ -1018,7 +1012,6 @@ const handleUploadMedia = async (e: FormEvent) => {
   };
 
   const getDynamicPieChartData = () => {
-    // Group categories
     const countMap: Record<string, number> = {};
     jobs.filter(j => j.active).forEach(j => {
       countMap[j.role] = (countMap[j.role] || 0) + 1;
@@ -1183,7 +1176,6 @@ const handleUploadMedia = async (e: FormEvent) => {
               {userRole === 'admin' ? 'ADMIN ACCESS' : 'EDITOR MODE'}
             </span>
             
-            {/* ✅ ADD LOGOUT BUTTON */}
             <button
               onClick={() => {
                 triggerLogout();
@@ -1201,7 +1193,6 @@ const handleUploadMedia = async (e: FormEvent) => {
           </p>
         </div>
 
-        {/* Dynamic Aggregation Pipe Button */}
         <div className="flex flex-col gap-1 shrink-0 w-full md:w-auto mt-2 md:mt-0">
           <button
             onClick={handleTriggerPipeline}
@@ -1266,7 +1257,6 @@ const handleUploadMedia = async (e: FormEvent) => {
           animate={{ opacity: 1 }}
           className="space-y-8"
         >
-          {/* Main KPI metrics Row */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="p-6 bg-white/[0.01] border hover:border-white/15 border-white/5 rounded-3xl relative overflow-hidden transition-all group duration-300">
               <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-full blur-2xl pointer-events-none group-hover:bg-blue-500/10 transition-colors" />
@@ -1306,10 +1296,8 @@ const handleUploadMedia = async (e: FormEvent) => {
             </div>
           </div>
 
-          {/* Graphics Dashboard & Telemetry Logs */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             
-            {/* Sector Breakdown Chart card */}
             <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl lg:col-span-8 space-y-4">
               <p className="text-xs font-bold text-white uppercase tracking-widest font-mono flex items-center gap-2">
                 <span className="w-1.5 h-3 bg-blue-500"></span> Sector Ingestion distribution (Live Telemetry Indices)
@@ -1331,7 +1319,6 @@ const handleUploadMedia = async (e: FormEvent) => {
               </div>
             </div>
 
-            {/* Pie distribution chart card */}
             <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl lg:col-span-4 space-y-4">
               <p className="text-xs font-bold text-white uppercase tracking-widest font-mono">Role allocation share</p>
               <div className="h-44 flex items-center justify-center">
@@ -1355,7 +1342,6 @@ const handleUploadMedia = async (e: FormEvent) => {
                 </ResponsiveContainer>
               </div>
               
-              {/* Custom Legends list */}
               <div className="grid grid-cols-2 gap-2 pt-2">
                 {getDynamicPieChartData().map((item, idx) => (
                   <div key={item.name} className="flex items-center gap-2 text-[10px] text-gray-400">
@@ -1370,7 +1356,6 @@ const handleUploadMedia = async (e: FormEvent) => {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             
-            {/* Trending top 5 Roles summary table */}
             <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
               <p className="text-xs font-bold text-white uppercase tracking-widest font-mono flex items-center gap-2">
                 <Flame size={14} className="text-amber-500" /> Active Trending roles (Automatic priority Matrix)
@@ -1406,7 +1391,6 @@ const handleUploadMedia = async (e: FormEvent) => {
               </div>
             </div>
 
-            {/* Recent activity log dashboard view */}
             <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4 flex flex-col justify-between">
               <div>
                 <p className="text-xs font-bold text-white uppercase tracking-widest font-mono flex items-center gap-2">
@@ -1447,7 +1431,7 @@ const handleUploadMedia = async (e: FormEvent) => {
       )}
 
       {/* ---------------------------------------------------- */}
-      {/* 📥 TAB 2: JOB INPUT SYSTEM */}
+      {/* 📥 TAB 2: JOB INPUT SYSTEM WITH IMAGE UPLOAD */}
       {/* ---------------------------------------------------- */}
       {activeTab === 'jobs' && (
         <motion.div 
@@ -1515,7 +1499,6 @@ const handleUploadMedia = async (e: FormEvent) => {
                 </div>
 
                 {isCreatingNewCompanyInline ? (
-                  // Inline Company Creation Form
                   <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl space-y-4">
                     <div className="space-y-1">
                       <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">New Company Name</label>
@@ -1540,7 +1523,6 @@ const handleUploadMedia = async (e: FormEvent) => {
                       />
                     </div>
 
-                    {/* Drag and Drop Custom Company logo inline */}
                     <div className="space-y-1">
                       <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Logo (Drag / Click to upload)</label>
                       <div className="border border-dashed border-white/10 hover:border-white/20 p-4 rounded-xl text-center relative cursor-pointer group">
@@ -1558,7 +1540,6 @@ const handleUploadMedia = async (e: FormEvent) => {
                     </div>
                   </div>
                 ) : (
-                  // Selection from Database autocomplete/select
                   <div className="space-y-1">
                     <select
                       value={jobForm.companySelected}
@@ -1637,6 +1618,59 @@ const handleUploadMedia = async (e: FormEvent) => {
                   />
                 </div>
 
+                {/* ✅ Job Images Upload Section */}
+                <div className="space-y-2 border-t border-white/5 pt-4 mt-2">
+                  <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">
+                    Job Listing Images / Ad Banners
+                  </label>
+                  
+                  {/* Upload Button */}
+                  <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-white/10 hover:border-blue-500/30 rounded-2xl cursor-pointer transition-all group">
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      multiple 
+                      onChange={handleJobImageUpload}
+                      className="hidden"
+                    />
+                    <Upload size={16} className="text-gray-500 group-hover:text-blue-400 transition-colors" />
+                    <span className="text-[10px] text-gray-500 group-hover:text-blue-400 font-mono uppercase tracking-wider">
+                      {uploadedJobImages.length > 0 
+                        ? `${uploadedJobImages.length} image(s) selected` 
+                        : 'Click to upload multiple images'}
+                    </span>
+                  </label>
+
+                  {/* Image Preview Grid */}
+                  {uploadedJobImages.length > 0 && (
+                    <div className="grid grid-cols-3 gap-2 mt-2">
+                      {uploadedJobImages.map((img, index) => (
+                        <div key={index} className="relative group/img rounded-xl overflow-hidden border border-white/5">
+                          <img 
+                            src={img.url} 
+                            alt={img.name} 
+                            className="w-full h-20 object-cover"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveJobImage(index)}
+                            className="absolute top-1 right-1 p-1 bg-red-500/80 hover:bg-red-500 rounded-full text-white opacity-0 group-hover/img:opacity-100 transition-opacity"
+                          >
+                            <Trash2 size={10} />
+                          </button>
+                          <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1.5 py-0.5">
+                            <span className="text-[7px] text-gray-300 truncate block">{img.name}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  <p className="text-[9px] text-gray-500 font-mono">
+                    Upload banner images for this job listing. First image will be the main banner.
+                  </p>
+                </div>
+
                 <button
                   type="submit"
                   disabled={actionLoading || !!duplicateWarning}
@@ -1649,27 +1683,22 @@ const handleUploadMedia = async (e: FormEvent) => {
             </div>
           </div>
 
-
-  {/* Recently Added Job postings catalog preview */}
-<div className="lg:col-span-7 space-y-4">
-  <div className="flex items-center justify-between px-1">
-    <span className="text-xs font-bold text-white uppercase tracking-widest font-mono flex items-center gap-2">
-      <Database size={13} className="text-blue-500" /> Real-Time placements directory ({jobs.length} total)
-    </span>
-    <span className="text-[10px] text-gray-500 font-mono">
-      {/* ✅ ADD REFRESH BUTTON */}
-      <button
-        onClick={fetchSystemData}
-        className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all"
-      >
-        <RefreshCw size={12} />
-        Refresh
-      </button>
-    </span>
-  </div>
-
-                                                     
-      
+          {/* Recently Added Job postings catalog preview */}
+          <div className="lg:col-span-7 space-y-4">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-xs font-bold text-white uppercase tracking-widest font-mono flex items-center gap-2">
+                <Database size={13} className="text-blue-500" /> Real-Time placements directory ({jobs.length} total)
+              </span>
+              <span className="text-[10px] text-gray-500 font-mono">
+                <button
+                  onClick={fetchSystemData}
+                  className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all"
+                >
+                  <RefreshCw size={12} />
+                  Refresh
+                </button>
+              </span>
+            </div>
 
             <div className="bg-white/[0.01] border border-white/5 rounded-3xl overflow-hidden divide-y divide-white/5 max-h-[600px] overflow-y-auto scrollbar-none">
               
@@ -1713,6 +1742,16 @@ const handleUploadMedia = async (e: FormEvent) => {
                         </span>
                       )}
                     </div>
+                    
+                    {/* Show image count if available */}
+                    {(job as any).images && (job as any).images.length > 0 && (
+                      <div className="flex items-center gap-1 mt-1">
+                        <ImageIcon size={10} className="text-blue-400" />
+                        <span className="text-[8px] text-gray-500 font-mono">
+                          {(job as any).images.length} image(s)
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
@@ -1757,7 +1796,6 @@ const handleUploadMedia = async (e: FormEvent) => {
           animate={{ opacity: 1 }}
           className="grid grid-cols-1 lg:grid-cols-12 gap-8"
         >
-          {/* Company creation form */}
           <div className="lg:col-span-5 space-y-6">
             <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
               <div>
@@ -1792,7 +1830,6 @@ const handleUploadMedia = async (e: FormEvent) => {
                   />
                 </div>
 
-                {/* Drag and Drop Custom Company logo block */}
                 <div className="space-y-1">
                   <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Spotlight Logo Vector</label>
                   <div className="border border-dashed border-white/10 hover:border-white/20 p-6 rounded-2xl text-center relative cursor-pointer group">
@@ -1821,7 +1858,6 @@ const handleUploadMedia = async (e: FormEvent) => {
             </div>
           </div>
 
-          {/* Active companies lists */}
           <div className="lg:col-span-7 space-y-4">
             <span className="text-xs font-bold text-white uppercase tracking-widest font-mono flex items-center gap-2">
               <Layers size={13} className="text-blue-500" /> Active Corporate Catalog ({companiesState.length} Spotlighted profiles)
@@ -1875,7 +1911,6 @@ const handleUploadMedia = async (e: FormEvent) => {
           animate={{ opacity: 1 }}
           className="grid grid-cols-1 lg:grid-cols-12 gap-8"
         >
-          {/* Role modeling form */}
           <div className="lg:col-span-5 space-y-6">
             <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
               <div>
@@ -1930,7 +1965,6 @@ const handleUploadMedia = async (e: FormEvent) => {
                     </button>
                   </div>
 
-                  {/* Keyword Chips preview list */}
                   <div className="flex flex-wrap gap-1.5 pt-2">
                     {roleForm.keywords.map((chip, idx) => (
                       <span 
@@ -1961,7 +1995,6 @@ const handleUploadMedia = async (e: FormEvent) => {
             </div>
           </div>
 
-          {/* Active mapping lists */}
           <div className="lg:col-span-7 space-y-4">
             <span className="text-xs font-bold text-white uppercase tracking-widest font-mono flex items-center gap-2">
               <Layers size={13} className="text-blue-500" /> Normalization Schema inventory ({rolesState.length} categories active)
@@ -1976,7 +2009,6 @@ const handleUploadMedia = async (e: FormEvent) => {
                   <div className="space-y-1">
                     <span className="text-xs font-black text-stone-100 uppercase tracking-wide block">{role.title}</span>
                     
-                    {/* Display matching chip tags */}
                     <div className="flex flex-wrap gap-1 pt-1.5">
                       {role.mappedTitles.map((kw, i) => (
                         <span key={i} className="text-[8px] bg-white/5 border border-white/5 text-gray-400 font-mono tracking-wider uppercase px-2 py-0.5 rounded">
@@ -2010,116 +2042,107 @@ const handleUploadMedia = async (e: FormEvent) => {
         </motion.div>
       )}
   
-    {/* ---------------------------------------------------- */}
-{/* 📰 TAB 5: REPORT CREATION SYSTEM - EDITOR ABOVE, REPORTS BELOW */}
-{/* ---------------------------------------------------- */}
-{activeTab === 'reports' && (
-  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8 font-sans">
-    
-    {/* ========== TINYMCE EDITOR (TOP) ========== */}
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-      <div className="lg:col-span-4 space-y-6">
-        <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
-          <div>
-            <h3 className="text-base font-extrabold uppercase tracking-widest flex items-center gap-1.5 text-stone-100">
-              <FileText size={16} className="text-blue-500" />
-              {editingReportId ? "Edit Report" : "Publish Report"}
-            </h3>
-          </div>
-          <div className="space-y-3">
-            <input type="text" value={reportForm.title} onChange={(e) => setReportForm(prev => ({ ...prev, title: e.target.value }))} placeholder="Report Title" className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white" required />
-            <div className="grid grid-cols-2 gap-3">
-              <select value={reportForm.roleSelected} onChange={(e) => setReportForm(prev => ({ ...prev, roleSelected: e.target.value }))} className="w-full bg-black/40 border border-white/15 px-3 py-2.5 rounded-2xl text-xs text-white">
-                {rolesState.map(r => (<option key={r.id} value={r.title}>{r.title}</option>))}
-              </select>
-              <input type="text" value={reportForm.monthYear} onChange={(e) => setReportForm(prev => ({ ...prev, monthYear: e.target.value }))} placeholder="June 2026" className="w-full bg-black/40 border border-white/15 px-3 py-2 rounded-2xl text-xs text-white" />
+      {/* ---------------------------------------------------- */}
+      {/* 📰 TAB 5: REPORT CREATION SYSTEM */}
+      {/* ---------------------------------------------------- */}
+      {activeTab === 'reports' && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8 font-sans">
+          
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div className="lg:col-span-4 space-y-6">
+              <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
+                <div>
+                  <h3 className="text-base font-extrabold uppercase tracking-widest flex items-center gap-1.5 text-stone-100">
+                    <FileText size={16} className="text-blue-500" />
+                    {editingReportId ? "Edit Report" : "Publish Report"}
+                  </h3>
+                </div>
+                <div className="space-y-3">
+                  <input type="text" value={reportForm.title} onChange={(e) => setReportForm(prev => ({ ...prev, title: e.target.value }))} placeholder="Report Title" className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white" required />
+                  <div className="grid grid-cols-2 gap-3">
+                    <select value={reportForm.roleSelected} onChange={(e) => setReportForm(prev => ({ ...prev, roleSelected: e.target.value }))} className="w-full bg-black/40 border border-white/15 px-3 py-2.5 rounded-2xl text-xs text-white">
+                      {rolesState.map(r => (<option key={r.id} value={r.title}>{r.title}</option>))}
+                    </select>
+                    <input type="text" value={reportForm.monthYear} onChange={(e) => setReportForm(prev => ({ ...prev, monthYear: e.target.value }))} placeholder="June 2026" className="w-full bg-black/40 border border-white/15 px-3 py-2 rounded-2xl text-xs text-white" />
+                  </div>
+                  <div className="flex gap-2">
+                    {editingReportId && (<button type="button" onClick={handleCancelEdit} className="flex-1 py-3 bg-white/5 border border-white/10 text-stone-300 font-extrabold text-[11px] uppercase rounded-2xl">Cancel</button>)}
+                    <button onClick={handlePostReport} disabled={actionLoading || !reportForm.title} className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-violet-600 text-stone-100 font-extrabold text-[11px] uppercase rounded-2xl disabled:opacity-50">
+                      {actionLoading ? "Saving..." : editingReportId ? "UPDATE" : "PUBLISH"}
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="flex gap-2">
-              {editingReportId && (<button type="button" onClick={handleCancelEdit} className="flex-1 py-3 bg-white/5 border border-white/10 text-stone-300 font-extrabold text-[11px] uppercase rounded-2xl">Cancel</button>)}
-              <button onClick={handlePostReport} disabled={actionLoading || !reportForm.title} className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-violet-600 text-stone-100 font-extrabold text-[11px] uppercase rounded-2xl disabled:opacity-50">
-                {actionLoading ? "Saving..." : editingReportId ? "UPDATE" : "PUBLISH"}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      <div className="lg:col-span-8">
-        <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
-          <div className="flex items-center justify-between border-b border-white/5 pb-3">
-            <h3 className="text-sm font-extrabold uppercase text-stone-100"><Sparkles size={14} className="text-blue-500 inline mr-1" />TinyMCE Editor</h3>
-            <div className="flex bg-black/60 p-1 rounded-2xl font-mono text-[10px] font-bold">
-              {(['visual','code','preview'] as const).map(m => (
-                <button key={m} onClick={() => setEditorMode(m)} className={`px-3 py-1.5 rounded-xl uppercase ${editorMode===m?'bg-blue-600 text-white':'text-gray-400'}`}>{m}</button>
+            <div className="lg:col-span-8">
+              <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
+                <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                  <h3 className="text-sm font-extrabold uppercase text-stone-100"><Sparkles size={14} className="text-blue-500 inline mr-1" />TinyMCE Editor</h3>
+                  <div className="flex bg-black/60 p-1 rounded-2xl font-mono text-[10px] font-bold">
+                    {(['visual','code','preview'] as const).map(m => (
+                      <button key={m} onClick={() => setEditorMode(m)} className={`px-3 py-1.5 rounded-xl uppercase ${editorMode===m?'bg-blue-600 text-white':'text-gray-400'}`}>{m}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="p-2 bg-black/50 border border-white/10 rounded-2xl flex flex-wrap items-center gap-1">
+                  <button onClick={() => handleToolbarClick('bold','','<strong>','</strong>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold"><Bold size={13}/> Bold</button>
+                  <button onClick={() => handleToolbarClick('italic','','<em>','</em>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold"><Italic size={13}/> Italic</button>
+                  
+                  <label className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold cursor-pointer flex items-center gap-1 text-blue-400" title="Upload Image">
+                    <Upload size={13}/> Image
+                    <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, 'article')} className="hidden" />
+                  </label>
+
+                  <span className="w-px h-5 bg-white/10 mx-1"/>
+                  <button onClick={() => handleToolbarClick('formatBlock','H2','<h2>','</h2>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold">H2</button>
+                  <button onClick={() => handleToolbarClick('formatBlock','H3','<h3>','</h3>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold">H3</button>
+                  <span className="w-px h-5 bg-white/10 mx-1"/>
+                  <button onClick={() => handleToolbarClick('insertUnorderedList','','<ul><li>','</li></ul>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold"><List size={13}/> List</button>
+                  <button onClick={() => handleToolbarClick('formatBlock','BLOCKQUOTE','<blockquote>','</blockquote>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold">Quote</button>
+                  <button onClick={() => handleToolbarClick('highlight','','<span class=\"text-blue-400\">','</span>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold text-blue-400">Highlight</button>
+                </div>
+
+                <div className="border border-white/10 rounded-2xl overflow-hidden bg-black/45 min-h-[350px]">
+                  {editorMode==='visual' && (
+                    <div className="p-5"><div ref={visualEditorRef} contentEditable onInput={handleVisualEditorInput} onBlur={handleVisualEditorBlur} className="w-full min-h-[300px] bg-transparent text-stone-200 text-sm outline-none"/></div>
+                  )}
+                  {editorMode==='code' && (
+                    <div className="p-4"><textarea id="excerpt-editor-textarea" value={reportForm.excerpt} onChange={(e) => setReportForm(prev=>({...prev,excerpt:e.target.value}))} className="w-full min-h-[300px] bg-transparent text-blue-400 text-xs font-mono outline-none resize-none"/></div>
+                  )}
+                  {editorMode==='preview' && (
+                    <div className="p-6 min-h-[300px] overflow-y-auto">{reportForm.excerpt ? <div dangerouslySetInnerHTML={{__html:reportForm.excerpt}} className="text-stone-300 text-sm"/> : <p className="text-gray-500 text-center py-20">No content</p>}</div>
+                  )}
+                </div>
+
+                <div className="flex gap-2">
+                  <button onClick={()=>handleInsertTemplate('insights')} className="px-3 py-2 bg-black/40 border border-white/5 rounded-xl text-[10px] font-bold text-white">Key Insights</button>
+                  <button onClick={()=>handleInsertTemplate('segmented')} className="px-3 py-2 bg-black/40 border border-white/5 rounded-xl text-[10px] font-bold text-white">Segment</button>
+                  <button onClick={()=>handleInsertTemplate('standard')} className="px-3 py-2 bg-black/40 border border-white/5 rounded-xl text-[10px] font-bold text-white">Summary</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-extrabold uppercase text-stone-100"><Layers size={14} className="text-violet-500 inline mr-1"/>Published Reports ({reportsState.length})</h3>
+              <button onClick={fetchSystemData} className="px-3 py-1.5 bg-white/5 rounded-xl text-[10px] font-bold text-gray-400 hover:text-white flex items-center gap-1"><RefreshCw size={12}/>Refresh</button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[300px] overflow-y-auto">
+              {reportsState.map(rep=>(
+                <div key={rep.id} className={`p-3 bg-black/30 border rounded-2xl flex items-center justify-between ${editingReportId===rep.id?'border-blue-500/50':'border-white/5'}`}>
+                  <div className="min-w-0 flex-1"><p className="text-xs font-bold text-white truncate">{rep.title}</p><span className="text-[9px] text-gray-500">{rep.monthYear} • {rep.role}</span></div>
+                  <div className="flex gap-1"><button onClick={()=>handleLoadReportToEdit(rep)} className="p-1.5 bg-blue-500/10 text-blue-400 rounded text-[9px] font-black">Edit</button><button onClick={()=>handleDeleteReport(rep.id)} className="p-1.5 bg-red-500/10 text-red-400 rounded text-[9px] font-black">Del</button></div>
+                </div>
               ))}
+              {reportsState.length===0 && <div className="col-span-full text-center py-8 text-gray-500 text-xs">No published reports.</div>}
             </div>
           </div>
+        </motion.div>
+      )}
 
-          {/* TOOLBAR WITH IMAGE UPLOAD */}
-          <div className="p-2 bg-black/50 border border-white/10 rounded-2xl flex flex-wrap items-center gap-1">
-            <button onClick={() => handleToolbarClick('bold','','<strong>','</strong>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold"><Bold size={13}/> Bold</button>
-            <button onClick={() => handleToolbarClick('italic','','<em>','</em>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold"><Italic size={13}/> Italic</button>
-            
-            {/* IMAGE UPLOAD BUTTON */}
-            <label className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold cursor-pointer flex items-center gap-1 text-blue-400" title="Upload Image">
-              <Upload size={13}/> Image
-              <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, 'article')} className="hidden" />
-            </label>
-
-            <span className="w-px h-5 bg-white/10 mx-1"/>
-            <button onClick={() => handleToolbarClick('formatBlock','H2','<h2>','</h2>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold">H2</button>
-            <button onClick={() => handleToolbarClick('formatBlock','H3','<h3>','</h3>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold">H3</button>
-            <span className="w-px h-5 bg-white/10 mx-1"/>
-            <button onClick={() => handleToolbarClick('insertUnorderedList','','<ul><li>','</li></ul>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold"><List size={13}/> List</button>
-            <button onClick={() => handleToolbarClick('formatBlock','BLOCKQUOTE','<blockquote>','</blockquote>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold">Quote</button>
-            <button onClick={() => handleToolbarClick('highlight','','<span class=\"text-blue-400\">','</span>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold text-blue-400">Highlight</button>
-          </div>
-
-          {/* EDITOR */}
-          <div className="border border-white/10 rounded-2xl overflow-hidden bg-black/45 min-h-[350px]">
-            {editorMode==='visual' && (
-              <div className="p-5"><div ref={visualEditorRef} contentEditable onInput={handleVisualEditorInput} onBlur={handleVisualEditorBlur} className="w-full min-h-[300px] bg-transparent text-stone-200 text-sm outline-none"/></div>
-            )}
-            {editorMode==='code' && (
-              <div className="p-4"><textarea id="excerpt-editor-textarea" value={reportForm.excerpt} onChange={(e) => setReportForm(prev=>({...prev,excerpt:e.target.value}))} className="w-full min-h-[300px] bg-transparent text-blue-400 text-xs font-mono outline-none resize-none"/></div>
-            )}
-            {editorMode==='preview' && (
-              <div className="p-6 min-h-[300px] overflow-y-auto">{reportForm.excerpt ? <div dangerouslySetInnerHTML={{__html:reportForm.excerpt}} className="text-stone-300 text-sm"/> : <p className="text-gray-500 text-center py-20">No content</p>}</div>
-            )}
-          </div>
-
-          {/* TEMPLATES */}
-          <div className="flex gap-2">
-            <button onClick={()=>handleInsertTemplate('insights')} className="px-3 py-2 bg-black/40 border border-white/5 rounded-xl text-[10px] font-bold text-white">Key Insights</button>
-            <button onClick={()=>handleInsertTemplate('segmented')} className="px-3 py-2 bg-black/40 border border-white/5 rounded-xl text-[10px] font-bold text-white">Segment</button>
-            <button onClick={()=>handleInsertTemplate('standard')} className="px-3 py-2 bg-black/40 border border-white/5 rounded-xl text-[10px] font-bold text-white">Summary</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    {/* ========== PUBLISHED REPORTS (BELOW) ========== */}
-    <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-extrabold uppercase text-stone-100"><Layers size={14} className="text-violet-500 inline mr-1"/>Published Reports ({reportsState.length})</h3>
-        <button onClick={fetchSystemData} className="px-3 py-1.5 bg-white/5 rounded-xl text-[10px] font-bold text-gray-400 hover:text-white flex items-center gap-1"><RefreshCw size={12}/>Refresh</button>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[300px] overflow-y-auto">
-        {reportsState.map(rep=>(
-          <div key={rep.id} className={`p-3 bg-black/30 border rounded-2xl flex items-center justify-between ${editingReportId===rep.id?'border-blue-500/50':'border-white/5'}`}>
-            <div className="min-w-0 flex-1"><p className="text-xs font-bold text-white truncate">{rep.title}</p><span className="text-[9px] text-gray-500">{rep.monthYear} • {rep.role}</span></div>
-            <div className="flex gap-1"><button onClick={()=>handleLoadReportToEdit(rep)} className="p-1.5 bg-blue-500/10 text-blue-400 rounded text-[9px] font-black">Edit</button><button onClick={()=>handleDeleteReport(rep.id)} className="p-1.5 bg-red-500/10 text-red-400 rounded text-[9px] font-black">Del</button></div>
-          </div>
-        ))}
-        {reportsState.length===0 && <div className="col-span-full text-center py-8 text-gray-500 text-xs">No published reports.</div>}
-      </div>
-    </div>
-  </motion.div>
-)}
-
-                    
-
-                    
       {/* ---------------------------------------------------- */}
       {/* 🖼️ TAB 6: MEDIA MANAGEMENT */}
       {/* ---------------------------------------------------- */}
@@ -2129,7 +2152,6 @@ const handleUploadMedia = async (e: FormEvent) => {
           animate={{ opacity: 1 }}
           className="grid grid-cols-1 lg:grid-cols-12 gap-8"
         >
-          {/* Visual asset creation form */}
           <div className="lg:col-span-5 space-y-6">
             <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
               <div>
@@ -2164,7 +2186,6 @@ const handleUploadMedia = async (e: FormEvent) => {
                   />
                 </div>
 
-                {/* File input drag selector */}
                 <div className="space-y-1">
                   <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Select Visual Artifact file (Drag & Drop)</label>
                   <div className="border border-dashed border-white/10 hover:border-white/20 p-8 rounded-2xl text-center relative cursor-pointer group">
@@ -2199,7 +2220,6 @@ const handleUploadMedia = async (e: FormEvent) => {
             </div>
           </div>
 
-          {/* Active media catalogs */}
           <div className="lg:col-span-7 space-y-4">
             <span className="text-xs font-bold text-white uppercase tracking-widest font-mono flex items-center gap-2">
               <Layers size={13} className="text-blue-500" /> Catalog Inventory Vault ({mediaAssets.length} static assets cataloged)
@@ -2219,7 +2239,6 @@ const handleUploadMedia = async (e: FormEvent) => {
                       className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-300" 
                     />
                     
-                    {/* Media metadata badge */}
                     <div className="absolute top-2 left-2 px-1.5 py-0.5 bg-black/80 backdrop-blur rounded text-[8px] font-mono tracking-wider text-gray-400 uppercase">
                       {asset.size}
                     </div>
@@ -2234,7 +2253,6 @@ const handleUploadMedia = async (e: FormEvent) => {
                     </span>
                   </div>
 
-                  {/* Absolute DELETE control */}
                   <button
                     onClick={() => handleDeleteMedia(asset.id)}
                     className="absolute bottom-2.5 right-2.5 p-1.5 bg-red-500/10 hover:bg-red-500/25 text-red-400 rounded-xl transition-colors"
