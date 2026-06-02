@@ -10,40 +10,48 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   try {
     // Get counts
     const jobsCount = await DB.prepare('SELECT COUNT(*) as count FROM jobs WHERE is_active = 1').first();
+    const allJobsCount = await DB.prepare('SELECT COUNT(*) as count FROM jobs').first();
     const companiesCount = await DB.prepare('SELECT COUNT(*) as count FROM companies').first();
     const reportsCount = await DB.prepare('SELECT COUNT(*) as count FROM reports').first();
+    const rolesCount = await DB.prepare('SELECT COUNT(*) as count FROM roles').first();
 
-    // Recent activity (last 5 jobs added)
+    // Recent activity
     const recentJobs = await DB.prepare(
-      'SELECT id, title, company_id, posted_at FROM jobs ORDER BY posted_at DESC LIMIT 5'
+      'SELECT j.id, j.title, c.name as company, j.posted_at FROM jobs j JOIN companies c ON j.company_id = c.id ORDER BY j.posted_at DESC LIMIT 10'
     ).all();
 
     const recentActivity = recentJobs.results.map((job: any) => ({
       id: job.id,
       action: 'Job Ingested',
-      details: `${job.title} added to index`,
+      details: `${job.title} at ${job.company}`,
       timestamp: job.posted_at
     }));
 
     return new Response(JSON.stringify({
-      addedToday: jobsCount?.count || 0,
+      addedToday: allJobsCount?.count || 0,
       activeJobs: jobsCount?.count || 0,
       totalCompanies: companiesCount?.count || 0,
+      totalReports: reportsCount?.count || 0,
+      totalRoles: rolesCount?.count || 0,
       lastUpdated: 'Today',
       recentActivity
     }), {
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
 
   } catch (err) {
+    console.error('Stats API Error:', err);
     return new Response(JSON.stringify({
       addedToday: 0,
       activeJobs: 0,
       totalCompanies: 0,
+      totalReports: 0,
+      totalRoles: 0,
       lastUpdated: 'Never',
       recentActivity: []
     }), {
-      headers: { 'Content-Type': 'application/json' }
+      status: 200,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
   }
 };
