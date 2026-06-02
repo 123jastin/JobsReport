@@ -30,20 +30,38 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       LIMIT 100
     `).all();
 
-    const jobs = jobsResult.results.map((job: any) => ({
-      id: job.id,
-      title: job.title,
-      role: job.role,
-      company: job.company,
-      location: job.location || 'Remote',
-      url: job.apply_url,
-      salary: job.salary,
-      postedAt: job.posted_at,
-      expiresAt: job.expires_at,
-      active: job.is_active === 1,
-      logoUrl: job.logo_url || '',
-      country: 'Tanzania'
-    }));
+    // ✅ Map jobs and fetch images for each
+    const jobs = await Promise.all(
+      jobsResult.results.map(async (job: any) => {
+        // Fetch images for this job
+        let images: any[] = [];
+        try {
+          const imagesResult = await DB.prepare(
+            'SELECT url, name FROM job_images WHERE job_id = ? ORDER BY sort_order'
+          ).bind(job.id).all();
+          images = imagesResult.results || [];
+        } catch (err) {
+          // Table might not exist yet
+          images = [];
+        }
+
+        return {
+          id: job.id,
+          title: job.title,
+          role: job.role,
+          company: job.company,
+          location: job.location || 'Remote',
+          url: job.apply_url,
+          salary: job.salary,
+          postedAt: job.posted_at,
+          expiresAt: job.expires_at,
+          active: job.is_active === 1,
+          logoUrl: job.logo_url || '',
+          country: 'Tanzania',
+          images: images  // ✅ Include images
+        };
+      })
+    );
 
     // 2. Get all roles
     const rolesResult = await DB.prepare(`
@@ -52,7 +70,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     
     const roles = rolesResult.results.map((r: any) => r.name);
 
-    // 3. Get all companies with website (correct column)
+    // 3. Get all companies with website
     const companiesResult = await DB.prepare(`
       SELECT id, name, logo_url, website FROM companies ORDER BY name
     `).all();
@@ -61,7 +79,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       id: c.id,
       name: c.name,
       logoUrl: c.logo_url || '',
-      url: c.website || ''  // ✅ website, not website_url
+      url: c.website || ''
     }));
 
     // 4. Get recent activity
