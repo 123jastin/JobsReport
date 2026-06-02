@@ -628,55 +628,50 @@ const handleIngestJob = async (e: FormEvent) => {
     }
   };
 
-
-
-  const handleToggleJobActive = async (id: string, currentStatus: boolean) => {
+const handleToggleJobActive = async (id: string, currentStatus: boolean) => {
     if (userRole === 'editor') {
-      showFeedback('error', 'PERMISSION DENIED: Staff editors cannot switch job active scopes.');
+      showFeedback('error', 'PERMISSION DENIED.');
       return;
     }
 
     try {
-      const res = await fetch(`/api/jobs/${id}`, {
+      const res = await fetch(`/api/admin/jobs/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ active: !currentStatus })
       });
       if (res.ok) {
         setJobs(prev => prev.map(j => j.id === id ? { ...j, active: !currentStatus } : j));
-        showFeedback('success', `Toggled job JR-${id.slice(0,4).toUpperCase()} status.`);
+        showFeedback('success', `Toggled job status.`);
         fetchSystemData();
-      }
-    } catch (err) {
-      showFeedback('error', 'Could not sync active parameter.');
-    }
-  };
+ 
 
-  const handleDeleteJob = async (id: string) => {
+const handleDeleteJob = async (id: string) => {
     if (userRole === 'editor') {
-      showFeedback('error', 'PERMISSION DENIED: Purge request rejected.');
+      showFeedback('error', 'PERMISSION DENIED.');
       return;
     }
 
     if (!confirm("Are you sure you want to delete this job listing?")) return;
 
     try {
-      const res = await fetch(`/api/admin/jobs/${id}`, { method: 'DELETE' });  // ✅ Use admin endpoint
+      // ✅ Use admin endpoint
+      const res = await fetch(`/api/admin/jobs/${id}`, { method: 'DELETE' });
       if (res.ok) {
         setJobs(prev => prev.filter(j => j.id !== id));
         showFeedback('success', 'Job record successfully purged.');
         fetchSystemData();
       } else {
-        const errData = await res.json();
-        showFeedback('error', errData.message || 'Delete failed');
+        showFeedback('error', 'Delete failed');
       }
     } catch (err) {
       showFeedback('error', 'Failed delete operation.');
     }
   };
 
+
   
-        
+     
   
 
   // 2. Action: Corporate Node Management
