@@ -507,7 +507,8 @@ export default function AdminPage() {
   };
 
   // 1. Ingest Job Telemetry
-  const handleIngestJob = async (e: FormEvent) => {
+
+const handleIngestJob = async (e: FormEvent) => {
     e.preventDefault();
     
     const targetCompany = isCreatingNewCompanyInline 
@@ -532,41 +533,14 @@ export default function AdminPage() {
         return;
       }
 
-      // Upload images to R2 first if any
-      const uploadedImages = [];
-      for (const img of uploadedJobImages) {
-        if (img.file) {
-          // Upload original to R2
-          const originalFormData = new FormData();
-          originalFormData.append('file', img.file);
-          originalFormData.append('name', `job-original-${Date.now()}-${img.name}`);
-          
-          const originalRes = await fetch('/api/upload', { method: 'POST', body: originalFormData });
-          const originalData = await originalRes.json();
-          
-          // Upload thumbnail to R2
-          const thumbBlob = await fetch(img.thumbnail).then(r => r.blob());
-          const thumbFormData = new FormData();
-          thumbFormData.append('file', thumbBlob, `thumb-${img.name}`);
-          thumbFormData.append('name', `job-thumb-${Date.now()}-${img.name}`);
-          
-          const thumbRes = await fetch('/api/upload', { method: 'POST', body: thumbFormData });
-          const thumbData = await thumbRes.json();
-          
-          uploadedImages.push({
-            url: originalData.url,
-            thumbnail: thumbData.url,
-            name: img.name
-          });
-        } else {
-          // Fallback for existing base64 images
-          uploadedImages.push({
-            url: img.url,
-            thumbnail: img.thumbnail,
-            name: img.name
-          });
-        }
-      }
+      // ✅ Prepare images - send base64 data directly (backend will upload to R2)
+      const uploadedImages = uploadedJobImages.map(img => ({
+        url: img.url,           // Original base64
+        thumbnail: img.thumbnail, // Thumbnail base64
+        name: img.name
+      }));
+
+      console.log('Sending job with images:', uploadedImages.length);
 
       const url = editingJobId ? `/api/admin/jobs/${editingJobId}` : '/api/admin/jobs';
       const method = editingJobId ? 'PUT' : 'POST';
@@ -583,7 +557,7 @@ export default function AdminPage() {
           salary: jobForm.salary,
           country: selectedCountry,
           expiresAt: jobForm.expiresAt,
-          images: uploadedImages
+          images: uploadedImages  // ✅ Send base64 images to backend
         })
       });
 
@@ -629,6 +603,11 @@ export default function AdminPage() {
       setActionLoading(false);
     }
   };
+
+
+
+
+
 
   const handleToggleJobActive = async (id: string, currentStatus: boolean) => {
     if (userRole === 'editor') {
