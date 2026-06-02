@@ -424,7 +424,143 @@ export default function MarketPage() {
                         )}
                       </div>
                       
-                      <button 
+                                            <button 
                         onClick={() => job.url && triggerRedirect(job.url, job.company, job.title)}
                         disabled={!job.url}
-                        className={`px-3.5 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider flex items
+                        className={`px-3.5 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all border ${
+                          job.url 
+                            ? 'bg-blue-600/10 hover:bg-blue-600 text-blue-400 hover:text-white border-blue-500/20 hover:border-blue-500 cursor-pointer' 
+                            : 'bg-white/5 text-gray-600 border-white/5 cursor-not-allowed'
+                        }`}
+                      >
+                        <span>View Signal</span>
+                        <ExternalLink size={10} />
+                      </button>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Market Intelligence Actions */}
+      <div className="p-6 rounded-3xl bg-gradient-to-r from-blue-950/20 to-violet-950/20 border border-blue-500/10 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div>
+          <h4 className="font-bold text-white text-sm">Ingest new market signals or adjust telemetry parameters?</h4>
+          <p className="text-xs text-gray-400 mt-1">Access the Admin Studio to add raw market data, update trending indices, or sync employer feeds.</p>
+        </div>
+        <Link 
+          to="/admin"
+          className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase tracking-wider transition-colors shrink-0 flex items-center gap-2"
+        >
+          <span>Admin Studio</span>
+          <ArrowUpRight size={12} />
+        </Link>
+      </div>
+
+      {/* ✅ Fullscreen Image Viewer (Facebook-style) */}
+      {selectedImage && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center"
+          onClick={() => {
+            setSelectedImage(null);
+            setImageList([]);
+          }}
+        >
+          {/* Close button */}
+          <button 
+            onClick={() => {
+              setSelectedImage(null);
+              setImageList([]);
+            }}
+            className="absolute top-4 right-4 z-50 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+
+          {/* Image counter */}
+          <div className="absolute top-4 left-4 z-50 px-3 py-1.5 bg-black/60 backdrop-blur rounded-full text-white text-xs font-mono">
+            {currentImageIndex + 1} / {imageList.length}
+          </div>
+
+          {/* Previous button */}
+          {currentImageIndex > 0 && (
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                const newIndex = currentImageIndex - 1;
+                setCurrentImageIndex(newIndex);
+                setSelectedImage(imageList[newIndex]);
+              }}
+              className="absolute left-4 top-1/2 -translate-y-1/2 z-50 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="15 18 9 12 15 6"></polyline>
+              </svg>
+            </button>
+          )}
+
+          {/* Main Image */}
+          <img 
+            src={selectedImage} 
+            alt="Job listing" 
+            className="max-w-full max-h-[85vh] object-contain"
+            onClick={(e) => e.stopPropagation()}
+            onError={(e) => {
+              // Fallback if image fails in viewer
+              (e.target as HTMLImageElement).src = 'https://via.placeholder.com/800x600?text=Image+Load+Failed';
+            }}
+          />
+
+          {/* Next button */}
+          {currentImageIndex < imageList.length - 1 && (
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                const newIndex = currentImageIndex + 1;
+                setCurrentImageIndex(newIndex);
+                setSelectedImage(imageList[newIndex]);
+              }}
+              className="absolute right-4 top-1/2 -translate-y-1/2 z-50 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </button>
+          )}
+
+          {/* Dot indicators */}
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50 flex gap-2">
+            {imageList.map((_, index) => (
+              <button
+                key={index}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCurrentImageIndex(index);
+                  setSelectedImage(imageList[index]);
+                }}
+                className={`w-2 h-2 rounded-full transition-all ${
+                  index === currentImageIndex 
+                    ? 'bg-blue-500 w-4' 
+                    : 'bg-white/40 hover:bg-white/60'
+                }`}
+              />
+            ))}
+          </div>
+
+          {/* Navigation instruction */}
+          {imageList.length > 1 && (
+            <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-50 text-white/50 text-xs font-mono">
+              Tap arrows to navigate
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
