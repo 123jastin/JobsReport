@@ -12,7 +12,12 @@ import {
   Filter,
   ArrowUpRight,
   AlertTriangle,
-  Eye
+  Eye,
+  FileText,
+  File,
+  X,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { RawJob, Company } from '../types';
 import { Link, useSearchParams, useParams } from 'react-router-dom';
@@ -35,10 +40,10 @@ export default function MarketPage() {
   const { triggerRedirect } = useCareerRedirect();
   const { query } = useParams<{ query?: string }>();
   
-  // ✅ Image viewer state
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [imageList, setImageList] = useState<string[]>([]);
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  // ✅ File/Image viewer state (supports images and PDFs)
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [fileList, setFileList] = useState<Array<{url: string, type: string, name: string}>>([]);
+  const [currentFileIndex, setCurrentFileIndex] = useState(0);
   
   // ✅ Load search query from URL path on page load
   useEffect(() => {
@@ -306,7 +311,7 @@ export default function MarketPage() {
               {filteredJobs.map((job, idx) => {
                 // ✅ Cast job to any to access images property
                 const jobWithImages = job as any;
-                const hasImages = jobWithImages.images && jobWithImages.images.length > 0;
+                const hasFiles = jobWithImages.images && jobWithImages.images.length > 0;
                 const companyLogo = getCompanyLogo(job.company);
                 
                 return (
@@ -318,35 +323,57 @@ export default function MarketPage() {
                     key={job.id || idx}
                     className="group p-5 bg-white/[0.01] border hover:bg-white/[0.03] border-white/5 rounded-3xl transition-all duration-300 flex flex-col justify-between"
                   >
-                    {/* ✅ Job Images from R2 - Thumbnails with original on click */}
-                    {hasImages && (
+                    {/* ✅ Job Files from R2 - Images show thumbnails, PDFs show document icons */}
+                    {hasFiles && (
                       <div className="relative w-full mb-3 rounded-2xl overflow-hidden bg-gradient-to-r from-blue-600/20 to-violet-600/20 border border-white/5">
                         {/* Scrollable thumbnail strip */}
                         <div className="flex overflow-x-auto gap-2 p-2 scrollbar-none">
-                          {jobWithImages.images.map((img: any, imgIndex: number) => (
-                            <div
-                              key={imgIndex}
-                              className="flex-shrink-0 w-24 h-24 rounded-xl overflow-hidden cursor-pointer group/img border border-white/5 hover:border-blue-500/50 transition-all"
-                              onClick={() => {
-                                const originals = jobWithImages.images.map((i: any) => i.url);
-                                setImageList(originals);
-                                setCurrentImageIndex(imgIndex);
-                                setSelectedImage(originals[imgIndex]);
-                              }}
-                            >
-                              <img 
-                                src={img.thumbnail || img.url}  // ✅ Show thumbnail
-                                alt={img.name || 'Job image'} 
-                                className="w-full h-full object-cover group-hover/img:scale-110 transition-transform duration-300"
-                                loading="lazy"
-                              />
-                            </div>
-                          ))}
+                          {jobWithImages.images.map((file: any, fileIndex: number) => {
+                            const isPDF = file.type === 'pdf' || file.name?.toLowerCase().endsWith('.pdf');
+                            const isDoc = file.type === 'document' || file.name?.match(/\.(doc|docx|xls|xlsx|ppt|pptx)$/i);
+                            const isFile = isPDF || isDoc;
+                            
+                            return (
+                              <div
+                                key={fileIndex}
+                                className="flex-shrink-0 w-24 h-24 rounded-xl overflow-hidden cursor-pointer group/file border border-white/5 hover:border-blue-500/50 transition-all"
+                                onClick={() => {
+                                  const filesWithTypes = jobWithImages.images.map((f: any) => ({
+                                    url: f.url,
+                                    type: f.type || (f.name?.toLowerCase().endsWith('.pdf') ? 'pdf' : 'image'),
+                                    name: f.name || 'File'
+                                  }));
+                                  setFileList(filesWithTypes);
+                                  setCurrentFileIndex(fileIndex);
+                                  setSelectedFile(filesWithTypes[fileIndex].url);
+                                }}
+                              >
+                                {isFile ? (
+                                  <div className="w-full h-full bg-slate-800 flex flex-col items-center justify-center p-1.5">
+                                    <span className={`text-lg font-black ${isPDF ? 'text-red-400' : 'text-blue-400'}`}>
+                                      {isPDF ? 'PDF' : file.name?.match(/\.(xls|xlsx)$/i) ? 'XLS' : 
+                                       file.name?.match(/\.(ppt|pptx)$/i) ? 'PPT' : 'DOC'}
+                                    </span>
+                                    <span className="text-[6px] text-gray-400 mt-0.5 truncate w-full text-center leading-tight">
+                                      {file.name?.substring(0, 15) || 'Document'}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <img 
+                                    src={file.thumbnail || file.url}
+                                    alt={file.name || 'Job file'} 
+                                    className="w-full h-full object-cover group-hover/file:scale-110 transition-transform duration-300"
+                                    loading="lazy"
+                                  />
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                         
-                        {/* Image count badge */}
+                        {/* File count badge */}
                         <div className="absolute top-2 right-2 px-2 py-0.5 bg-black/60 backdrop-blur rounded-lg text-[8px] font-mono text-white">
-                          {jobWithImages.images.length} {jobWithImages.images.length === 1 ? 'image' : 'images'}
+                          {jobWithImages.images.length} {jobWithImages.images.length === 1 ? 'file' : 'files'}
                         </div>
                       </div>
                     )}
@@ -424,7 +451,7 @@ export default function MarketPage() {
                         )}
                       </div>
                       
-                                            <button 
+                      <button 
                         onClick={() => job.url && triggerRedirect(job.url, job.company, job.title)}
                         disabled={!job.url}
                         className={`px-3.5 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all border ${
@@ -460,103 +487,123 @@ export default function MarketPage() {
         </Link>
       </div>
 
-      {/* ✅ Fullscreen Image Viewer (Facebook-style) */}
-      {selectedImage && (
+      {/* ✅ Fullscreen File Viewer (Supports Images and PDFs) */}
+      {selectedFile && (
         <div 
           className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center"
           onClick={() => {
-            setSelectedImage(null);
-            setImageList([]);
+            setSelectedFile(null);
+            setFileList([]);
           }}
         >
           {/* Close button */}
           <button 
             onClick={() => {
-              setSelectedImage(null);
-              setImageList([]);
+              setSelectedFile(null);
+              setFileList([]);
             }}
             className="absolute top-4 right-4 z-50 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all"
           >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
+            <X size={24} />
           </button>
 
-          {/* Image counter */}
+          {/* File counter */}
           <div className="absolute top-4 left-4 z-50 px-3 py-1.5 bg-black/60 backdrop-blur rounded-full text-white text-xs font-mono">
-            {currentImageIndex + 1} / {imageList.length}
+            {currentFileIndex + 1} / {fileList.length}
+            {fileList[currentFileIndex]?.type === 'pdf' && <span className="ml-2 text-red-400">PDF</span>}
           </div>
 
           {/* Previous button */}
-          {currentImageIndex > 0 && (
+          {currentFileIndex > 0 && (
             <button 
               onClick={(e) => {
                 e.stopPropagation();
-                const newIndex = currentImageIndex - 1;
-                setCurrentImageIndex(newIndex);
-                setSelectedImage(imageList[newIndex]);
+                const newIndex = currentFileIndex - 1;
+                setCurrentFileIndex(newIndex);
+                setSelectedFile(fileList[newIndex].url);
               }}
               className="absolute left-4 top-1/2 -translate-y-1/2 z-50 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all"
             >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="15 18 9 12 15 6"></polyline>
-              </svg>
+              <ChevronLeft size={24} />
             </button>
           )}
 
-          {/* Main Image */}
-          <img 
-            src={selectedImage} 
-            alt="Job listing" 
-            className="max-w-full max-h-[85vh] object-contain"
-            onClick={(e) => e.stopPropagation()}
-            onError={(e) => {
-              // Fallback if image fails in viewer
-              (e.target as HTMLImageElement).src = 'https://via.placeholder.com/800x600?text=Image+Load+Failed';
-            }}
-          />
+          {/* Main Content - PDF iframe or Image */}
+          {fileList[currentFileIndex]?.type === 'pdf' || 
+           fileList[currentFileIndex]?.url?.toLowerCase().endsWith('.pdf') ? (
+            <iframe 
+              src={selectedFile}
+              className="w-full max-w-5xl h-[90vh] rounded-xl bg-white"
+              title="PDF Viewer"
+              onClick={(e) => e.stopPropagation()}
+              style={{ border: 'none' }}
+            />
+          ) : (
+            <img 
+              src={selectedFile} 
+              alt="Job listing" 
+              className="max-w-full max-h-[85vh] object-contain"
+              onClick={(e) => e.stopPropagation()}
+              onError={(e) => {
+                // Fallback if image fails in viewer
+                (e.target as HTMLImageElement).src = 'data:image/svg+xml,' + encodeURIComponent(`
+                  <svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+                    <rect fill="#1e293b" width="400" height="300" rx="12"/>
+                    <text fill="#ef4444" font-size="20" font-weight="bold" text-anchor="middle" x="200" y="140">Failed to Load</text>
+                    <text fill="#94a3b8" font-size="14" text-anchor="middle" x="200" y="170">Tap to close</text>
+                  </svg>
+                `);
+              }}
+            />
+          )}
 
           {/* Next button */}
-          {currentImageIndex < imageList.length - 1 && (
+          {currentFileIndex < fileList.length - 1 && (
             <button 
               onClick={(e) => {
                 e.stopPropagation();
-                const newIndex = currentImageIndex + 1;
-                setCurrentImageIndex(newIndex);
-                setSelectedImage(imageList[newIndex]);
+                const newIndex = currentFileIndex + 1;
+                setCurrentFileIndex(newIndex);
+                setSelectedFile(fileList[newIndex].url);
               }}
               className="absolute right-4 top-1/2 -translate-y-1/2 z-50 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all"
             >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="9 18 15 12 9 6"></polyline>
-              </svg>
+              <ChevronRight size={24} />
             </button>
           )}
 
           {/* Dot indicators */}
-          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50 flex gap-2">
-            {imageList.map((_, index) => (
-              <button
-                key={index}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setCurrentImageIndex(index);
-                  setSelectedImage(imageList[index]);
-                }}
-                className={`w-2 h-2 rounded-full transition-all ${
-                  index === currentImageIndex 
-                    ? 'bg-blue-500 w-4' 
-                    : 'bg-white/40 hover:bg-white/60'
-                }`}
-              />
-            ))}
-          </div>
+          {fileList.length > 1 && (
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50 flex gap-2">
+              {fileList.map((_, index) => (
+                <button
+                  key={index}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setCurrentFileIndex(index);
+                    setSelectedFile(fileList[index].url);
+                  }}
+                  className={`w-2 h-2 rounded-full transition-all ${
+                    index === currentFileIndex 
+                      ? 'bg-blue-500 w-4' 
+                      : 'bg-white/40 hover:bg-white/60'
+                  }`}
+                />
+              ))}
+            </div>
+          )}
 
           {/* Navigation instruction */}
-          {imageList.length > 1 && (
+          {fileList.length > 1 && (
             <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-50 text-white/50 text-xs font-mono">
               Tap arrows to navigate
+            </div>
+          )}
+
+          {/* File name display */}
+          {fileList[currentFileIndex]?.name && (
+            <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-50 px-3 py-1.5 bg-black/60 backdrop-blur rounded-full text-white/80 text-[10px] font-mono whitespace-nowrap">
+              {fileList[currentFileIndex].name}
             </div>
           )}
         </div>
