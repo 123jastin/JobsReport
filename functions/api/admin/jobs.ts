@@ -41,10 +41,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       companyResult = { id: companyId };
     }
 
-    // Insert job
+    // ✅ Insert job with description
     await DB.prepare(`
-      INSERT INTO jobs (id, title, role_id, company_id, location, apply_url, salary, posted_at, expires_at, is_active)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+      INSERT INTO jobs (id, title, role_id, company_id, location, apply_url, salary, posted_at, expires_at, is_active, description)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
     `).bind(
       id,
       body.title?.trim(),
@@ -54,10 +54,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       body.url || '',
       body.salary || '',
       new Date().toISOString().split('T')[0],
-      body.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+      body.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      body.description || ''  // ✅ Job description HTML
     ).run();
 
-    // ✅ Save files (images, PDFs, documents)
+    // Save files (images, PDFs, documents)
     const savedFiles: any[] = [];
     if (body.images && Array.isArray(body.images) && body.images.length > 0) {
       for (let i = 0; i < body.images.length; i++) {
@@ -99,6 +100,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       location: body.location || 'Remote',
       url: body.url || '',
       salary: body.salary || '',
+      description: body.description || '',  // ✅ Return description
       postedAt: new Date().toISOString().split('T')[0],
       expiresAt: body.expiresAt || '',
       active: true,
@@ -153,10 +155,10 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       companyResult = { id: companyId };
     }
 
-    // Update job
+    // ✅ Update job with description
     await DB.prepare(`
       UPDATE jobs 
-      SET title = ?, role_id = ?, company_id = ?, location = ?, apply_url = ?, salary = ?, expires_at = ?
+      SET title = ?, role_id = ?, company_id = ?, location = ?, apply_url = ?, salary = ?, expires_at = ?, description = ?
       WHERE id = ?
     `).bind(
       body.title?.trim(),
@@ -166,6 +168,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       body.url || '',
       body.salary || '',
       body.expiresAt || '',
+      body.description || '',  // ✅ Update description
       id
     ).run();
 
@@ -209,6 +212,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       location: body.location || 'Remote',
       url: body.url || '',
       salary: body.salary || '',
+      description: body.description || '',  // ✅ Return description
       postedAt: new Date().toISOString().split('T')[0],
       expiresAt: body.expiresAt || '',
       active: true,
