@@ -418,31 +418,19 @@ export default function AdminPage() {
           companySelected: result.data.company || prev.companySelected,
         }));
 
-        // Apply TEMPLATE to AI data
-        let templateHTML = '';
-        if (result.data.sections) {
-          const templateData: JobTemplateData = {
-            title: result.data.title || '',
-            company: result.data.company || '',
-            location: result.data.location || '',
-            salary: result.data.salary,
-            role: result.data.role || 'General',
-            sections: result.data.sections
-          };
-          templateHTML = renderJobDescription(templateData, 'premium');
-        } else if (result.data.description) {
-          templateHTML = result.data.description;
-        }
+        // ✅ Use description from AI (already HTML from template)
+        const descriptionHTML = result.data.description || '';
         
-        if (templateHTML) {
-          setJobDescription(templateHTML);
+        if (descriptionHTML) {
+          setJobDescription(descriptionHTML);
           
-          // Auto-scroll to editor and highlight
+          // Load into editor
           setTimeout(() => {
             const editor = jobDescEditorRef.current;
             if (editor) {
+              editor.innerHTML = descriptionHTML;
               editor.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              editor.innerHTML = templateHTML;
+              // Green highlight
               editor.style.borderColor = '#10b981';
               editor.style.borderWidth = '2px';
               setTimeout(() => {
@@ -450,10 +438,10 @@ export default function AdminPage() {
                 editor.style.borderWidth = '';
               }, 2000);
             }
-          }, 200);
+          }, 300);
         }
 
-        showFeedback('success', `Job parsed with template! Review and submit.`);
+        showFeedback('success', 'Job parsed! Description loaded in editor below.');
         setShowAIPaste(false);
         setRawJobText('');
       } else {
@@ -466,7 +454,6 @@ export default function AdminPage() {
             title: result.partial.title || prev.title,
             location: result.partial.location || prev.location,
           }));
-          showFeedback('error', 'Partial data extracted. Please complete remaining fields manually.');
         }
       }
     } catch (err) {
@@ -476,6 +463,9 @@ export default function AdminPage() {
       setAiProcessing(false);
     }
   };
+  
+  
+  
 
   // ✅ Generate thumbnail from image file
   const generateThumbnail = (file: File, maxWidth: number = 400): Promise<string> => {
