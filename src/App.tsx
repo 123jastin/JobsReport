@@ -26,15 +26,16 @@ export default function App() {
             <Layout>
               <Routes>
 
-                {/* 🏠 Homepage */}
+                {/* 🏠 Homepage - Market Intelligence Dashboard */}
                 <Route path="/" element={<HomePage />} />
 
-                {/* 📊 Market */}
+                {/* 📊 Market Telemetry Stream */}
                 <Route path="/market" element={<MarketPage />} />
+                {/* SEO-friendly search route */}
                 <Route path="/market/search/:query" element={<MarketPage />} />
-                
-                {/* 💼 Job Detail - Use /job/ path to avoid conflicts */}
-                <Route path="/job/:jobId" element={<JobDetailPage />} />
+
+                {/* 💼 Individual Job Detail - Under /market/ for SEO */}
+                <Route path="/market/:jobId" element={<JobDetailPage />} />
 
                 {/* 📰 Reports */}
                 <Route path="/reports" element={<ReportsPage />} />
@@ -43,9 +44,11 @@ export default function App() {
                 {/* 🔐 Admin */}
                 <Route path="/admin" element={<AdminPage />} />
 
-                {/* Fallbacks */}
+                {/* Optional fallback routes */}
                 <Route path="/jobs" element={<Navigate to="/market" replace />} />
                 <Route path="/companies" element={<Navigate to="/" replace />} />
+
+                {/* ❌ Catch-all */}
                 <Route path="*" element={<Navigate to="/" replace />} />
 
               </Routes>
