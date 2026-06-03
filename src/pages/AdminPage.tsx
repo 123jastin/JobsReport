@@ -112,6 +112,11 @@ export default function AdminPage() {
   // ✅ JOB FILES STATES (Supports images + documents)
   const [jobFiles, setJobFiles] = useState<{url: string, thumbnail: string, name: string, type: string, file?: File}[]>([]);
   
+  // ✅ JOB DESCRIPTION STATE
+  const [jobDescription, setJobDescription] = useState('');
+  const [showJobDescEditor, setShowJobDescEditor] = useState(false);
+  const jobDescEditorRef = useRef<HTMLDivElement>(null);
+  
   const [isCreatingNewCompanyInline, setIsCreatingNewCompanyInline] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
 
@@ -520,8 +525,16 @@ export default function AdminPage() {
       salary: job.salary || '',
       expiresAt: job.expiresAt || ''
     });
+    setJobDescription((job as any).description || '');
+    if ((job as any).description) {
+      setShowJobDescEditor(true);
+      setTimeout(() => {
+        if (jobDescEditorRef.current) {
+          jobDescEditorRef.current.innerHTML = (job as any).description;
+        }
+      }, 100);
+    }
     setIsCreatingNewCompanyInline(false);
-    // Clear files - will be re-uploaded if needed
     setJobFiles([]);
     window.scrollTo({ top: 300, behavior: 'smooth' });
   };
@@ -541,6 +554,11 @@ export default function AdminPage() {
       salary: '',
       expiresAt: ''
     });
+    setJobDescription('');
+    setShowJobDescEditor(false);
+    if (jobDescEditorRef.current) {
+      jobDescEditorRef.current.innerHTML = '';
+    }
     setJobFiles([]);
     setIsCreatingNewCompanyInline(false);
   };
@@ -642,7 +660,8 @@ export default function AdminPage() {
           salary: jobForm.salary,
           country: selectedCountry,
           expiresAt: jobForm.expiresAt,
-          images: uploadedFiles  // ✅ R2 URLs with type info
+          description: jobDescription, // ✅ Add job description
+          images: uploadedFiles
         })
       });
 
@@ -669,6 +688,11 @@ export default function AdminPage() {
           salary: '',
           expiresAt: ''
         });
+        setJobDescription('');
+        setShowJobDescEditor(false);
+        if (jobDescEditorRef.current) {
+          jobDescEditorRef.current.innerHTML = '';
+        }
         setIsCreatingNewCompanyInline(false);
         setJobFiles([]);
         setEditingJobId(null);
@@ -1936,6 +1960,97 @@ export default function AdminPage() {
                   </p>
                 </div>
 
+                {/* ✅ Job Description Editor Toggle */}
+                <div className="space-y-2 border-t border-white/5 pt-4">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">
+                      Job Description
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowJobDescEditor(!showJobDescEditor)}
+                      className="text-[9px] font-mono font-bold text-blue-500 uppercase flex items-center gap-1 hover:text-blue-400"
+                    >
+                      <Sparkles size={12} />
+                      {showJobDescEditor ? 'Hide Editor' : 'Add Description'}
+                    </button>
+                  </div>
+
+                  {showJobDescEditor && (
+                    <div className="space-y-2">
+                      {/* Mini Toolbar */}
+                      <div className="p-1.5 bg-black/50 border border-white/10 rounded-xl flex flex-wrap items-center gap-0.5">
+                        <button 
+                          type="button" 
+                          onClick={() => document.execCommand('bold')} 
+                          className="p-1.5 hover:bg-white/10 rounded-lg text-[10px]"
+                          title="Bold"
+                        >
+                          <Bold size={12}/>
+                        </button>
+                        <button 
+                          type="button" 
+                          onClick={() => document.execCommand('italic')} 
+                          className="p-1.5 hover:bg-white/10 rounded-lg text-[10px]"
+                          title="Italic"
+                        >
+                          <Italic size={12}/>
+                        </button>
+                        <button 
+                          type="button" 
+                          onClick={() => document.execCommand('underline')} 
+                          className="p-1.5 hover:bg-white/10 rounded-lg text-[10px]"
+                          title="Underline"
+                        >
+                          <Underline size={12}/>
+                        </button>
+                        <span className="w-px h-4 bg-white/10 mx-0.5"/>
+                        <button 
+                          type="button" 
+                          onClick={() => document.execCommand('formatBlock', false, 'h2')} 
+                          className="p-1.5 hover:bg-white/10 rounded-lg text-[9px] font-bold"
+                          title="Heading 2"
+                        >
+                          H2
+                        </button>
+                        <button 
+                          type="button" 
+                          onClick={() => document.execCommand('formatBlock', false, 'h3')} 
+                          className="p-1.5 hover:bg-white/10 rounded-lg text-[9px] font-bold"
+                          title="Heading 3"
+                        >
+                          H3
+                        </button>
+                        <button 
+                          type="button" 
+                          onClick={() => document.execCommand('insertUnorderedList')} 
+                          className="p-1.5 hover:bg-white/10 rounded-lg text-[10px]"
+                          title="Bullet List"
+                        >
+                          <List size={12}/>
+                        </button>
+                      </div>
+                      
+                      {/* Editor Area */}
+                      <div 
+                        ref={jobDescEditorRef}
+                        contentEditable
+                        className="w-full min-h-[150px] bg-black/40 border border-white/10 rounded-xl p-3 text-xs text-stone-200 focus:outline-none focus:border-blue-500/50 overflow-y-auto"
+                        onInput={() => {
+                          if (jobDescEditorRef.current) {
+                            setJobDescription(jobDescEditorRef.current.innerHTML);
+                          }
+                        }}
+                        dangerouslySetInnerHTML={{ __html: jobDescription }}
+                      />
+                      
+                      <p className="text-[8px] text-gray-500 font-mono text-right">
+                        Rich text supported • HTML formatting allowed
+                      </p>
+                    </div>
+                  )}
+                </div>
+
                 <div className="flex gap-2">
                   {editingJobId && (
                     <button
@@ -2025,6 +2140,16 @@ export default function AdminPage() {
                         <File size={10} className="text-blue-400" />
                         <span className="text-[8px] text-gray-500 font-mono">
                           {(job as any).images.length} file(s)
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Show description indicator */}
+                    {(job as any).description && (
+                      <div className="flex items-center gap-1 mt-1">
+                        <FileText size={10} className="text-emerald-400" />
+                        <span className="text-[8px] text-gray-500 font-mono">
+                          Description available
                         </span>
                       </div>
                     )}
