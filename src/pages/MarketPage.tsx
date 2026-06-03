@@ -25,6 +25,19 @@ import { Link, useSearchParams, useParams } from 'react-router-dom';
 import { useCountry } from '../context/CountryContext';
 import { useCareerRedirect } from '../context/CareerRedirectContext';
 
+// ✅ SEO-friendly slug generator
+const getJobSlug = (job: RawJob): string => {
+  // Create URL-friendly slug from job title
+  const slug = job.title
+    ?.toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+  
+  // Use ID for uniqueness while keeping slug for SEO
+  // Cleaner URL: /market/senior-frontend-developer-mpvbhd13i3aj
+  return `/market/${slug}-${job.id?.slice(-10) || job.id}`;
+};
+
 export default function MarketPage() {
   const [jobs, setJobs] = useState<RawJob[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -241,7 +254,7 @@ export default function MarketPage() {
               const value = e.target.value;
               setSearchQuery(value);
               
-              // Update URL with clean path
+              // Update URL with clean path for search
               if (value) {
                 const cleanQuery = value.trim().toLowerCase().replace(/\s+/g, '-');
                 window.history.replaceState(null, '', `/market/search/${encodeURIComponent(cleanQuery)}`);
@@ -371,8 +384,8 @@ export default function MarketPage() {
                           </span>
                         </div>
 
-                        {/* ✅ Job Title with Link to Detail Page */}
-                        <Link to={`/job/${job.id}`}>
+                        {/* ✅ SEO-Friendly Job Title Link */}
+                        <Link to={getJobSlug(job)}>
                           <h3 className="font-bold text-white text-base leading-tight hover:text-blue-400 transition-colors cursor-pointer">
                             {job.title}
                           </h3>
