@@ -42,13 +42,14 @@ export default function MarketPage() {
   const { query } = useParams<{ query?: string }>();
   
   // ✅ File/Image viewer state (supports images and PDFs)
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
-  const [fileList, setFileList] = useState<Array<{url: string, type: string, name: string}>>([]);
-  const [currentFileIndex, setCurrentFileIndex] = useState(0);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [imageList, setImageList] = useState<Array<string>>([]);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
   
   // ✅ Job Description viewer state
   const [selectedDescription, setSelectedDescription] = useState<string | null>(null);
   const [descriptionJobTitle, setDescriptionJobTitle] = useState<string>('');
+  const [descriptionJobUrl, setDescriptionJobUrl] = useState<string>('');
   
   // ✅ Load search query from URL path on page load
   useEffect(() => {
@@ -401,6 +402,7 @@ export default function MarketPage() {
                         onClick={() => {
                           setSelectedDescription(jobWithImages.description);
                           setDescriptionJobTitle(job.title);
+                          setDescriptionJobUrl(job.url || '');
                         }}
                       >
                         <div className="flex items-center justify-between p-3">
@@ -435,14 +437,10 @@ export default function MarketPage() {
                                 key={fileIndex}
                                 className="flex-shrink-0 w-24 h-24 rounded-xl overflow-hidden cursor-pointer group/file border border-white/5 hover:border-blue-500/50 transition-all"
                                 onClick={() => {
-                                  const filesWithTypes = jobWithImages.images.map((f: any) => ({
-                                    url: f.url,
-                                    type: f.type || (f.name?.toLowerCase().endsWith('.pdf') ? 'pdf' : 'image'),
-                                    name: f.name || 'File'
-                                  }));
-                                  setFileList(filesWithTypes);
-                                  setCurrentFileIndex(fileIndex);
-                                  setSelectedFile(filesWithTypes[fileIndex].url);
+                                  const originals = jobWithImages.images.map((i: any) => i.url);
+                                  setImageList(originals);
+                                  setCurrentImageIndex(fileIndex);
+                                  setSelectedImage(originals[fileIndex]);
                                 }}
                               >
                                 {isFile ? (
@@ -475,7 +473,7 @@ export default function MarketPage() {
                       </div>
                     )}
 
-                    {/* Footer with Signal ID and Apply Button */}
+                    {/* Footer with Signal ID and Apply Now Button */}
                     <div className="flex items-center justify-between border-t border-white/5 pt-4 mt-4">
                       <div className="flex flex-col gap-1">
                         <span className="text-[10px] text-gray-500 font-mono uppercase tracking-widest">
@@ -497,7 +495,7 @@ export default function MarketPage() {
                             : 'bg-white/5 text-gray-600 border-white/5 cursor-not-allowed'
                         }`}
                       >
-                        <span>View Signal</span>
+                        <span>Apply Now</span>
                         <ExternalLink size={10} />
                       </button>
                     </div>
@@ -524,40 +522,40 @@ export default function MarketPage() {
         </Link>
       </div>
 
-      {/* ✅ Fullscreen File Viewer (Supports Images and PDFs via Google Docs Viewer) */}
-      {selectedFile && (
+      {/* ✅ Fullscreen Image/PDF Viewer - Solid Background */}
+      {selectedImage && (
         <div 
-          className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center"
+          className="fixed inset-0 z-50 bg-[#0a0a0a] flex items-center justify-center"
           onClick={() => {
-            setSelectedFile(null);
-            setFileList([]);
+            setSelectedImage(null);
+            setImageList([]);
           }}
         >
           {/* Close button */}
           <button 
             onClick={() => {
-              setSelectedFile(null);
-              setFileList([]);
+              setSelectedImage(null);
+              setImageList([]);
             }}
             className="absolute top-4 right-4 z-50 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all"
           >
             <X size={24} />
           </button>
 
-          {/* File counter */}
+          {/* Image counter */}
           <div className="absolute top-4 left-4 z-50 px-3 py-1.5 bg-black/60 backdrop-blur rounded-full text-white text-xs font-mono">
-            {currentFileIndex + 1} / {fileList.length}
-            {fileList[currentFileIndex]?.type === 'pdf' && <span className="ml-2 text-red-400">PDF</span>}
+            {currentImageIndex + 1} / {imageList.length}
+            {imageList[currentImageIndex]?.toLowerCase().endsWith('.pdf') && <span className="ml-2 text-red-400">PDF</span>}
           </div>
 
           {/* Previous button */}
-          {currentFileIndex > 0 && (
+          {currentImageIndex > 0 && (
             <button 
               onClick={(e) => {
                 e.stopPropagation();
-                const newIndex = currentFileIndex - 1;
-                setCurrentFileIndex(newIndex);
-                setSelectedFile(fileList[newIndex].url);
+                const newIndex = currentImageIndex - 1;
+                setCurrentImageIndex(newIndex);
+                setSelectedImage(imageList[newIndex]);
               }}
               className="absolute left-4 top-1/2 -translate-y-1/2 z-50 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all"
             >
@@ -566,8 +564,7 @@ export default function MarketPage() {
           )}
 
           {/* Main Content - PDF or Image */}
-          {(fileList[currentFileIndex]?.type === 'pdf' || 
-            fileList[currentFileIndex]?.url?.toLowerCase().endsWith('.pdf')) ? (
+          {(imageList[currentImageIndex]?.toLowerCase().endsWith('.pdf')) ? (
             <div 
               className="w-full max-w-5xl h-[90vh] flex flex-col bg-black rounded-xl overflow-hidden"
               onClick={(e) => e.stopPropagation()}
@@ -576,11 +573,11 @@ export default function MarketPage() {
               <div className="flex items-center justify-between p-3 bg-black/90 border-b border-white/10 rounded-t-xl">
                 <span className="text-white text-xs font-mono truncate max-w-[50%] flex items-center gap-2">
                   <FileText size={14} className="text-red-400" />
-                  {fileList[currentFileIndex]?.name || 'Document'}
+                  Document
                 </span>
                 <div className="flex items-center gap-2">
                   <a 
-                    href={selectedFile}
+                    href={selectedImage}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
@@ -590,7 +587,7 @@ export default function MarketPage() {
                     Open in New Tab
                   </a>
                   <a 
-                    href={selectedFile} 
+                    href={selectedImage} 
                     download
                     onClick={(e) => e.stopPropagation()}
                     className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold rounded-lg flex items-center gap-1 transition-colors"
@@ -603,7 +600,7 @@ export default function MarketPage() {
               
               {/* ✅ Google Docs Viewer - Works reliably across all browsers */}
               <iframe 
-                src={`https://docs.google.com/viewer?url=${encodeURIComponent(selectedFile)}&embedded=true`}
+                src={`https://docs.google.com/viewer?url=${encodeURIComponent(selectedImage)}&embedded=true`}
                 className="w-full flex-1 rounded-b-xl bg-white"
                 title="PDF Viewer"
                 style={{ border: 'none', minHeight: '70vh' }}
@@ -612,7 +609,7 @@ export default function MarketPage() {
             </div>
           ) : (
             <img 
-              src={selectedFile} 
+              src={selectedImage} 
               alt="Job listing" 
               className="max-w-full max-h-[85vh] object-contain"
               onClick={(e) => e.stopPropagation()}
@@ -630,13 +627,13 @@ export default function MarketPage() {
           )}
 
           {/* Next button */}
-          {currentFileIndex < fileList.length - 1 && (
+          {currentImageIndex < imageList.length - 1 && (
             <button 
               onClick={(e) => {
                 e.stopPropagation();
-                const newIndex = currentFileIndex + 1;
-                setCurrentFileIndex(newIndex);
-                setSelectedFile(fileList[newIndex].url);
+                const newIndex = currentImageIndex + 1;
+                setCurrentImageIndex(newIndex);
+                setSelectedImage(imageList[newIndex]);
               }}
               className="absolute right-4 top-1/2 -translate-y-1/2 z-50 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all"
             >
@@ -645,18 +642,18 @@ export default function MarketPage() {
           )}
 
           {/* Dot indicators */}
-          {fileList.length > 1 && (
+          {imageList.length > 1 && (
             <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50 flex gap-2">
-              {fileList.map((_, index) => (
+              {imageList.map((_, index) => (
                 <button
                   key={index}
                   onClick={(e) => {
                     e.stopPropagation();
-                    setCurrentFileIndex(index);
-                    setSelectedFile(fileList[index].url);
+                    setCurrentImageIndex(index);
+                    setSelectedImage(imageList[index]);
                   }}
                   className={`w-2 h-2 rounded-full transition-all ${
-                    index === currentFileIndex 
+                    index === currentImageIndex 
                       ? 'bg-blue-500 w-4' 
                       : 'bg-white/40 hover:bg-white/60'
                   }`}
@@ -664,63 +661,76 @@ export default function MarketPage() {
               ))}
             </div>
           )}
-
-          {/* Navigation instruction */}
-          {fileList.length > 1 && (
-            <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-50 text-white/50 text-xs font-mono">
-              Tap arrows to navigate
-            </div>
-          )}
         </div>
       )}
 
-      {/* ✅ Job Description Fullscreen Viewer */}
+      {/* ✅ Job Description Fullscreen Viewer - Solid Background with Apply Buttons */}
       {selectedDescription && (
         <div 
-          className="fixed inset-0 z-50 bg-black/95 flex flex-col"
-          onClick={() => {
-            setSelectedDescription(null);
-            setDescriptionJobTitle('');
-          }}
+          className="fixed inset-0 z-50 bg-[#0a0a0a] flex flex-col"
+          onClick={() => {}}
         >
-          {/* Close button */}
-          <button 
-            onClick={() => { 
-              setSelectedDescription(null); 
-              setDescriptionJobTitle('');
-            }}
-            className="absolute top-4 right-4 z-50 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all"
-          >
-            <X size={24} />
-          </button>
-
-          {/* Description Header */}
-          <div className="p-4 bg-black/80 border-b border-white/10">
+          {/* Top Bar with Apply Now button */}
+          <div className="flex items-center justify-between p-4 bg-black/90 border-b border-white/10 shrink-0">
             <h3 className="text-white font-bold text-sm flex items-center gap-2">
               <FileText size={16} className="text-emerald-400" />
               Job Description: {descriptionJobTitle}
             </h3>
-            <p className="text-[10px] text-gray-500 mt-1 font-mono">
-              Full details, requirements, and responsibilities for this position
-            </p>
+            <div className="flex items-center gap-2">
+              {/* Apply Now Button - Top right */}
+              <button
+                onClick={() => {
+                  setSelectedDescription(null);
+                  setDescriptionJobTitle('');
+                  if (descriptionJobUrl) {
+                    triggerRedirect(descriptionJobUrl, descriptionJobTitle, 'Job Description');
+                  }
+                }}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-[10px] uppercase tracking-wider rounded-xl flex items-center gap-1.5 transition-all shadow-lg shadow-blue-500/20"
+              >
+                <span>Apply Now</span>
+                <ExternalLink size={12} />
+              </button>
+              
+              {/* Close button */}
+              <button 
+                onClick={() => { 
+                  setSelectedDescription(null); 
+                  setDescriptionJobTitle('');
+                  setDescriptionJobUrl('');
+                }}
+                className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all"
+              >
+                <X size={20} />
+              </button>
+            </div>
           </div>
 
           {/* Description Content - Scrollable */}
-          <div 
-            className="flex-1 overflow-y-auto p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div 
-              className="max-w-4xl mx-auto prose prose-invert prose-sm prose-headings:text-white prose-headings:font-bold prose-p:text-gray-300 prose-p:text-sm prose-p:leading-relaxed prose-strong:text-white prose-ul:text-gray-300 prose-li:text-gray-300 space-y-4"
-              dangerouslySetInnerHTML={{ __html: selectedDescription }}
-            />
-          </div>
-
-          {/* Footer hint */}
-          <div className="p-3 text-center border-t border-white/5">
-            <p className="text-[9px] text-gray-500 font-mono">
-              Tap outside or press ESC to close
-            </p>
+          <div className="flex-1 overflow-y-auto">
+            <div className="max-w-3xl mx-auto p-8">
+              <div 
+                className="prose prose-invert prose-headings:text-white prose-headings:font-bold prose-p:text-gray-300 prose-p:text-sm prose-p:leading-relaxed prose-strong:text-white prose-ul:text-gray-300 prose-li:text-gray-300 space-y-4"
+                dangerouslySetInnerHTML={{ __html: selectedDescription }}
+              />
+              
+              {/* Bottom Apply Now Button */}
+              <div className="mt-8 pt-6 border-t border-white/10 flex justify-center">
+                <button
+                  onClick={() => {
+                    setSelectedDescription(null);
+                    setDescriptionJobTitle('');
+                    if (descriptionJobUrl) {
+                      triggerRedirect(descriptionJobUrl, descriptionJobTitle, 'Job Description');
+                    }
+                  }}
+                  className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase tracking-wider rounded-2xl flex items-center gap-2 transition-all shadow-lg shadow-blue-500/20"
+                >
+                  <span>Apply Now</span>
+                  <ExternalLink size={14} />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
