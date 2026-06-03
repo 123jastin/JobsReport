@@ -10,6 +10,7 @@ import HomePage from './pages/HomePage';
 import ReportDetailPage from './pages/ReportDetailPage';
 import ReportsPage from './pages/ReportsPage';
 import MarketPage from './pages/MarketPage';
+import JobDetailPage from './pages/JobDetailPage';
 import AdminPage from './pages/AdminPage';
 
 import { AuthProvider } from './context/AuthContext';
@@ -32,6 +33,9 @@ export default function App() {
                 <Route path="/market" element={<MarketPage />} />
                 {/* ✅ SEO-friendly search route */}
                 <Route path="/market/search/:query" element={<MarketPage />} />
+
+                {/* 💼 Individual Job Detail Page */}
+                <Route path="/job/:jobId" element={<JobDetailPage />} />
 
                 {/* 📰 Reports */}
                 <Route path="/reports" element={<ReportsPage />} />
