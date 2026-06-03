@@ -117,6 +117,11 @@ export default function AdminPage() {
   const [showJobDescEditor, setShowJobDescEditor] = useState(false);
   const jobDescEditorRef = useRef<HTMLDivElement>(null);
   
+  // ✅ AI Job Parser States
+  const [showAIPaste, setShowAIPaste] = useState(false);
+  const [rawJobText, setRawJobText] = useState('');
+  const [aiProcessing, setAiProcessing] = useState(false);
+  
   const [isCreatingNewCompanyInline, setIsCreatingNewCompanyInline] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
 
@@ -316,6 +321,73 @@ export default function AdminPage() {
     setTimeout(() => {
       setOperationMessage(null);
     }, 5000);
+  };
+
+  // ✅ AI Job Parser with validation feedback
+  const handleAIProcessJob = async () => {
+    if (!rawJobText.trim() || rawJobText.trim().length < 20) {
+      showFeedback('error', 'Please paste a complete job description (at least 20 characters).');
+      return;
+    }
+
+    setAiProcessing(true);
+    try {
+      const res = await fetch('/api/ai/process-job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: rawJobText })
+      });
+
+      const result = await res.json();
+
+      if (result.success && result.data) {
+        // ✅ Auto-fill job form with validated data
+        setJobForm(prev => ({
+          ...prev,
+          title: result.data.title || prev.title,
+          roleSelected: result.data.role || prev.roleSelected,
+          location: result.data.location || prev.location,
+          salary: result.data.salary || prev.salary,
+          companySelected: result.data.company || prev.companySelected,
+        }));
+
+        // ✅ Set AI-generated safe HTML description
+        if (result.data.description) {
+          setJobDescription(result.data.description);
+          setShowJobDescEditor(true);
+          // Load into editor
+          setTimeout(() => {
+            if (jobDescEditorRef.current) {
+              jobDescEditorRef.current.innerHTML = result.data.description;
+            }
+          }, 100);
+        }
+
+        showFeedback('success', `Job parsed successfully${result.attempts > 1 ? ` (took ${result.attempts} attempts)` : ''}! Review and submit.`);
+        setShowAIPaste(false);
+        setRawJobText('');
+      } else {
+        // ✅ Show specific error from API
+        const errorMsg = result.error || 'AI processing failed';
+        const debug = result.debug ? ` (${result.debug})` : '';
+        showFeedback('error', errorMsg + debug);
+        
+        // If partial data available, still try to fill what we can
+        if (result.partial && result.partial.title) {
+          setJobForm(prev => ({
+            ...prev,
+            title: result.partial.title || prev.title,
+            location: result.partial.location || prev.location,
+          }));
+          showFeedback('error', 'Partial data extracted. Please complete remaining fields manually.');
+        }
+      }
+    } catch (err) {
+      showFeedback('error', 'AI service unavailable. Please fill manually.');
+      console.error('AI error:', err);
+    } finally {
+      setAiProcessing(false);
+    }
   };
 
   // ✅ Generate thumbnail from image file
@@ -1713,7 +1785,7 @@ export default function AdminPage() {
       )}
 
       {/* ---------------------------------------------------- */}
-      {/* 📥 TAB 2: JOB INPUT SYSTEM WITH FILE UPLOAD (IMAGES + DOCUMENTS) */}
+      {/* 📥 TAB 2: JOB INPUT SYSTEM WITH AI PARSER & FILE UPLOAD */}
       {/* ---------------------------------------------------- */}
       {activeTab === 'jobs' && (
         <motion.div 
@@ -1729,6 +1801,75 @@ export default function AdminPage() {
                   <Briefcase size={16} className="text-blue-500" /> {editingJobId ? 'Edit Placement' : 'Ingest Real-Time Placement'}
                 </h3>
                 <p className="text-xs text-gray-500 mt-1">Automatic categorizations are applied based on keyword matching logic. Supports images, PDFs, Word, Excel, PowerPoint files.</p>
+              </div>
+
+              {/* ✅ AI Job Parser - Smart Paste */}
+              <div className="pb-4 border-b border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setShowAIPaste(!showAIPaste)}
+                  className="w-full px-4 py-3 rounded-2xl bg-gradient-to-r from-violet-600/10 to-blue-600/10 border border-violet-500/20 hover:border-violet-500/40 text-violet-400 hover:text-violet-300 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all group"
+                >
+                  <Sparkles size={14} className="group-hover:scale-110 transition-transform" />
+                  {showAIPaste ? '✕ Close AI Parser' : '⚡ AI Auto-Fill from Job Description'}
+                </button>
+
+                {/* AI Paste Area */}
+                {showAIPaste && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="mt-3 space-y-3 p-4 bg-violet-950/10 border border-violet-500/10 rounded-2xl"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={12} className="text-violet-400" />
+                      <p className="text-[9px] text-gray-400 font-mono leading-relaxed">
+                        Paste a raw job posting below. AI will extract: <span className="text-violet-400">title, company, location, salary, role, and description</span>.
+                      </p>
+                    </div>
+                    
+                    <textarea
+                      value={rawJobText}
+                      onChange={(e) => setRawJobText(e.target.value)}
+                      placeholder={`Paste job description here...\n\nExample:\n"We are hiring a Senior Accountant in Dar es Salaam. The ideal candidate will have 5+ years experience..."`}
+                      className="w-full h-32 bg-black/40 border border-white/10 rounded-xl p-3 text-xs text-white resize-none focus:outline-none focus:border-violet-500/50 font-mono placeholder:text-gray-600"
+                      disabled={aiProcessing}
+                    />
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-[8px] text-gray-500 font-mono">
+                        {rawJobText.length} characters
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => { setRawJobText(''); setShowAIPaste(false); }}
+                          className="px-3 py-2 bg-white/5 hover:bg-white/10 text-gray-400 text-[10px] font-bold uppercase rounded-xl transition-all"
+                        >
+                          Clear
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleAIProcessJob}
+                          disabled={aiProcessing || rawJobText.trim().length < 20}
+                          className="px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:bg-gray-800 disabled:text-gray-500 text-white font-bold text-[10px] uppercase tracking-wider rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-violet-500/10"
+                        >
+                          {aiProcessing ? (
+                            <>
+                              <RefreshCw size={12} className="animate-spin" />
+                              Processing...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles size={12} />
+                              Parse with AI
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
               </div>
 
               <form onSubmit={handleIngestJob} className="space-y-4">
@@ -1960,7 +2101,7 @@ export default function AdminPage() {
                   </p>
                 </div>
 
-                {/* ✅ Job Description Editor Toggle */}
+                {/* ✅ Job Description Editor */}
                 <div className="space-y-2 border-t border-white/5 pt-4">
                   <div className="flex items-center justify-between">
                     <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">
@@ -1971,8 +2112,8 @@ export default function AdminPage() {
                       onClick={() => setShowJobDescEditor(!showJobDescEditor)}
                       className="text-[9px] font-mono font-bold text-blue-500 uppercase flex items-center gap-1 hover:text-blue-400"
                     >
-                      <Sparkles size={12} />
-                      {showJobDescEditor ? 'Hide Editor' : 'Add Description'}
+                      <FileText size={12} />
+                      {showJobDescEditor ? 'Hide Editor' : jobDescription ? '✏️ Edit' : '+ Add Description'}
                     </button>
                   </div>
 
@@ -1980,68 +2121,27 @@ export default function AdminPage() {
                     <div className="space-y-2">
                       {/* Mini Toolbar */}
                       <div className="p-1.5 bg-black/50 border border-white/10 rounded-xl flex flex-wrap items-center gap-0.5">
-                        <button 
-                          type="button" 
-                          onClick={() => document.execCommand('bold')} 
-                          className="p-1.5 hover:bg-white/10 rounded-lg text-[10px]"
-                          title="Bold"
-                        >
-                          <Bold size={12}/>
-                        </button>
-                        <button 
-                          type="button" 
-                          onClick={() => document.execCommand('italic')} 
-                          className="p-1.5 hover:bg-white/10 rounded-lg text-[10px]"
-                          title="Italic"
-                        >
-                          <Italic size={12}/>
-                        </button>
-                        <button 
-                          type="button" 
-                          onClick={() => document.execCommand('underline')} 
-                          className="p-1.5 hover:bg-white/10 rounded-lg text-[10px]"
-                          title="Underline"
-                        >
-                          <Underline size={12}/>
-                        </button>
+                        <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('bold'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><Bold size={12}/></button>
+                        <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('italic'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><Italic size={12}/></button>
+                        <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('underline'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><Underline size={12}/></button>
                         <span className="w-px h-4 bg-white/10 mx-0.5"/>
-                        <button 
-                          type="button" 
-                          onClick={() => document.execCommand('formatBlock', false, 'h2')} 
-                          className="p-1.5 hover:bg-white/10 rounded-lg text-[9px] font-bold"
-                          title="Heading 2"
-                        >
-                          H2
-                        </button>
-                        <button 
-                          type="button" 
-                          onClick={() => document.execCommand('formatBlock', false, 'h3')} 
-                          className="p-1.5 hover:bg-white/10 rounded-lg text-[9px] font-bold"
-                          title="Heading 3"
-                        >
-                          H3
-                        </button>
-                        <button 
-                          type="button" 
-                          onClick={() => document.execCommand('insertUnorderedList')} 
-                          className="p-1.5 hover:bg-white/10 rounded-lg text-[10px]"
-                          title="Bullet List"
-                        >
-                          <List size={12}/>
-                        </button>
+                        <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('formatBlock', false, 'h3'); }} className="p-1.5 hover:bg-white/10 rounded-lg text-[9px] font-bold">H3</button>
+                        <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('formatBlock', false, 'h4'); }} className="p-1.5 hover:bg-white/10 rounded-lg text-[9px] font-bold">H4</button>
+                        <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('insertUnorderedList'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><List size={12}/></button>
+                        <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('insertOrderedList'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><List size={12}/></button>
                       </div>
                       
-                      {/* Editor Area */}
+                      {/* Editor */}
                       <div 
                         ref={jobDescEditorRef}
                         contentEditable
+                        suppressContentEditableWarning
                         className="w-full min-h-[150px] bg-black/40 border border-white/10 rounded-xl p-3 text-xs text-stone-200 focus:outline-none focus:border-blue-500/50 overflow-y-auto"
                         onInput={() => {
                           if (jobDescEditorRef.current) {
                             setJobDescription(jobDescEditorRef.current.innerHTML);
                           }
                         }}
-                        dangerouslySetInnerHTML={{ __html: jobDescription }}
                       />
                       
                       <p className="text-[8px] text-gray-500 font-mono text-right">
