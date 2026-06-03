@@ -488,7 +488,7 @@ export default function MarketPage() {
         </Link>
       </div>
 
-      {/* ✅ Fullscreen File Viewer (Supports Images and Embedded PDFs via Proxy) */}
+      {/* ✅ Fullscreen File Viewer (Supports Images and PDFs via Google Docs Viewer) */}
       {selectedFile && (
         <div 
           className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center"
@@ -529,31 +529,32 @@ export default function MarketPage() {
             </button>
           )}
 
-          {/* Main Content - Embedded PDF Viewer (via Proxy) or Image */}
+          {/* Main Content - PDF or Image */}
           {(fileList[currentFileIndex]?.type === 'pdf' || 
             fileList[currentFileIndex]?.url?.toLowerCase().endsWith('.pdf')) ? (
             <div 
-              className="w-full max-w-5xl h-[90vh] flex flex-col bg-white rounded-xl overflow-hidden"
+              className="w-full max-w-5xl h-[90vh] flex flex-col bg-black rounded-xl overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
               {/* PDF Toolbar */}
-              <div className="flex items-center justify-between p-3 bg-gray-100 border-b border-gray-200">
-                <span className="text-gray-800 text-xs font-mono truncate max-w-[50%]">
+              <div className="flex items-center justify-between p-3 bg-black/90 border-b border-white/10 rounded-t-xl">
+                <span className="text-white text-xs font-mono truncate max-w-[50%] flex items-center gap-2">
+                  <FileText size={14} className="text-red-400" />
                   {fileList[currentFileIndex]?.name || 'Document'}
                 </span>
                 <div className="flex items-center gap-2">
                   <a 
-                    href={`/api/view-pdf?file=${encodeURIComponent(fileList[currentFileIndex]?.url)}`}
+                    href={selectedFile}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-800 text-[10px] font-bold rounded-lg flex items-center gap-1 transition-colors"
+                    className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white text-[10px] font-bold rounded-lg flex items-center gap-1 transition-colors"
                   >
                     <ExternalLink size={12} />
-                    Open
+                    Open in New Tab
                   </a>
                   <a 
-                    href={fileList[currentFileIndex]?.url} 
+                    href={selectedFile} 
                     download
                     onClick={(e) => e.stopPropagation()}
                     className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold rounded-lg flex items-center gap-1 transition-colors"
@@ -564,27 +565,14 @@ export default function MarketPage() {
                 </div>
               </div>
               
-              {/* PDF Embedded Viewer - Using proxy endpoint for inline display */}
-              <object
-                data={`/api/view-pdf?file=${encodeURIComponent(fileList[currentFileIndex]?.url)}`}
-                type="application/pdf"
-                className="w-full flex-1"
-                style={{ border: 'none' }}
-              >
-                <div className="flex flex-col items-center justify-center h-full p-10 text-center">
-                  <p className="text-gray-600 text-sm mb-4">
-                    Unable to display PDF in this browser.
-                  </p>
-                  <a 
-                    href={`/api/view-pdf?file=${encodeURIComponent(fileList[currentFileIndex]?.url)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors"
-                  >
-                    Open PDF in New Tab
-                  </a>
-                </div>
-              </object>
+              {/* ✅ Google Docs Viewer - Works reliably across all browsers */}
+              <iframe 
+                src={`https://docs.google.com/viewer?url=${encodeURIComponent(selectedFile)}&embedded=true`}
+                className="w-full flex-1 rounded-b-xl bg-white"
+                title="PDF Viewer"
+                style={{ border: 'none', minHeight: '70vh' }}
+                sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+              />
             </div>
           ) : (
             <img 
