@@ -1,61 +1,16 @@
 import { useState, useEffect, FormEvent, ChangeEvent, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  Database, 
-  TrendingUp, 
-  BookOpen, 
-  Plus, 
-  Trash2, 
-  RefreshCw, 
-  Check, 
-  AlertCircle, 
-  ExternalLink,
-  ChevronRight,
-  Shield,
-  Clock,
-  Briefcase,
-  Lock,
-  LogOut,
-  Building2,
-  FileText,
-  Image as ImageIcon,
-  Key,
-  Flame,
-  Globe,
-  Compass,
-  Settings,
-  ChevronDown,
-  Layers,
-  Sparkles,
-  DollarSign,
-  MapPin,
-  Eye,
-  CheckCircle,
-  HelpCircle,
-  Upload,
-  Bold,
-  Italic,
-  Underline,
-  List,
-  Code,
-  Link as LinkIcon,
-  File
+  Database, TrendingUp, BookOpen, Plus, Trash2, RefreshCw, Check, AlertCircle, ExternalLink,
+  ChevronRight, Shield, Clock, Briefcase, Lock, LogOut, Building2, FileText, Image as ImageIcon,
+  Key, Flame, Globe, Compass, Settings, ChevronDown, Layers, Sparkles, DollarSign, MapPin,
+  Eye, CheckCircle, HelpCircle, Upload, Bold, Italic, Underline, List, Code, Link as LinkIcon, File
 } from 'lucide-react';
 import { RawJob, Trend, Report, Company, ActivityLog, MediaAsset, RoleDefinition } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useCountry } from '../context/CountryContext';
 import { useCareerRedirect } from '../context/CareerRedirectContext';
-import { 
-  ResponsiveContainer, 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  Tooltip, 
-  PieChart, 
-  Pie, 
-  Cell 
-} from 'recharts';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts';
 
 // ========== TEMPLATE TYPES ==========
 interface JobSection {
@@ -181,8 +136,11 @@ export default function AdminPage() {
     expiresAt: ''
   });
   
-  // ✅ JOB FILES STATES (Supports images + documents)
-  const [jobFiles, setJobFiles] = useState<{url: string, thumbnail: string, name: string, type: string, file?: File}[]>([]);
+  // ✅ JOB FILES STATES with SEO support
+  const [jobFiles, setJobFiles] = useState<{
+    url: string; thumbnail: string; name: string; type: string; file?: File;
+    seoTitle?: string; seoDescription?: string; seoSlug?: string;
+  }[]>([]);
   
   // ✅ JOB DESCRIPTION STATE - Always visible
   const [jobDescription, setJobDescription] = useState('');
@@ -202,6 +160,27 @@ export default function AdminPage() {
   // ✅ Draft and Application Type States
   const [isDraft, setIsDraft] = useState(false);
   const [applicationType, setApplicationType] = useState<'url' | 'email'>('url');
+
+  // ✅ Schema data state
+  const [schemaData, setSchemaData] = useState({
+    job_category: 'Other',
+    industry: '',
+    employment_type: 'FULL_TIME',
+    workplace_type: 'Onsite',
+    education_level: 'Any',
+    experience_months: 0,
+    skills: [] as string[],
+    benefits: [] as string[],
+    salary_min: null as number | null,
+    salary_max: null as number | null,
+    salary_currency: 'TZS',
+    city: '',
+    region: '',
+    country: 'Tanzania',
+    postcode: '',
+    slug: '',
+    canonical_url: ''
+  });
 
   // --- COMPANY FORM STATES ---
   const [companyForm, setCompanyForm] = useState({
@@ -415,7 +394,6 @@ export default function AdminPage() {
       const result = await res.json();
 
       if (result.success && result.data) {
-        // Auto-fill form
         setJobForm(prev => ({
           ...prev,
           title: result.data.title || prev.title,
@@ -425,20 +403,17 @@ export default function AdminPage() {
           companySelected: result.data.company || prev.companySelected,
         }));
 
-        // ✅ Use description from AI (already HTML from template)
         const descriptionHTML = result.data.description || '';
         
         if (descriptionHTML) {
           setJobDescription(descriptionHTML);
-          setDescEditMode('visual'); // Always start in visual mode for AI content
+          setDescEditMode('visual');
           
-          // Load into editor
           setTimeout(() => {
             const editor = jobDescEditorRef.current;
             if (editor) {
               editor.innerHTML = descriptionHTML;
               editor.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              // Green highlight
               editor.style.borderColor = '#10b981';
               editor.style.borderWidth = '2px';
               setTimeout(() => {
@@ -472,9 +447,6 @@ export default function AdminPage() {
     }
   };
   
-  
-  
-
   // ✅ Generate thumbnail from image file
   const generateThumbnail = (file: File, maxWidth: number = 400): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -536,13 +508,16 @@ export default function AdminPage() {
     `);
   };
 
-  // ✅ Handle multiple file upload for jobs
+  // ✅ Handle multiple file upload for jobs with SEO metadata
   const handleJobFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
     setActionLoading(true);
-    const newFiles: {url: string, thumbnail: string, name: string, type: string, file: File}[] = [];
+    const newFiles: {
+      url: string; thumbnail: string; name: string; type: string; file: File;
+      seoTitle: string; seoDescription: string; seoSlug: string;
+    }[] = [];
     let processedCount = 0;
 
     for (let i = 0; i < files.length; i++) {
@@ -551,22 +526,39 @@ export default function AdminPage() {
       const isPDF = file.type === 'application/pdf';
       const isDoc = file.type.includes('document') || file.name.match(/\.(doc|docx|xls|xlsx|ppt|pptx)$/i);
       
+      // ✅ Generate SEO-friendly metadata
+      const baseName = file.name.replace(/\.[^/.]+$/, '');
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'file';
+      const cleanSlug = baseName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      
+      let seoTitle = '';
+      let seoDescription = '';
+      const jobTitle = jobForm.title || 'Job';
+      const companyName = jobForm.companySelected || (jobForm.companyNewName || 'company');
+      
+      if (isImage) {
+        seoTitle = `${jobTitle} - Image ${i + 1}`;
+        seoDescription = `Image attachment for ${jobTitle} at ${companyName}`;
+      } else if (isPDF) {
+        seoTitle = `${jobTitle} - PDF Document`;
+        seoDescription = `PDF document for ${jobTitle} at ${companyName} - ${baseName}`;
+      } else if (isDoc) {
+        seoTitle = `${jobTitle} - Document`;
+        seoDescription = `Document attachment for ${jobTitle} at ${companyName}`;
+      }
+      
+      const seoSlug = `${cleanSlug}-${Date.now().toString(36)}.${ext}`;
+      
       if (isImage) {
         const thumbnail = await generateThumbnail(file, 400);
         const reader = new FileReader();
         reader.onloadend = () => {
-          newFiles.push({ 
-            url: reader.result as string, 
-            thumbnail: thumbnail,
-            name: file.name, 
-            type: 'image',
-            file 
-          });
+          newFiles.push({ url: reader.result as string, thumbnail, name: seoSlug, type: 'image', file, seoTitle, seoDescription, seoSlug });
           processedCount++;
           if (processedCount === files.length) {
             setJobFiles(prev => [...prev, ...newFiles]);
             setActionLoading(false);
-            showFeedback('success', `${files.length} file(s) ready`);
+            showFeedback('success', `${files.length} file(s) ready with SEO metadata`);
           }
         };
         reader.readAsDataURL(file);
@@ -574,18 +566,12 @@ export default function AdminPage() {
         const docThumbnail = generateDocumentThumbnail(file.name, file.type);
         const reader = new FileReader();
         reader.onloadend = () => {
-          newFiles.push({ 
-            url: reader.result as string, 
-            thumbnail: docThumbnail,
-            name: file.name, 
-            type: isPDF ? 'pdf' : 'document',
-            file 
-          });
+          newFiles.push({ url: reader.result as string, thumbnail: docThumbnail, name: seoSlug, type: isPDF ? 'pdf' : 'document', file, seoTitle, seoDescription, seoSlug });
           processedCount++;
           if (processedCount === files.length) {
             setJobFiles(prev => [...prev, ...newFiles]);
             setActionLoading(false);
-            showFeedback('success', `${files.length} file(s) ready`);
+            showFeedback('success', `${files.length} file(s) ready with SEO metadata`);
           }
         };
         reader.readAsDataURL(file);
@@ -706,21 +692,6 @@ export default function AdminPage() {
     setIsCreatingNewCompanyInline(false);
   };
 
-  const handleEditCompany = (company: Company) => {
-    setEditingCompanyId(company.id);
-    setCompanyForm({
-      name: company.name,
-      url: company.url || '',
-      logoUrl: company.logoUrl || ''
-    });
-    window.scrollTo({ top: 300, behavior: 'smooth' });
-  };
-
-  const handleCancelEditCompany = () => {
-    setEditingCompanyId(null);
-    setCompanyForm({ name: '', url: '', logoUrl: '' });
-  };
-
   const handleIngestJob = async (e: FormEvent) => {
     e.preventDefault();
     
@@ -746,19 +717,24 @@ export default function AdminPage() {
         return;
       }
 
-      const uploadedFiles: {url: string, thumbnail: string, name: string, type: string}[] = [];
+      const uploadedFiles: {url: string, thumbnail: string, name: string, type: string, seoTitle: string, seoDescription: string}[] = [];
       
       for (const file of jobFiles) {
-        const fileData: {url: string, thumbnail: string, name: string, type: string} = {
+        const fileData: any = {
           url: file.url,
           thumbnail: file.thumbnail,
           name: file.name,
-          type: file.type
+          type: file.type,
+          seoTitle: file.seoTitle || file.name,
+          seoDescription: file.seoDescription || ''
         };
 
         if (file.file) {
+          // Upload original with SEO-friendly filename
           const originalFormData = new FormData();
-          originalFormData.append('file', file.file, file.name);
+          originalFormData.append('file', file.file, file.seoSlug || file.name);
+          originalFormData.append('name', file.seoSlug || file.name);
+          originalFormData.append('altText', file.seoTitle || file.name);
           
           const originalRes = await fetch('/api/upload', { method: 'POST', body: originalFormData });
           if (originalRes.ok) {
@@ -766,10 +742,14 @@ export default function AdminPage() {
             fileData.url = originalData.url;
           }
           
+          // Upload thumbnail for images
           if (file.type === 'image') {
             const thumbBlob = await fetch(file.thumbnail).then(r => r.blob());
             const thumbFormData = new FormData();
-            thumbFormData.append('file', thumbBlob, `thumb-${file.name}`);
+            const thumbSlug = `thumb-${file.seoSlug || file.name}`;
+            thumbFormData.append('file', thumbBlob, thumbSlug);
+            thumbFormData.append('name', thumbSlug);
+            thumbFormData.append('altText', `Thumbnail: ${file.seoTitle || file.name}`);
             
             const thumbRes = await fetch('/api/upload', { method: 'POST', body: thumbFormData });
             if (thumbRes.ok) {
@@ -807,7 +787,11 @@ export default function AdminPage() {
           country: selectedCountry,
           expiresAt: jobForm.expiresAt,
           description: jobDescription,
-          is_active: isDraft ? 0 : 1, // ✅ Draft = inactive
+          is_active: isDraft ? 0 : 1,
+          // ✅ Include all schema data
+          ...schemaData,
+          skills: schemaData.skills,
+          benefits: schemaData.benefits,
           images: uploadedFiles
         })
       });
@@ -827,7 +811,6 @@ export default function AdminPage() {
         }
         
         if (!isDraft || editingJobId) {
-          // Reset form only on publish or update
           setJobForm({
             title: '',
             roleSelected: 'Software Developer',
@@ -847,6 +830,26 @@ export default function AdminPage() {
           setIsCreatingNewCompanyInline(false);
           setJobFiles([]);
           setEditingJobId(null);
+          // Reset schema data
+          setSchemaData({
+            job_category: 'Other',
+            industry: '',
+            employment_type: 'FULL_TIME',
+            workplace_type: 'Onsite',
+            education_level: 'Any',
+            experience_months: 0,
+            skills: [],
+            benefits: [],
+            salary_min: null,
+            salary_max: null,
+            salary_currency: 'TZS',
+            city: '',
+            region: '',
+            country: 'Tanzania',
+            postcode: '',
+            slug: '',
+            canonical_url: ''
+          });
         }
         
         await fetchSystemData();
@@ -2196,7 +2199,6 @@ export default function AdminPage() {
                             type="button"
                             onClick={() => {
                               setDescEditMode('code');
-                              // Sync code view with editor content
                               if (jobDescEditorRef.current) {
                                 setJobDescription(jobDescEditorRef.current.innerHTML);
                               }
@@ -2287,7 +2289,6 @@ export default function AdminPage() {
                       value={jobDescription}
                       onChange={(e) => {
                         setJobDescription(e.target.value);
-                        // Also update visual editor
                         if (jobDescEditorRef.current) {
                           jobDescEditorRef.current.innerHTML = e.target.value;
                         }
@@ -2307,6 +2308,88 @@ export default function AdminPage() {
                         ✓ Ready to save
                       </p>
                     )}
+                  </div>
+                </div>
+
+                {/* ✅ Schema Data Section */}
+                <div className="space-y-2 border-t border-white/5 pt-4">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">
+                      Schema & SEO Data
+                    </label>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!jobForm.title) {
+                          showFeedback('error', 'Please enter a job title first');
+                          return;
+                        }
+                        setActionLoading(true);
+                        try {
+                          const res = await fetch('/api/ai/extract-schema', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              title: jobForm.title,
+                              description: jobDescription,
+                              location: jobForm.location,
+                              company: isCreatingNewCompanyInline ? jobForm.companyNewName : jobForm.companySelected
+                            })
+                          });
+                          const result = await res.json();
+                          if (result.success && result.schema) {
+                            setSchemaData(prev => ({ ...prev, ...result.schema }));
+                            showFeedback('success', 'Schema data auto-extracted!');
+                          } else {
+                            showFeedback('error', result.error || 'Schema extraction failed');
+                          }
+                        } catch (err) {
+                          showFeedback('error', 'AI service unavailable');
+                        } finally {
+                          setActionLoading(false);
+                        }
+                      }}
+                      disabled={actionLoading || !jobForm.title}
+                      className="text-[9px] font-mono font-bold text-violet-500 hover:text-violet-400 disabled:text-gray-600 uppercase flex items-center gap-1 transition-colors"
+                    >
+                      <Sparkles size={12} />
+                      Auto-Extract Schema
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    <select value={schemaData.job_category} onChange={(e) => setSchemaData(prev => ({...prev, job_category: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
+                      <option value="">Category</option>
+                      {['Accounting','Engineering','Healthcare','Hospitality','Marketing','IT','Education','Finance','Legal','Other'].map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                    <select value={schemaData.employment_type} onChange={(e) => setSchemaData(prev => ({...prev, employment_type: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
+                      <option value="FULL_TIME">Full Time</option><option value="PART_TIME">Part Time</option><option value="CONTRACT">Contract</option><option value="TEMPORARY">Temporary</option><option value="INTERNSHIP">Internship</option>
+                    </select>
+                    <select value={schemaData.workplace_type} onChange={(e) => setSchemaData(prev => ({...prev, workplace_type: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
+                      <option value="Onsite">Onsite</option><option value="Remote">Remote</option><option value="Hybrid">Hybrid</option>
+                    </select>
+                    <select value={schemaData.education_level} onChange={(e) => setSchemaData(prev => ({...prev, education_level: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
+                      <option value="Any">Any Education</option><option value="High School">High School</option><option value="Diploma">Diploma</option><option value="Bachelor">Bachelor</option><option value="Master">Master</option><option value="PhD">PhD</option>
+                    </select>
+                    <input type="number" placeholder="Experience (months)" value={schemaData.experience_months || ''} onChange={(e) => setSchemaData(prev => ({...prev, experience_months: parseInt(e.target.value) || 0}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" />
+                    <input type="text" placeholder="Industry" value={schemaData.industry || ''} onChange={(e) => setSchemaData(prev => ({...prev, industry: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" />
+                  </div>
+
+                  {/* Salary & Currency */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <select value={schemaData.salary_currency} onChange={(e) => setSchemaData(prev => ({...prev, salary_currency: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
+                      <option value="TZS">🇹🇿 TZS</option><option value="KES">🇰🇪 KES</option><option value="UGX">🇺🇬 UGX</option><option value="USD">🇺🇸 USD</option><option value="EUR">🇪🇺 EUR</option><option value="GBP">🇬🇧 GBP</option><option value="ZAR">🇿🇦 ZAR</option><option value="NGN">🇳🇬 NGN</option><option value="AED">🇦🇪 AED</option>
+                    </select>
+                    <input type="number" placeholder="Min Salary" value={schemaData.salary_min || ''} onChange={(e) => setSchemaData(prev => ({...prev, salary_min: parseFloat(e.target.value) || null}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" />
+                    <input type="number" placeholder="Max Salary" value={schemaData.salary_max || ''} onChange={(e) => setSchemaData(prev => ({...prev, salary_max: parseFloat(e.target.value) || null}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" />
+                  </div>
+
+                  {/* Skills & Benefits */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="text" placeholder="Skills (comma separated)" value={Array.isArray(schemaData.skills) ? schemaData.skills.join(', ') : ''} onChange={(e) => setSchemaData(prev => ({...prev, skills: e.target.value.split(',').map(s => s.trim()).filter(Boolean)}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" />
+                    <input type="text" placeholder="Benefits (comma separated)" value={Array.isArray(schemaData.benefits) ? schemaData.benefits.join(', ') : ''} onChange={(e) => setSchemaData(prev => ({...prev, benefits: e.target.value.split(',').map(s => s.trim()).filter(Boolean)}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" />
                   </div>
                 </div>
 
