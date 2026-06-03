@@ -31,11 +31,11 @@ export default function App() {
 
                 {/* 📊 Market Telemetry Stream */}
                 <Route path="/market" element={<MarketPage />} />
-                {/* ✅ SEO-friendly search route */}
+                {/* SEO-friendly search route */}
                 <Route path="/market/search/:query" element={<MarketPage />} />
 
-                {/* 💼 Individual Job Detail Page */}
-                <Route path="/job/:jobId" element={<JobDetailPage />} />
+                {/* 💼 Individual Job Detail - Under /market/ for SEO */}
+                <Route path="/market/:jobId" element={<JobDetailPage />} />
 
                 {/* 📰 Reports */}
                 <Route path="/reports" element={<ReportsPage />} />
