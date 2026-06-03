@@ -2,15 +2,19 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Building2, Search, TrendingUp, Clock, Globe,
-  RefreshCw, Filter, ArrowUpRight, MapPin
+  RefreshCw, Filter, ArrowUpRight
 } from 'lucide-react';
 import { RawJob, Company } from '../types';
 import { Link, useSearchParams, useParams } from 'react-router-dom';
 import { useCountry } from '../context/CountryContext';
 
-// SEO-friendly slug generator
+// ✅ SEO-friendly slug generator
 const getJobSlug = (job: RawJob): string => {
-  return `/job/${job.id}`;
+  const titleSlug = job.title
+    ?.toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+  return `/market/${titleSlug}-${job.id}`;
 };
 
 export default function MarketPage() {
@@ -27,7 +31,7 @@ export default function MarketPage() {
   const { selectedCountry, setSelectedCountry, currentFlag } = useCountry();
   const { query } = useParams<{ query?: string }>();
   
-  // Load search query from URL
+  // Load search query from URL path
   useEffect(() => {
     if (query) {
       const decodedQuery = decodeURIComponent(query).replace(/-/g, ' ');
@@ -35,7 +39,7 @@ export default function MarketPage() {
     }
   }, [query]);
   
-  // Simple API call - no fallbacks
+  // Simple API call
   useEffect(() => {
     async function loadMarketData() {
       try {
@@ -55,7 +59,7 @@ export default function MarketPage() {
     loadMarketData();
   }, []);
 
-  // Sync selectedRole
+  // Sync selectedRole with URL params
   useEffect(() => {
     const roleParam = searchParams.get('role');
     if (roleParam) setSelectedRole(roleParam);
@@ -71,7 +75,9 @@ export default function MarketPage() {
   };
 
   const getCompanyLogo = (companyName: string) => {
-    const foundCo = companies.find(c => c.name.toLowerCase() === companyName.toLowerCase());
+    const foundCo = companies.find(c => 
+      c.name.toLowerCase() === companyName.toLowerCase()
+    );
     return foundCo?.logoUrl;
   };
 
@@ -85,11 +91,11 @@ export default function MarketPage() {
     return matchesSearch && matchesRole && matchesCountry;
   });
 
-  // Simple loading
+  // Simple loading spinner
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="w-6 h-6 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+        <RefreshCw size={24} className="text-blue-500 animate-spin" />
       </div>
     );
   }
@@ -171,7 +177,7 @@ export default function MarketPage() {
         </div>
       </div>
 
-      {/* Job Cards - Clean list, no images/PDFs/Apply on cards */}
+      {/* Job Cards - Clean list, clickable title to detail page */}
       <div className="space-y-3">
         <div className="flex items-center justify-between text-xs text-gray-500 px-1">
           <span className="flex items-center gap-2">
@@ -241,7 +247,7 @@ export default function MarketPage() {
                           </span>
                         </div>
 
-                        {/* Job Title - Links to detail page */}
+                        {/* ✅ Job Title - Links to /market/title-slug-id */}
                         <Link to={getJobSlug(job)}>
                           <h3 className="font-bold text-white text-base leading-tight hover:text-blue-400 transition-colors cursor-pointer">
                             {job.title}
@@ -264,7 +270,7 @@ export default function MarketPage() {
                       </div>
                     </div>
 
-                    {/* Footer - Signal ID only */}
+                    {/* Footer - Signal ID + Expiry */}
                     <div className="flex items-center justify-between border-t border-white/5 pt-4 mt-4">
                       <span className="text-[10px] text-gray-500 font-mono uppercase tracking-widest">
                         SIGNAL: JR-{job.id?.toString().slice(0, 4).toUpperCase() || '????'}
