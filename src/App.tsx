@@ -29,12 +29,10 @@ export default function App() {
                 {/* 🏠 Homepage */}
                 <Route path="/" element={<HomePage />} />
 
-                {/* 📊 Market */}
-                <Route path="/market" element={<MarketPage />} />
+                {/* 📊 Market Routes */}
                 <Route path="/market/search/:query" element={<MarketPage />} />
-                
-                {/* 💼 Job Detail - Use /job/ path to avoid conflicts */}
-                <Route path="/job/:jobId" element={<JobDetailPage />} />
+                <Route path="/market/:jobId" element={<JobDetailPage />} />
+                <Route path="/market" element={<MarketPage />} />
 
                 {/* 📰 Reports */}
                 <Route path="/reports" element={<ReportsPage />} />
