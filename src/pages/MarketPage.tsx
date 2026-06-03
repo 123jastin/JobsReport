@@ -488,7 +488,7 @@ export default function MarketPage() {
         </Link>
       </div>
 
-      {/* ✅ Fullscreen File Viewer (Supports Images and Embedded PDFs) */}
+      {/* ✅ Fullscreen File Viewer (Supports Images and Embedded PDFs via Proxy) */}
       {selectedFile && (
         <div 
           className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center"
@@ -529,7 +529,7 @@ export default function MarketPage() {
             </button>
           )}
 
-          {/* Main Content - Embedded PDF Viewer or Image */}
+          {/* Main Content - Embedded PDF Viewer (via Proxy) or Image */}
           {(fileList[currentFileIndex]?.type === 'pdf' || 
             fileList[currentFileIndex]?.url?.toLowerCase().endsWith('.pdf')) ? (
             <div 
@@ -543,7 +543,7 @@ export default function MarketPage() {
                 </span>
                 <div className="flex items-center gap-2">
                   <a 
-                    href={fileList[currentFileIndex]?.url}
+                    href={`/api/view-pdf?file=${encodeURIComponent(fileList[currentFileIndex]?.url)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
@@ -564,14 +564,27 @@ export default function MarketPage() {
                 </div>
               </div>
               
-              {/* PDF Embedded Viewer - Using #toolbar=0&view=FitH for inline display */}
-              <iframe 
-                src={`${fileList[currentFileIndex]?.url}#toolbar=0&view=FitH`}
+              {/* PDF Embedded Viewer - Using proxy endpoint for inline display */}
+              <object
+                data={`/api/view-pdf?file=${encodeURIComponent(fileList[currentFileIndex]?.url)}`}
+                type="application/pdf"
                 className="w-full flex-1"
-                title="PDF Viewer"
-                onClick={(e) => e.stopPropagation()}
                 style={{ border: 'none' }}
-              />
+              >
+                <div className="flex flex-col items-center justify-center h-full p-10 text-center">
+                  <p className="text-gray-600 text-sm mb-4">
+                    Unable to display PDF in this browser.
+                  </p>
+                  <a 
+                    href={`/api/view-pdf?file=${encodeURIComponent(fileList[currentFileIndex]?.url)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors"
+                  >
+                    Open PDF in New Tab
+                  </a>
+                </div>
+              </object>
             </div>
           ) : (
             <img 
