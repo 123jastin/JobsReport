@@ -46,6 +46,10 @@ export default function MarketPage() {
   const [fileList, setFileList] = useState<Array<{url: string, type: string, name: string}>>([]);
   const [currentFileIndex, setCurrentFileIndex] = useState(0);
   
+  // ✅ Job Description viewer state
+  const [selectedDescription, setSelectedDescription] = useState<string | null>(null);
+  const [descriptionJobTitle, setDescriptionJobTitle] = useState<string>('');
+  
   // ✅ Load search query from URL path on page load
   useEffect(() => {
     if (query) {
@@ -310,9 +314,10 @@ export default function MarketPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {filteredJobs.map((job, idx) => {
-                // ✅ Cast job to any to access images property
+                // ✅ Cast job to any to access images and description properties
                 const jobWithImages = job as any;
                 const hasFiles = jobWithImages.images && jobWithImages.images.length > 0;
+                const hasDescription = jobWithImages.description && jobWithImages.description.trim().length > 0;
                 const companyLogo = getCompanyLogo(job.company);
                 
                 return (
@@ -324,6 +329,33 @@ export default function MarketPage() {
                     key={job.id || idx}
                     className="group p-5 bg-white/[0.01] border hover:bg-white/[0.03] border-white/5 rounded-3xl transition-all duration-300 flex flex-col justify-between"
                   >
+                    {/* ✅ View Job Description Button (shown above images) */}
+                    {hasDescription && (
+                      <div 
+                        className="relative w-full mb-3 rounded-2xl overflow-hidden bg-gradient-to-r from-emerald-600/20 to-teal-600/20 border border-white/5 cursor-pointer group/desc"
+                        onClick={() => {
+                          setSelectedDescription(jobWithImages.description);
+                          setDescriptionJobTitle(job.title);
+                        }}
+                      >
+                        <div className="flex items-center justify-between p-3">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-emerald-500/20 rounded-xl">
+                              <FileText size={20} className="text-emerald-400" />
+                            </div>
+                            <div>
+                              <span className="text-white text-xs font-bold block">View Job Description</span>
+                              <span className="text-[9px] text-gray-400 mt-0.5">Full details, requirements & responsibilities</span>
+                            </div>
+                          </div>
+                          <Eye size={16} className="text-emerald-400 opacity-0 group-hover/desc:opacity-100 transition-opacity" />
+                        </div>
+                        <div className="absolute top-2 right-2 px-2 py-0.5 bg-black/60 backdrop-blur rounded-lg text-[8px] font-mono text-emerald-400">
+                          JD
+                        </div>
+                      </div>
+                    )}
+
                     {/* ✅ Job Files from R2 - Images show thumbnails, PDFs show document icons */}
                     {hasFiles && (
                       <div className="relative w-full mb-3 rounded-2xl overflow-hidden bg-gradient-to-r from-blue-600/20 to-violet-600/20 border border-white/5">
@@ -635,6 +667,57 @@ export default function MarketPage() {
               Tap arrows to navigate
             </div>
           )}
+        </div>
+      )}
+
+      {/* ✅ Job Description Fullscreen Viewer */}
+      {selectedDescription && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/95 flex flex-col"
+          onClick={() => {
+            setSelectedDescription(null);
+            setDescriptionJobTitle('');
+          }}
+        >
+          {/* Close button */}
+          <button 
+            onClick={() => { 
+              setSelectedDescription(null); 
+              setDescriptionJobTitle('');
+            }}
+            className="absolute top-4 right-4 z-50 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all"
+          >
+            <X size={24} />
+          </button>
+
+          {/* Description Header */}
+          <div className="p-4 bg-black/80 border-b border-white/10">
+            <h3 className="text-white font-bold text-sm flex items-center gap-2">
+              <FileText size={16} className="text-emerald-400" />
+              Job Description: {descriptionJobTitle}
+            </h3>
+            <p className="text-[10px] text-gray-500 mt-1 font-mono">
+              Full details, requirements, and responsibilities for this position
+            </p>
+          </div>
+
+          {/* Description Content - Scrollable */}
+          <div 
+            className="flex-1 overflow-y-auto p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div 
+              className="max-w-4xl mx-auto prose prose-invert prose-sm prose-headings:text-white prose-headings:font-bold prose-p:text-gray-300 prose-p:text-sm prose-p:leading-relaxed prose-strong:text-white prose-ul:text-gray-300 prose-li:text-gray-300 space-y-4"
+              dangerouslySetInnerHTML={{ __html: selectedDescription }}
+            />
+          </div>
+
+          {/* Footer hint */}
+          <div className="p-3 text-center border-t border-white/5">
+            <p className="text-[9px] text-gray-500 font-mono">
+              Tap outside or press ESC to close
+            </p>
+          </div>
         </div>
       )}
     </div>
