@@ -29,13 +29,10 @@ export default function App() {
                 {/* 🏠 Homepage - Market Intelligence Dashboard */}
                 <Route path="/" element={<HomePage />} />
 
-                {/* 📊 Market Telemetry Stream */}
-                <Route path="/market" element={<MarketPage />} />
-                {/* SEO-friendly search route */}
+                {/* 📊 Market Routes - More specific routes FIRST */}
                 <Route path="/market/search/:query" element={<MarketPage />} />
-
-                {/* 💼 Individual Job Detail - Under /market/ for SEO */}
                 <Route path="/market/:jobId" element={<JobDetailPage />} />
+                <Route path="/market" element={<MarketPage />} />
 
                 {/* 📰 Reports */}
                 <Route path="/reports" element={<ReportsPage />} />
