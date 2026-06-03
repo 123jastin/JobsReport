@@ -318,7 +318,6 @@ export default function MarketPage() {
                 const jobWithImages = job as any;
                 const hasFiles = jobWithImages.images && jobWithImages.images.length > 0;
                 const hasDescription = jobWithImages.description && jobWithImages.description.trim().length > 0;
-                const companyLogo = getCompanyLogo(job.company);
                 
                 return (
                   <motion.div
@@ -329,37 +328,84 @@ export default function MarketPage() {
                     key={job.id || idx}
                     className="group p-5 bg-white/[0.01] border hover:bg-white/[0.03] border-white/5 rounded-3xl transition-all duration-300 flex flex-col justify-between"
                   >
-                    {/* ✅ View Job Description Button (shown above images) */}
-                    {hasDescription && (
-                      <div 
-                        className="relative w-full mb-3 rounded-2xl overflow-hidden bg-gradient-to-r from-emerald-600/20 to-teal-600/20 border border-white/5 cursor-pointer group/desc"
-                        onClick={() => {
-                          setSelectedDescription(jobWithImages.description);
-                          setDescriptionJobTitle(job.title);
-                        }}
-                      >
-                        <div className="flex items-center justify-between p-3">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 bg-emerald-500/20 rounded-xl">
-                              <FileText size={20} className="text-emerald-400" />
-                            </div>
-                            <div>
-                              <span className="text-white text-xs font-bold block">View Job Description</span>
-                              <span className="text-[9px] text-gray-400 mt-0.5">Full details, requirements & responsibilities</span>
-                            </div>
+                    {/* Job Header with Logo and Details */}
+                    <div className="flex gap-4 items-start">
+                      {/* Company Logo */}
+                      <div className="flex-shrink-0 w-12 h-12 rounded-2xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center p-0.5 mt-0.5">
+                        {getCompanyLogo(job.company) ? (
+                          <img 
+                            src={getCompanyLogo(job.company)} 
+                            alt={`${job.company} logo`} 
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover rounded-xl"
+                            onError={(e) => { 
+                              (e.target as HTMLImageElement).style.display = 'none'; 
+                            }}
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400 font-mono">
+                            {job.company?.charAt(0).toUpperCase() || '?'}
                           </div>
-                          <Eye size={16} className="text-emerald-400 opacity-0 group-hover/desc:opacity-100 transition-opacity" />
-                        </div>
-                        <div className="absolute top-2 right-2 px-2 py-0.5 bg-black/60 backdrop-blur rounded-lg text-[8px] font-mono text-emerald-400">
-                          JD
-                        </div>
+                        )}
                       </div>
-                    )}
 
-                    {/* ✅ Job Files from R2 - Images show thumbnails, PDFs show document icons */}
+                      {/* Job Details */}
+                      <div className="flex-1 min-w-0">
+                        {/* Role Badge + Date */}
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <span className="px-2 py-0.5 rounded text-[8px] font-bold bg-blue-500/10 text-blue-400 font-mono tracking-widest uppercase">
+                            {job.role || 'Unknown'}
+                          </span>
+                          <span className="text-[10px] text-gray-500 font-mono flex items-center gap-1">
+                            <Clock size={11} />
+                            {job.postedAt || 'Recent'}
+                          </span>
+                        </div>
+
+                        {/* Job Title */}
+                        <h3 className="font-bold text-white text-base leading-tight group-hover:text-blue-400 transition-colors">
+                          {job.title}
+                        </h3>
+                        
+                        {/* Company, Location, Salary */}
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className="text-xs text-gray-400 font-medium">{job.company}</span>
+                          {job.location && (
+                            <>
+                              <span className="text-gray-600 font-mono">•</span>
+                              <span className="text-xs text-gray-500 font-medium">{job.location}</span>
+                            </>
+                          )}
+                        </div>
+
+                        {job.salary && (
+                          <span className="text-[10px] text-emerald-400 font-mono mt-1 block">
+                            {job.salary}
+                          </span>
+                        )}
+
+                        {/* ✅ View Job Description Button - After details, before images */}
+                        {hasDescription && (
+                          <button
+                            onClick={() => {
+                              setSelectedDescription(jobWithImages.description);
+                              setDescriptionJobTitle(job.title);
+                            }}
+                            className="mt-2 px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600/20 to-violet-600/20 border border-blue-500/20 hover:border-blue-500/40 text-blue-400 text-[10px] font-bold flex items-center gap-1.5 transition-all group/desc"
+                          >
+                            <FileText size={12} className="group-hover/desc:scale-110 transition-transform" />
+                            <span>View Job Description</span>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="group-hover/desc:translate-x-0.5 transition-transform">
+                              <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* ✅ Job Images/PDFs Strip - After description button */}
                     {hasFiles && (
-                      <div className="relative w-full mb-3 rounded-2xl overflow-hidden bg-gradient-to-r from-blue-600/20 to-violet-600/20 border border-white/5">
-                        {/* Scrollable thumbnail strip */}
+                      <div className="relative w-full mt-3 rounded-2xl overflow-hidden bg-gradient-to-r from-blue-600/20 to-violet-600/20 border border-white/5">
                         <div className="flex overflow-x-auto gap-2 p-2 scrollbar-none">
                           {jobWithImages.images.map((file: any, fileIndex: number) => {
                             const isPDF = file.type === 'pdf' || file.name?.toLowerCase().endsWith('.pdf');
@@ -411,68 +457,8 @@ export default function MarketPage() {
                       </div>
                     )}
 
-                    <div className="flex gap-4 items-start">
-                      {/* ✅ Company Logo Display with fallback */}
-                      <div className="flex-shrink-0 w-12 h-12 rounded-2xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center p-0.5 mt-0.5">
-                        {companyLogo ? (
-                          <img 
-                            src={companyLogo} 
-                            alt={`${job.company} logo`} 
-                            referrerPolicy="no-referrer"
-                            className="w-full h-full object-cover rounded-xl"
-                            onError={(e) => {
-                              // Fallback if image fails to load
-                              (e.target as HTMLImageElement).style.display = 'none';
-                              const parent = (e.target as HTMLImageElement).parentElement;
-                              if (parent) {
-                                const fallback = document.createElement('div');
-                                fallback.className = 'w-full h-full bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400 font-mono';
-                                fallback.textContent = job.company?.charAt(0).toUpperCase() || '?';
-                                parent.appendChild(fallback);
-                              }
-                            }}
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400 font-mono">
-                            {job.company?.charAt(0).toUpperCase() || '?'}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2 mb-2">
-                          <span className="px-2 py-0.5 rounded text-[8px] font-bold bg-blue-500/10 text-blue-400 font-mono tracking-widest uppercase">
-                            {job.role || 'Unknown'}
-                          </span>
-                          <span className="text-[10px] text-gray-500 font-mono flex items-center gap-1">
-                            <Clock size={11} />
-                            {job.postedAt || 'Recent'}
-                          </span>
-                        </div>
-
-                        <h3 className="font-bold text-white text-base leading-tight group-hover:text-blue-400 transition-colors">
-                          {job.title}
-                        </h3>
-                        
-                        <div className="flex items-center gap-2 mt-2">
-                          <span className="text-xs text-gray-400 font-medium">{job.company}</span>
-                          {job.location && (
-                            <>
-                              <span className="text-gray-600 font-mono">•</span>
-                              <span className="text-xs text-gray-500 font-medium">{job.location}</span>
-                            </>
-                          )}
-                        </div>
-
-                        {job.salary && (
-                          <span className="text-[10px] text-emerald-400 font-mono mt-1 block">
-                            {job.salary}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between border-t border-white/5 pt-4 mt-6">
+                    {/* Footer with Signal ID and Apply Button */}
+                    <div className="flex items-center justify-between border-t border-white/5 pt-4 mt-4">
                       <div className="flex flex-col gap-1">
                         <span className="text-[10px] text-gray-500 font-mono uppercase tracking-widest">
                           SIGNAL: JR-{job.id?.toString().slice(0, 4).toUpperCase() || '????'}
