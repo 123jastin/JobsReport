@@ -57,6 +57,79 @@ import {
   Cell 
 } from 'recharts';
 
+// ========== TEMPLATE TYPES ==========
+interface JobSection {
+  title: string;
+  content: string;
+  type?: 'paragraph' | 'list' | 'subheader';
+  items?: string[];
+}
+
+interface JobTemplateData {
+  title: string;
+  company: string;
+  location: string;
+  salary?: string;
+  role: string;
+  sections: JobSection[];
+}
+
+// ========== TEMPLATE RENDERER ==========
+const renderJobDescription = (data: JobTemplateData, variant: 'standard' | 'premium' = 'standard'): string => {
+  if (variant === 'premium') {
+    return `
+      <div class="job-description-premium">
+        <div class="bg-gradient-to-r from-blue-600/20 to-violet-600/20 p-6 rounded-2xl mb-6 border border-white/10">
+          <h1 class="text-2xl font-bold text-white mb-2">${data.title}</h1>
+          <div class="flex flex-wrap gap-4 text-sm text-gray-300">
+            <span class="flex items-center gap-1">🏢 ${data.company}</span>
+            <span class="flex items-center gap-1">📍 ${data.location}</span>
+            ${data.salary ? `<span class="flex items-center gap-1">💰 ${data.salary}</span>` : ''}
+            <span class="flex items-center gap-1">🎯 ${data.role}</span>
+          </div>
+        </div>
+        ${data.sections.map(section => `
+          <div class="mb-5">
+            <h2 class="text-lg font-bold text-white mb-3 border-l-3 border-blue-500 pl-3">${section.title}</h2>
+            ${section.type === 'list' && section.items ? `
+              <ul class="list-disc pl-6 space-y-2 text-gray-300">
+                ${section.items.map(item => `<li>${item}</li>`).join('')}
+              </ul>
+            ` : `
+              <p class="text-gray-300 leading-relaxed">${section.content}</p>
+            `}
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+  
+  // Standard template
+  return `
+    <div class="job-description">
+      <h2 class="text-xl font-bold text-white mb-3 border-b border-white/10 pb-2">${data.title}</h2>
+      <div class="grid grid-cols-2 gap-3 mb-4 p-3 bg-white/5 rounded-lg text-sm">
+        <div><span class="text-gray-400">Company:</span> <span class="text-white">${data.company}</span></div>
+        <div><span class="text-gray-400">Location:</span> <span class="text-white">${data.location}</span></div>
+        ${data.salary ? `<div><span class="text-gray-400">Salary:</span> <span class="text-green-400">${data.salary}</span></div>` : ''}
+        <div><span class="text-gray-400">Role:</span> <span class="text-blue-400">${data.role}</span></div>
+      </div>
+      ${data.sections.map(section => `
+        <div class="mb-4">
+          <h3 class="font-semibold text-blue-400 mb-2">${section.title}</h3>
+          ${section.type === 'list' && section.items ? `
+            <ul class="list-disc pl-5 space-y-1 text-gray-300">
+              ${section.items.map(item => `<li>${item}</li>`).join('')}
+            </ul>
+          ` : `
+            <p class="text-gray-300 leading-relaxed">${section.content}</p>
+          `}
+        </div>
+      `).join('')}
+    </div>
+  `;
+};
+
 export default function AdminPage() {
   const { isAdmin, login, logout: triggerLogout } = useAuth();
   const { selectedCountry, currentFlag } = useCountry();
@@ -323,7 +396,7 @@ export default function AdminPage() {
     }, 5000);
   };
 
-  // ✅ AI Job Parser with validation feedback
+  // ✅ AI Job Parser with Template Support
   const handleAIProcessJob = async () => {
     if (!rawJobText.trim() || rawJobText.trim().length < 20) {
       showFeedback('error', 'Please paste a complete job description (at least 20 characters).');
@@ -351,11 +424,31 @@ export default function AdminPage() {
           companySelected: result.data.company || prev.companySelected,
         }));
 
-        // ✅ Set AI-generated safe HTML description
-        if (result.data.description) {
+        // ✅ Apply TEMPLATE to AI data
+        if (result.data.sections) {
+          const templateData: JobTemplateData = {
+            title: result.data.title || '',
+            company: result.data.company || '',
+            location: result.data.location || '',
+            salary: result.data.salary,
+            role: result.data.role || 'General',
+            sections: result.data.sections
+          };
+          
+          // Render using template (premium for better formatting)
+          const templateHTML = renderJobDescription(templateData, 'premium');
+          
+          setJobDescription(templateHTML);
+          setShowJobDescEditor(true);
+          setTimeout(() => {
+            if (jobDescEditorRef.current) {
+              jobDescEditorRef.current.innerHTML = templateHTML;
+            }
+          }, 100);
+        } else if (result.data.description) {
+          // Fallback to raw description if no structured sections
           setJobDescription(result.data.description);
           setShowJobDescEditor(true);
-          // Load into editor
           setTimeout(() => {
             if (jobDescEditorRef.current) {
               jobDescEditorRef.current.innerHTML = result.data.description;
@@ -363,7 +456,7 @@ export default function AdminPage() {
           }, 100);
         }
 
-        showFeedback('success', `Job parsed successfully${result.attempts > 1 ? ` (took ${result.attempts} attempts)` : ''}! Review and submit.`);
+        showFeedback('success', `Job parsed with template${result.attempts > 1 ? ` (took ${result.attempts} attempts)` : ''}! Review and submit.`);
         setShowAIPaste(false);
         setRawJobText('');
       } else {
@@ -1215,7 +1308,7 @@ export default function AdminPage() {
       title: rep.title,
       roleSelected: rep.role,
       monthYear: rep.monthYear || 'May 2026',
-      excerpt: rep.excerpt || '',
+      excerpt: rep.content || rep.excerpt || '',
       content: rep.content || ''
     });
     showFeedback('success', `Loaded "${rep.title}" into the rich text composer workspace.`);
@@ -1695,14 +1788,14 @@ export default function AdminPage() {
                 </ResponsiveContainer>
               </div>
       
-<div className="grid grid-cols-2 gap-2 pt-2">
-  {getDynamicPieChartData().map((item, idx) => (
-    <div key={item.name} className="flex items-center gap-2 text-[10px] text-gray-400">
-      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: CHART_COLORS[idx % CHART_COLORS.length] }}></span>
-      <span className="truncate">{item.name} ({item.value})</span>
-    </div>
-  ))}
-</div>
+              <div className="grid grid-cols-2 gap-2 pt-2">
+                {getDynamicPieChartData().map((item, idx) => (
+                  <div key={item.name} className="flex items-center gap-2 text-[10px] text-gray-400">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: CHART_COLORS[idx % CHART_COLORS.length] }}></span>
+                    <span className="truncate">{item.name} ({item.value})</span>
+                  </div>
+                ))}
+              </div>
               
             </div>
 
@@ -1832,7 +1925,8 @@ export default function AdminPage() {
                       value={rawJobText}
                       onChange={(e) => setRawJobText(e.target.value)}
                       placeholder={`Paste job description here...\n\nExample:\n"We are hiring a Senior Accountant in Dar es Salaam. The ideal candidate will have 5+ years experience..."`}
-                      className="w-full h-32 bg-black/40 border border-white/10 rounded-xl p-3 text-xs text-white resize-none focus:outline-none focus:border-violet-500/50 font-mono placeholder:text-gray-600"
+                      className="w-full h-40 bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-white resize-none focus:outline-none focus:border-violet-500/50 font-mono placeholder:text-gray-600"
+                      style={{ fontSize: '13px', lineHeight: '1.6' }}
                       disabled={aiProcessing}
                     />
                     
@@ -2101,7 +2195,7 @@ export default function AdminPage() {
                   </p>
                 </div>
 
-                {/* ✅ Job Description Editor */}
+                {/* ✅ Job Description Editor - LARGER */}
                 <div className="space-y-2 border-t border-white/5 pt-4">
                   <div className="flex items-center justify-between">
                     <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">
@@ -2131,12 +2225,13 @@ export default function AdminPage() {
                         <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('insertOrderedList'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><List size={12}/></button>
                       </div>
                       
-                      {/* Editor */}
+                      {/* Editor - LARGER */}
                       <div 
                         ref={jobDescEditorRef}
                         contentEditable
                         suppressContentEditableWarning
-                        className="w-full min-h-[150px] bg-black/40 border border-white/10 rounded-xl p-3 text-xs text-stone-200 focus:outline-none focus:border-blue-500/50 overflow-y-auto"
+                        className="w-full min-h-[250px] bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-stone-200 focus:outline-none focus:border-blue-500/50 overflow-y-auto"
+                        style={{ fontSize: '14px', lineHeight: '1.8' }}
                         onInput={() => {
                           if (jobDescEditorRef.current) {
                             setJobDescription(jobDescEditorRef.current.innerHTML);
@@ -2585,98 +2680,161 @@ export default function AdminPage() {
       )}
   
       {/* ---------------------------------------------------- */}
-      {/* 📰 TAB 5: REPORT CREATION SYSTEM */}
+      {/* 📰 TAB 5: REPORT CREATION SYSTEM - FULL WIDTH FLAT */}
       {/* ---------------------------------------------------- */}
       {activeTab === 'reports' && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8 font-sans">
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
           
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            <div className="lg:col-span-4 space-y-6">
-              <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
-                <div>
-                  <h3 className="text-base font-extrabold uppercase tracking-widest flex items-center gap-1.5 text-stone-100">
-                    <FileText size={16} className="text-blue-500" />
-                    {editingReportId ? "Edit Report" : "Publish Report"}
-                  </h3>
-                </div>
-                <div className="space-y-3">
-                  <input type="text" value={reportForm.title} onChange={(e) => setReportForm(prev => ({ ...prev, title: e.target.value }))} placeholder="Report Title" className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white" required />
-                  <div className="grid grid-cols-2 gap-3">
-                    <select value={reportForm.roleSelected} onChange={(e) => setReportForm(prev => ({ ...prev, roleSelected: e.target.value }))} className="w-full bg-black/40 border border-white/15 px-3 py-2.5 rounded-2xl text-xs text-white">
-                      {rolesState.map(r => (<option key={r.id} value={r.title}>{r.title}</option>))}
-                    </select>
-                    <input type="text" value={reportForm.monthYear} onChange={(e) => setReportForm(prev => ({ ...prev, monthYear: e.target.value }))} placeholder="June 2026" className="w-full bg-black/40 border border-white/15 px-3 py-2 rounded-2xl text-xs text-white" />
-                  </div>
-                  <div className="flex gap-2">
-                    {editingReportId && (<button type="button" onClick={handleCancelEdit} className="flex-1 py-3 bg-white/5 border border-white/10 text-stone-300 font-extrabold text-[11px] uppercase rounded-2xl">Cancel</button>)}
-                    <button onClick={handlePostReport} disabled={actionLoading || !reportForm.title} className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-violet-600 text-stone-100 font-extrabold text-[11px] uppercase rounded-2xl disabled:opacity-50">
-                      {actionLoading ? "Saving..." : editingReportId ? "UPDATE" : "PUBLISH"}
-                    </button>
-                  </div>
+          {/* ========== TINYMCE EDITOR - FULL WIDTH ========== */}
+          <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
+            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+              <div className="flex items-center gap-3">
+                <h3 className="text-sm font-extrabold uppercase text-stone-100">
+                  <Sparkles size={14} className="text-blue-500 inline mr-1" />TinyMCE Editor
+                </h3>
+                <span className="text-[9px] text-gray-500 font-mono">
+                  {(reportForm.excerpt || '').length} characters
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {/* Push to Live / Copy Buttons */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(reportForm.excerpt || '');
+                    showFeedback('success', 'Content copied to clipboard');
+                  }}
+                  className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-400 text-[10px] font-bold uppercase rounded-xl flex items-center gap-1.5 transition-all"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                  Copy
+                </button>
+                <div className="flex bg-black/60 p-1 rounded-2xl font-mono text-[10px] font-bold">
+                  {(['visual','code','preview'] as const).map(m => (
+                    <button key={m} onClick={() => setEditorMode(m)} className={`px-3 py-1.5 rounded-xl uppercase ${editorMode===m?'bg-blue-600 text-white':'text-gray-400'}`}>{m}</button>
+                  ))}
                 </div>
               </div>
             </div>
 
-            <div className="lg:col-span-8">
-              <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
-                <div className="flex items-center justify-between border-b border-white/5 pb-3">
-                  <h3 className="text-sm font-extrabold uppercase text-stone-100"><Sparkles size={14} className="text-blue-500 inline mr-1" />TinyMCE Editor</h3>
-                  <div className="flex bg-black/60 p-1 rounded-2xl font-mono text-[10px] font-bold">
-                    {(['visual','code','preview'] as const).map(m => (
-                      <button key={m} onClick={() => setEditorMode(m)} className={`px-3 py-1.5 rounded-xl uppercase ${editorMode===m?'bg-blue-600 text-white':'text-gray-400'}`}>{m}</button>
-                    ))}
-                  </div>
+            {/* Toolbar */}
+            <div className="p-2 bg-black/50 border border-white/10 rounded-2xl flex flex-wrap items-center gap-1">
+              <button onClick={() => handleToolbarClick('bold','','<strong>','</strong>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold"><Bold size={13}/> Bold</button>
+              <button onClick={() => handleToolbarClick('italic','','<em>','</em>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold"><Italic size={13}/> Italic</button>
+              <label className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold cursor-pointer flex items-center gap-1 text-blue-400">
+                <Upload size={13}/> Image
+                <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, 'article')} className="hidden" />
+              </label>
+              <span className="w-px h-5 bg-white/10 mx-1"/>
+              <button onClick={() => handleToolbarClick('formatBlock','H2','<h2>','</h2>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold">H2</button>
+              <button onClick={() => handleToolbarClick('formatBlock','H3','<h3>','</h3>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold">H3</button>
+              <span className="w-px h-5 bg-white/10 mx-1"/>
+              <button onClick={() => handleToolbarClick('insertUnorderedList','','<ul><li>','</li></ul>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold"><List size={13}/> List</button>
+              <button onClick={() => handleToolbarClick('formatBlock','BLOCKQUOTE','<blockquote>','</blockquote>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold">Quote</button>
+              <button onClick={() => handleToolbarClick('highlight','','<span class=\"text-blue-400\">','</span>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold text-blue-400">Highlight</button>
+            </div>
+
+            {/* Editor Area - FULL WIDTH LARGE */}
+            <div className="border border-white/10 rounded-2xl overflow-hidden bg-black/45">
+              {editorMode==='visual' && (
+                <div className="p-6">
+                  <div 
+                    ref={visualEditorRef} 
+                    contentEditable 
+                    onInput={handleVisualEditorInput} 
+                    onBlur={handleVisualEditorBlur} 
+                    className="w-full min-h-[500px] bg-transparent text-stone-200 text-sm outline-none leading-relaxed"
+                    style={{ fontSize: '15px', lineHeight: '1.8' }}
+                  />
                 </div>
-
-                <div className="p-2 bg-black/50 border border-white/10 rounded-2xl flex flex-wrap items-center gap-1">
-                  <button onClick={() => handleToolbarClick('bold','','<strong>','</strong>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold"><Bold size={13}/> Bold</button>
-                  <button onClick={() => handleToolbarClick('italic','','<em>','</em>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold"><Italic size={13}/> Italic</button>
-                  
-                  <label className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold cursor-pointer flex items-center gap-1 text-blue-400" title="Upload Image">
-                    <Upload size={13}/> Image
-                    <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, 'article')} className="hidden" />
-                  </label>
-
-                  <span className="w-px h-5 bg-white/10 mx-1"/>
-                  <button onClick={() => handleToolbarClick('formatBlock','H2','<h2>','</h2>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold">H2</button>
-                  <button onClick={() => handleToolbarClick('formatBlock','H3','<h3>','</h3>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold">H3</button>
-                  <span className="w-px h-5 bg-white/10 mx-1"/>
-                  <button onClick={() => handleToolbarClick('insertUnorderedList','','<ul><li>','</li></ul>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold"><List size={13}/> List</button>
-                  <button onClick={() => handleToolbarClick('formatBlock','BLOCKQUOTE','<blockquote>','</blockquote>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold">Quote</button>
-                  <button onClick={() => handleToolbarClick('highlight','','<span class=\"text-blue-400\">','</span>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold text-blue-400">Highlight</button>
+              )}
+              {editorMode==='code' && (
+                <div className="p-6">
+                  <textarea 
+                    id="excerpt-editor-textarea" 
+                    value={reportForm.excerpt} 
+                    onChange={(e) => setReportForm(prev=>({...prev,excerpt:e.target.value}))} 
+                    className="w-full min-h-[500px] bg-transparent text-blue-400 text-sm font-mono outline-none resize-none leading-relaxed"
+                    style={{ fontSize: '14px', lineHeight: '1.8' }}
+                  />
                 </div>
-
-                <div className="border border-white/10 rounded-2xl overflow-hidden bg-black/45 min-h-[350px]">
-                  {editorMode==='visual' && (
-                    <div className="p-5"><div ref={visualEditorRef} contentEditable onInput={handleVisualEditorInput} onBlur={handleVisualEditorBlur} className="w-full min-h-[300px] bg-transparent text-stone-200 text-sm outline-none"/></div>
+              )}
+              {editorMode==='preview' && (
+                <div className="p-6 min-h-[500px] overflow-y-auto">
+                  {reportForm.excerpt ? (
+                    <div dangerouslySetInnerHTML={{__html:reportForm.excerpt}} className="text-stone-300 text-sm leading-relaxed max-w-4xl"/>
+                  ) : (
+                    <p className="text-gray-500 text-center py-20">No content</p>
                   )}
-                  {editorMode==='code' && (
-                    <div className="p-4"><textarea id="excerpt-editor-textarea" value={reportForm.excerpt} onChange={(e) => setReportForm(prev=>({...prev,excerpt:e.target.value}))} className="w-full min-h-[300px] bg-transparent text-blue-400 text-xs font-mono outline-none resize-none"/></div>
-                  )}
-                  {editorMode==='preview' && (
-                    <div className="p-6 min-h-[300px] overflow-y-auto">{reportForm.excerpt ? <div dangerouslySetInnerHTML={{__html:reportForm.excerpt}} className="text-stone-300 text-sm"/> : <p className="text-gray-500 text-center py-20">No content</p>}</div>
-                  )}
                 </div>
+              )}
+            </div>
 
-                <div className="flex gap-2">
-                  <button onClick={()=>handleInsertTemplate('insights')} className="px-3 py-2 bg-black/40 border border-white/5 rounded-xl text-[10px] font-bold text-white">Key Insights</button>
-                  <button onClick={()=>handleInsertTemplate('segmented')} className="px-3 py-2 bg-black/40 border border-white/5 rounded-xl text-[10px] font-bold text-white">Segment</button>
-                  <button onClick={()=>handleInsertTemplate('standard')} className="px-3 py-2 bg-black/40 border border-white/5 rounded-xl text-[10px] font-bold text-white">Summary</button>
-                </div>
+            {/* Templates + Publish Row */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex gap-2">
+                <button onClick={()=>handleInsertTemplate('insights')} className="px-3 py-2 bg-black/40 border border-white/5 rounded-xl text-[10px] font-bold text-white">Key Insights</button>
+                <button onClick={()=>handleInsertTemplate('segmented')} className="px-3 py-2 bg-black/40 border border-white/5 rounded-xl text-[10px] font-bold text-white">Segment</button>
+                <button onClick={()=>handleInsertTemplate('standard')} className="px-3 py-2 bg-black/40 border border-white/5 rounded-xl text-[10px] font-bold text-white">Summary</button>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <input 
+                  type="text" 
+                  value={reportForm.title} 
+                  onChange={(e) => setReportForm(prev => ({ ...prev, title: e.target.value }))} 
+                  placeholder="Report Title" 
+                  className="bg-black/40 border border-white/15 px-4 py-2.5 rounded-2xl text-xs text-white w-64" 
+                  required 
+                />
+                <select 
+                  value={reportForm.roleSelected} 
+                  onChange={(e) => setReportForm(prev => ({ ...prev, roleSelected: e.target.value }))} 
+                  className="bg-black/40 border border-white/15 px-3 py-2.5 rounded-2xl text-xs text-white"
+                >
+                  {rolesState.map(r => (<option key={r.id} value={r.title}>{r.title}</option>))}
+                </select>
+                <input 
+                  type="text" 
+                  value={reportForm.monthYear} 
+                  onChange={(e) => setReportForm(prev => ({ ...prev, monthYear: e.target.value }))} 
+                  placeholder="June 2026" 
+                  className="bg-black/40 border border-white/15 px-3 py-2.5 rounded-2xl text-xs text-white w-28" 
+                />
+                {editingReportId && (
+                  <button type="button" onClick={handleCancelEdit} className="px-4 py-2.5 bg-white/5 border border-white/10 text-stone-300 font-extrabold text-[10px] uppercase rounded-2xl">Cancel</button>
+                )}
+                <button 
+                  onClick={handlePostReport} 
+                  disabled={actionLoading || !reportForm.title} 
+                  className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-violet-600 text-stone-100 font-extrabold text-[10px] uppercase rounded-2xl disabled:opacity-50"
+                >
+                  {actionLoading ? "Saving..." : editingReportId ? "UPDATE" : "PUBLISH"}
+                </button>
               </div>
             </div>
           </div>
 
+          {/* ========== PUBLISHED REPORTS ========== */}
           <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-extrabold uppercase text-stone-100"><Layers size={14} className="text-violet-500 inline mr-1"/>Published Reports ({reportsState.length})</h3>
-              <button onClick={fetchSystemData} className="px-3 py-1.5 bg-white/5 rounded-xl text-[10px] font-bold text-gray-400 hover:text-white flex items-center gap-1"><RefreshCw size={12}/>Refresh</button>
+              <h3 className="text-sm font-extrabold uppercase text-stone-100">
+                <Layers size={14} className="text-violet-500 inline mr-1"/>Published Reports ({reportsState.length})
+              </h3>
+              <button onClick={fetchSystemData} className="px-3 py-1.5 bg-white/5 rounded-xl text-[10px] font-bold text-gray-400 hover:text-white flex items-center gap-1">
+                <RefreshCw size={12}/>Refresh
+              </button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[300px] overflow-y-auto">
               {reportsState.map(rep=>(
                 <div key={rep.id} className={`p-3 bg-black/30 border rounded-2xl flex items-center justify-between ${editingReportId===rep.id?'border-blue-500/50':'border-white/5'}`}>
                   <div className="min-w-0 flex-1"><p className="text-xs font-bold text-white truncate">{rep.title}</p><span className="text-[9px] text-gray-500">{rep.monthYear} • {rep.role}</span></div>
-                  <div className="flex gap-1"><button onClick={()=>handleLoadReportToEdit(rep)} className="p-1.5 bg-blue-500/10 text-blue-400 rounded text-[9px] font-black">Edit</button><button onClick={()=>handleDeleteReport(rep.id)} className="p-1.5 bg-red-500/10 text-red-400 rounded text-[9px] font-black">Del</button></div>
+                  <div className="flex gap-1">
+                    <button onClick={()=>handleLoadReportToEdit(rep)} className="p-1.5 bg-blue-500/10 text-blue-400 rounded text-[9px] font-black">Edit</button>
+                    <button onClick={()=>handleDeleteReport(rep.id)} className="p-1.5 bg-red-500/10 text-red-400 rounded text-[9px] font-black">Del</button>
+                  </div>
                 </div>
               ))}
               {reportsState.length===0 && <div className="col-span-full text-center py-8 text-gray-500 text-xs">No published reports.</div>}
