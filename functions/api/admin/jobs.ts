@@ -57,22 +57,36 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       body.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     ).run();
 
-    // Save images
-    const savedImages: any[] = [];
+    // ✅ Save files (images, PDFs, documents)
+    const savedFiles: any[] = [];
     if (body.images && Array.isArray(body.images) && body.images.length > 0) {
       for (let i = 0; i < body.images.length; i++) {
-        const img = body.images[i];
+        const file = body.images[i];
         const imageId = 'img-' + Date.now().toString(36) + '-' + i + '-' + Math.random().toString(36).substring(2, 4);
+        const fileType = file.type || 'image';
         
         try {
           await DB.prepare(`
-            INSERT INTO job_images (id, job_id, url, thumbnail_url, name, sort_order)
-            VALUES (?, ?, ?, ?, ?, ?)
-          `).bind(imageId, id, img.url || '', img.thumbnail || img.url || '', img.name || 'image', i).run();
+            INSERT INTO job_images (id, job_id, url, thumbnail_url, name, sort_order, type)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+          `).bind(
+            imageId, 
+            id, 
+            file.url || '', 
+            file.thumbnail || file.url || '', 
+            file.name || 'file', 
+            i,
+            fileType
+          ).run();
           
-          savedImages.push({ url: img.url, thumbnail: img.thumbnail || img.url, name: img.name });
+          savedFiles.push({ 
+            url: file.url, 
+            thumbnail: file.thumbnail || file.url, 
+            name: file.name,
+            type: fileType
+          });
         } catch (dbErr) {
-          console.error(`Failed to save image ${i}:`, dbErr);
+          console.error(`Failed to save file ${i}:`, dbErr);
         }
       }
     }
@@ -88,7 +102,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       postedAt: new Date().toISOString().split('T')[0],
       expiresAt: body.expiresAt || '',
       active: true,
-      images: savedImages
+      images: savedFiles
     }), {
       status: 201,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
@@ -155,19 +169,35 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       id
     ).run();
 
-    // ✅ Delete old images, then save new ones
+    // Delete old files, save new ones
     await DB.prepare('DELETE FROM job_images WHERE job_id = ?').bind(id).run();
 
-    const savedImages: any[] = [];
+    const savedFiles: any[] = [];
     if (body.images && Array.isArray(body.images) && body.images.length > 0) {
       for (let i = 0; i < body.images.length; i++) {
-        const img = body.images[i];
+        const file = body.images[i];
         const imageId = 'img-' + Date.now().toString(36) + '-' + i;
+        const fileType = file.type || 'image';
+        
         await DB.prepare(`
-          INSERT INTO job_images (id, job_id, url, thumbnail_url, name, sort_order)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `).bind(imageId, id, img.url || '', img.thumbnail || img.url || '', img.name || 'image', i).run();
-        savedImages.push({ url: img.url, thumbnail: img.thumbnail || img.url, name: img.name });
+          INSERT INTO job_images (id, job_id, url, thumbnail_url, name, sort_order, type)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).bind(
+          imageId, 
+          id, 
+          file.url || '', 
+          file.thumbnail || file.url || '', 
+          file.name || 'file', 
+          i,
+          fileType
+        ).run();
+        
+        savedFiles.push({ 
+          url: file.url, 
+          thumbnail: file.thumbnail || file.url, 
+          name: file.name,
+          type: fileType
+        });
       }
     }
 
@@ -182,7 +212,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       postedAt: new Date().toISOString().split('T')[0],
       expiresAt: body.expiresAt || '',
       active: true,
-      images: savedImages
+      images: savedFiles
     }), {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
@@ -196,7 +226,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
   }
 };
 
-// DELETE - Delete job (and its images)
+// DELETE - Delete job (and its files)
 export const onRequestDelete: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
   const url = new URL(context.request.url);
@@ -204,7 +234,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
   const id = pathParts[pathParts.length - 1];
 
   try {
-    // ✅ Delete images first (foreign key)
+    // Delete files first (foreign key)
     await DB.prepare('DELETE FROM job_images WHERE job_id = ?').bind(id).run();
     
     // Then delete job
