@@ -371,10 +371,12 @@ export default function MarketPage() {
                           </span>
                         </div>
 
-                        {/* Job Title */}
-                        <h3 className="font-bold text-white text-base leading-tight group-hover:text-blue-400 transition-colors">
-                          {job.title}
-                        </h3>
+                        {/* ✅ Job Title with Link to Detail Page */}
+                        <Link to={`/job/${job.id}`}>
+                          <h3 className="font-bold text-white text-base leading-tight hover:text-blue-400 transition-colors cursor-pointer">
+                            {job.title}
+                          </h3>
+                        </Link>
                         
                         {/* Company, Location, Salary */}
                         <div className="flex items-center gap-2 mt-2">
