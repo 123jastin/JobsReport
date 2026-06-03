@@ -1,316 +1,298 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { motion } from 'motion/react';
-import {
-  Building2, MapPin, Clock, ExternalLink, ArrowLeft,
-  FileText, Eye, ChevronLeft, ChevronRight, X, Download,
-  Briefcase, DollarSign, Calendar
+import { motion, AnimatePresence } from 'motion/react';
+import { 
+  Building2, Search, TrendingUp, Clock, Globe,
+  RefreshCw, Filter, ArrowUpRight, MapPin
 } from 'lucide-react';
-import { useCareerRedirect } from '../context/CareerRedirectContext';
+import { RawJob, Company } from '../types';
+import { Link, useSearchParams, useParams } from 'react-router-dom';
+import { useCountry } from '../context/CountryContext';
 
-export default function JobDetailPage() {
-  const { jobId } = useParams<{ jobId: string }>();
-  const [job, setJob] = useState<any>(null);
+// SEO-friendly slug generator
+const getJobSlug = (job: RawJob): string => {
+  return `/job/${job.id}`;
+};
+
+export default function MarketPage() {
+  const [jobs, setJobs] = useState<RawJob[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [roles, setRoles] = useState<string[]>(['All']);
   const [loading, setLoading] = useState(true);
-  const { triggerRedirect } = useCareerRedirect();
+  const [searchQuery, setSearchQuery] = useState('');
   
-  // Image/PDF viewer state
-  const [viewerOpen, setViewerOpen] = useState(false);
-  const [viewerIndex, setViewerIndex] = useState(0);
-  const [viewerFiles, setViewerFiles] = useState<any[]>([]);
-
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialRole = searchParams.get('role') || 'All';
+  const [selectedRole, setSelectedRole] = useState<string>(initialRole);
+  
+  const { selectedCountry, setSelectedCountry, currentFlag } = useCountry();
+  const { query } = useParams<{ query?: string }>();
+  
+  // Load search query from URL
   useEffect(() => {
-    async function loadJob() {
+    if (query) {
+      const decodedQuery = decodeURIComponent(query).replace(/-/g, ' ');
+      setSearchQuery(decodedQuery);
+    }
+  }, [query]);
+  
+  // Simple API call - no fallbacks
+  useEffect(() => {
+    async function loadMarketData() {
       try {
-        const res = await fetch('/api/market');
-        if (res.ok) {
-          const data = await res.json();
-          const found = data.jobs?.find((j: any) => j.id === jobId);
-          setJob(found || null);
+        const response = await fetch('/api/market');
+        if (response.ok) {
+          const data = await response.json();
+          setJobs(Array.isArray(data.jobs) ? data.jobs : []);
+          setCompanies(Array.isArray(data.companies) ? data.companies : []);
+          setRoles(['All', ...(Array.isArray(data.roles) ? data.roles : [])]);
         }
       } catch (err) {
-        console.error('Failed to load job:', err);
+        console.error("Error loading market:", err);
       } finally {
         setLoading(false);
       }
     }
-    if (jobId) loadJob();
-    window.scrollTo(0, 0);
-  }, [jobId]);
+    loadMarketData();
+  }, []);
 
+  // Sync selectedRole
+  useEffect(() => {
+    const roleParam = searchParams.get('role');
+    if (roleParam) setSelectedRole(roleParam);
+    else setSelectedRole('All');
+  }, [searchParams]);
+
+  const handleRoleSelect = (role: string) => {
+    setSelectedRole(role);
+    const newParams = new URLSearchParams(searchParams);
+    if (role === 'All') newParams.delete('role');
+    else newParams.set('role', role);
+    setSearchParams(newParams);
+  };
+
+  const getCompanyLogo = (companyName: string) => {
+    const foundCo = companies.find(c => c.name.toLowerCase() === companyName.toLowerCase());
+    return foundCo?.logoUrl;
+  };
+
+  const filteredJobs = jobs.filter(job => {
+    const matchesSearch = 
+      job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      job.company.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesRole = selectedRole === 'All' || job.role === selectedRole;
+    const matchesCountry = selectedCountry === 'Worldwide' || 
+                           job.country?.toLowerCase() === selectedCountry.toLowerCase();
+    return matchesSearch && matchesRole && matchesCountry;
+  });
+
+  // Simple loading
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="w-8 h-8 rounded-full border-4 border-blue-500 border-t-transparent animate-spin" />
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="w-6 h-6 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
       </div>
     );
   }
-
-  if (!job) {
-    return (
-      <div className="text-center py-20">
-        <h2 className="text-2xl font-bold text-white mb-4">Job Not Found</h2>
-        <p className="text-gray-400 mb-6">This listing may have been removed or expired.</p>
-        <Link to="/market" className="text-blue-500 hover:underline font-bold uppercase tracking-wider text-sm">
-          ← Back to Market
-        </Link>
-      </div>
-    );
-  }
-
-  const hasFiles = job.images && job.images.length > 0;
-  const hasDescription = job.description && job.description.trim() !== '';
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* Back Navigation */}
-      <Link to="/market" className="flex items-center gap-2 text-gray-500 hover:text-white text-xs font-bold uppercase tracking-widest group">
-        <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
-        Back to Market
-      </Link>
+    <div className="space-y-8 pb-12">
+      {/* Page Header */}
+      <div>
+        <div className="flex items-center gap-2 text-xs font-bold text-blue-500 uppercase tracking-[0.2em] mb-2 font-mono">
+          <TrendingUp size={14} /> 
+          {selectedCountry === 'Worldwide' ? 'GLOBAL' : `${selectedCountry.toUpperCase()} REGIONAL`} MARKET TELEMETRY
+        </div>
+        <h1 className="text-4xl md:text-5xl font-black text-white tracking-widest leading-none uppercase">
+          Live Job Market {currentFlag}
+        </h1>
+        <p className="text-sm text-gray-400 max-w-xl mt-2">
+          Live job market telemetry stream for <b>{selectedCountry} {currentFlag}</b>.
+        </p>
+      </div>
 
-      {/* Job Header Card */}
-      <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl">
-        <div className="flex items-start gap-4">
-          {/* Company Logo */}
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 flex items-center justify-center text-white font-bold text-xl shrink-0">
-            {job.company?.charAt(0)?.toUpperCase() || '?'}
-          </div>
-          
-          <div className="flex-1 min-w-0">
-            {/* Role Badge */}
-            <div className="flex items-center gap-2 mb-2">
-              <span className="px-2 py-0.5 rounded text-[8px] font-bold bg-blue-500/10 text-blue-400 uppercase tracking-wider">
-                {job.role || 'General'}
-              </span>
-              <span className="text-[10px] text-gray-500 flex items-center gap-1">
-                <Calendar size={11} />
-                Posted: {job.postedAt || 'Recent'}
-              </span>
-              {job.expiresAt && (
-                <span className="text-[10px] text-gray-500 flex items-center gap-1">
-                  <Clock size={11} />
-                  Expires: {job.expiresAt}
-                </span>
-              )}
-            </div>
-
-            {/* Job Title */}
-            <h1 className="text-2xl md:text-3xl font-bold text-white mb-3">{job.title}</h1>
-
-            {/* Meta Info */}
-            <div className="flex flex-wrap items-center gap-3 text-sm">
-              <span className="flex items-center gap-1.5 text-gray-400">
-                <Building2 size={14} className="text-stone-500" />
-                {job.company}
-              </span>
-              <span className="text-gray-600">•</span>
-              <span className="flex items-center gap-1.5 text-gray-400">
-                <MapPin size={14} className="text-stone-500" />
-                {job.location || 'Remote'}
-              </span>
-              {job.salary && (
-                <>
-                  <span className="text-gray-600">•</span>
-                  <span className="flex items-center gap-1.5 text-emerald-400 font-bold">
-                    <DollarSign size={14} />
-                    {job.salary}
-                  </span>
-                </>
-              )}
-              <span className="text-gray-600">•</span>
-              <span className="flex items-center gap-1.5 text-gray-400">
-                <Briefcase size={14} className="text-stone-500" />
-                {job.role}
-              </span>
-            </div>
-          </div>
+      {/* Summary Matrix */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="p-4 rounded-2xl bg-white/[0.01] border border-white/5">
+          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Active Signals</p>
+          <p className="text-2xl font-mono text-white mt-1">{filteredJobs.length}</p>
+        </div>
+        <div className="p-4 rounded-2xl bg-white/[0.01] border border-white/5">
+          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Hiring Entities</p>
+          <p className="text-2xl font-mono text-white mt-1">
+            {Array.from(new Set(filteredJobs.map(j => j.company))).length}
+          </p>
+        </div>
+        <div className="p-4 rounded-2xl bg-white/[0.01] border border-white/5">
+          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Market Sectors</p>
+          <p className="text-2xl font-mono text-white mt-1">{roles.length - 1}</p>
+        </div>
+        <div className="p-4 rounded-2xl bg-white/[0.01] border border-white/5">
+          <p className="text-[10px] text-green-400 uppercase tracking-widest font-bold">Signal Integrity</p>
+          <p className="text-2xl font-mono text-green-400 mt-1">100%</p>
         </div>
       </div>
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Left: Description + Media */}
-        <div className="lg:col-span-2 space-y-6">
-          
-          {/* Job Description */}
-          {hasDescription && (
-            <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl">
-              <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                <FileText size={18} className="text-blue-400" />
-                Job Description
-              </h2>
-              <div 
-                className="text-stone-300 text-sm leading-relaxed space-y-4"
-                dangerouslySetInnerHTML={{ __html: job.description }}
-              />
-            </div>
-          )}
-
-          {!hasDescription && (
-            <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl text-center">
-              <FileText size={32} className="text-gray-600 mx-auto mb-3" />
-              <p className="text-gray-500 text-sm">No detailed description available for this listing.</p>
-            </div>
-          )}
-
-          {/* Attachments / Media */}
-          {hasFiles && (
-            <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl">
-              <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                <Eye size={18} className="text-blue-400" />
-                Attachments ({job.images.length})
-              </h2>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {job.images.map((img: any, index: number) => {
-                  const isPDF = img.type === 'pdf' || img.name?.toLowerCase().endsWith('.pdf');
-                  const isDoc = img.type === 'document';
-                  
-                  return (
-                    <div
-                      key={index}
-                      onClick={() => {
-                        setViewerFiles(job.images);
-                        setViewerIndex(index);
-                        setViewerOpen(true);
-                      }}
-                      className="relative rounded-xl overflow-hidden border border-white/5 bg-slate-900/50 cursor-pointer group hover:border-blue-500/30 transition-all aspect-square"
-                    >
-                      {isPDF ? (
-                        <div className="w-full h-full flex flex-col items-center justify-center bg-red-900/20 p-3">
-                          <span className="text-2xl font-black text-red-400">PDF</span>
-                          <span className="text-[8px] text-gray-400 mt-1 text-center truncate w-full">{img.name?.substring(0, 15)}</span>
-                        </div>
-                      ) : isDoc ? (
-                        <div className="w-full h-full flex flex-col items-center justify-center bg-blue-900/20 p-3">
-                          <span className="text-2xl font-black text-blue-400">DOC</span>
-                          <span className="text-[8px] text-gray-400 mt-1 text-center truncate w-full">{img.name?.substring(0, 15)}</span>
-                        </div>
-                      ) : (
-                        <>
-                          <img src={img.thumbnail || img.url} alt={img.name} className="w-full h-full object-cover" />
-                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center">
-                            <Eye size={24} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Right Sidebar: Apply Button + Info */}
-        <div className="space-y-4">
-          {/* Apply Now Button */}
-          <button
-            onClick={() => job.url && triggerRedirect(job.url, job.company, job.title)}
-            disabled={!job.url}
-            className={`w-full py-4 rounded-2xl font-bold text-sm uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
-              job.url 
-                ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20' 
-                : 'bg-white/5 text-gray-600 cursor-not-allowed'
-            }`}
-          >
-            Apply Now <ExternalLink size={16} />
-          </button>
-
-          {/* Job Info Card */}
-          <div className="p-5 bg-white/[0.01] border border-white/5 rounded-3xl space-y-3">
-            <h3 className="text-xs font-bold text-white uppercase tracking-widest border-b border-white/5 pb-2">Job Details</h3>
-            <div className="space-y-2 text-xs">
-              <div className="flex justify-between">
-                <span className="text-gray-500">Role</span>
-                <span className="text-white font-bold">{job.role || 'N/A'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Company</span>
-                <span className="text-white font-bold">{job.company}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Location</span>
-                <span className="text-white font-bold">{job.location || 'Remote'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Salary</span>
-                <span className="text-emerald-400 font-bold">{job.salary || 'Not specified'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Posted</span>
-                <span className="text-white font-bold">{job.postedAt || 'Recent'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Signal ID</span>
-                <span className="text-white font-mono text-[10px]">JR-{job.id?.slice(0, 8).toUpperCase()}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Share Link */}
-          <button
-            onClick={() => {
-              if (navigator.share) {
-                navigator.share({ title: job.title, url: window.location.href });
+      {/* Search & Filters */}
+      <div className="flex flex-col md:flex-row gap-4 items-center justify-between p-4 bg-white/[0.02] border border-white/5 rounded-3xl">
+        <div className="relative w-full md:w-80">
+          <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+          <input 
+            type="text" 
+            placeholder="Search title or company..."
+            value={searchQuery}
+            onChange={(e) => {
+              const value = e.target.value;
+              setSearchQuery(value);
+              if (value) {
+                const cleanQuery = value.trim().toLowerCase().replace(/\s+/g, '-');
+                window.history.replaceState(null, '', `/market/search/${encodeURIComponent(cleanQuery)}`);
               } else {
-                navigator.clipboard.writeText(window.location.href);
-                alert('Link copied!');
+                window.history.replaceState(null, '', '/market');
               }
             }}
-            className="w-full py-3 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white text-xs font-bold uppercase tracking-wider rounded-2xl transition-all"
-          >
-            📤 Share This Job
-          </button>
+            className="w-full bg-white/5 border border-white/10 rounded-2xl pl-11 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors font-mono"
+          />
+        </div>
+
+        <div className="flex gap-1.5 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 scrollbar-none">
+          {roles.map(role => (
+            <button
+              key={role}
+              onClick={() => handleRoleSelect(role)}
+              className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-all ${
+                selectedRole === role 
+                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20' 
+                  : 'text-gray-500 hover:text-white bg-white/5 hover:bg-white/10'
+              }`}
+            >
+              {role}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Fullscreen File Viewer */}
-      {viewerOpen && viewerFiles.length > 0 && (
-        <div className="fixed inset-0 z-50 bg-[#0a0a0a] flex flex-col">
-          <div className="flex items-center justify-between p-4 bg-black/90 shrink-0">
-            <span className="text-white text-xs font-mono">{viewerIndex + 1} / {viewerFiles.length}</span>
-            <div className="flex gap-2">
-              <a href={viewerFiles[viewerIndex]?.url} download className="px-3 py-1.5 bg-white/10 text-white text-xs rounded-lg flex items-center gap-1">
-                <Download size={12} /> Download
-              </a>
-              <button onClick={() => setViewerOpen(false)} className="p-1.5 bg-white/10 rounded-full text-white">
-                <X size={18} />
-              </button>
-            </div>
-          </div>
-          
-          <div className="flex-1 flex items-center justify-center p-4">
-            {viewerFiles[viewerIndex]?.type === 'pdf' || viewerFiles[viewerIndex]?.name?.endsWith('.pdf') ? (
-              <iframe
-                src={`https://docs.google.com/viewer?url=${encodeURIComponent(viewerFiles[viewerIndex].url)}&embedded=true`}
-                className="w-full h-full rounded-xl"
-                style={{ border: 'none' }}
-              />
-            ) : (
-              <img src={viewerFiles[viewerIndex]?.url} alt="" className="max-w-full max-h-full object-contain" />
-            )}
-          </div>
-          
-          <div className="flex justify-center gap-4 p-4 bg-black/90 shrink-0">
-            <button
-              onClick={() => setViewerIndex(Math.max(0, viewerIndex - 1))}
-              disabled={viewerIndex === 0}
-              className="p-2 bg-white/10 rounded-full text-white disabled:opacity-30"
-            >
-              <ChevronLeft size={20} />
-            </button>
-            <button
-              onClick={() => setViewerIndex(Math.min(viewerFiles.length - 1, viewerIndex + 1))}
-              disabled={viewerIndex === viewerFiles.length - 1}
-              className="p-2 bg-white/10 rounded-full text-white disabled:opacity-30"
-            >
-              <ChevronRight size={20} />
-            </button>
-          </div>
+      {/* Job Cards - Clean list, no images/PDFs/Apply on cards */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between text-xs text-gray-500 px-1">
+          <span className="flex items-center gap-2">
+            <Filter size={12} className="text-blue-500" />
+            STREAMING {filteredJobs.length} VERIFIED MARKET SIGNALS
+          </span>
         </div>
-      )}
+
+        <AnimatePresence mode="popLayout">
+          {filteredJobs.length === 0 ? (
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="p-12 text-center bg-white/[0.01] rounded-[2rem] border border-dashed border-white/10"
+            >
+              <Globe size={32} className="text-gray-600 mx-auto mb-4" />
+              <p className="text-white font-bold text-sm">No Active Market Signals Found</p>
+              <p className="text-xs text-gray-500 mt-1">
+                No verified job listings matching your telemetry filters.
+              </p>
+              <button 
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedRole('All');
+                  setSelectedCountry('Worldwide');
+                  window.history.replaceState(null, '', '/market');
+                }}
+                className="mt-4 px-4 py-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all"
+              >
+                Reset Filters
+              </button>
+            </motion.div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredJobs.map((job, idx) => {
+                const companyLogo = getCompanyLogo(job.company);
+                
+                return (
+                  <motion.div
+                    layout
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0, transition: { delay: Math.min(idx * 0.04, 0.4) } }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    key={job.id || idx}
+                    className="group p-5 bg-white/[0.01] border hover:bg-white/[0.03] border-white/5 rounded-3xl transition-all duration-300"
+                  >
+                    <div className="flex gap-4 items-start">
+                      {/* Company Logo */}
+                      <div className="flex-shrink-0 w-12 h-12 rounded-2xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center p-0.5 mt-0.5">
+                        {companyLogo ? (
+                          <img src={companyLogo} alt="" className="w-full h-full object-cover rounded-xl" />
+                        ) : (
+                          <div className="w-full h-full bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400 font-mono">
+                            {job.company?.charAt(0)?.toUpperCase() || '?'}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <span className="px-2 py-0.5 rounded text-[8px] font-bold bg-blue-500/10 text-blue-400 font-mono uppercase">
+                            {job.role || 'Unknown'}
+                          </span>
+                          <span className="text-[10px] text-gray-500 font-mono flex items-center gap-1">
+                            <Clock size={11} />
+                            {job.postedAt || 'Recent'}
+                          </span>
+                        </div>
+
+                        {/* Job Title - Links to detail page */}
+                        <Link to={getJobSlug(job)}>
+                          <h3 className="font-bold text-white text-base leading-tight hover:text-blue-400 transition-colors cursor-pointer">
+                            {job.title}
+                          </h3>
+                        </Link>
+                        
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className="text-xs text-gray-400 font-medium">{job.company}</span>
+                          {job.location && (
+                            <>
+                              <span className="text-gray-600 font-mono">•</span>
+                              <span className="text-xs text-gray-500 font-medium">{job.location}</span>
+                            </>
+                          )}
+                        </div>
+
+                        {job.salary && (
+                          <span className="text-[10px] text-emerald-400 font-mono mt-1 block">{job.salary}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Footer - Signal ID only */}
+                    <div className="flex items-center justify-between border-t border-white/5 pt-4 mt-4">
+                      <span className="text-[10px] text-gray-500 font-mono uppercase tracking-widest">
+                        SIGNAL: JR-{job.id?.toString().slice(0, 4).toUpperCase() || '????'}
+                      </span>
+                      {job.expiresAt && (
+                        <span className="text-[9px] text-gray-500 font-mono">
+                          Expires: {job.expiresAt}
+                        </span>
+                      )}
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Admin Link */}
+      <div className="p-6 rounded-3xl bg-gradient-to-r from-blue-950/20 to-violet-950/20 border border-blue-500/10 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div>
+          <h4 className="font-bold text-white text-sm">Ingest new market signals?</h4>
+          <p className="text-xs text-gray-400 mt-1">Access the Admin Studio to add raw market data.</p>
+        </div>
+        <Link to="/admin" className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase tracking-wider transition-colors flex items-center gap-2">
+          Admin Studio <ArrowUpRight size={12} />
+        </Link>
+      </div>
     </div>
   );
 }
