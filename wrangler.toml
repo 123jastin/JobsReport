@@ -1,22 +1,23 @@
 name = "jobsreport"
-main = "src/index.ts"
 compatibility_date = "2024-01-01"
 
+# =========================
 # D1 Database
+# =========================
 [[d1_databases]]
 binding = "DB"
 database_name = "jobsreport"
 database_id = "c2264f13-a786-438c-a616-2190592c3ba8"
 
-# R2 Bucket for media storage
+# =========================
+# R2 Bucket
+# =========================
 [[r2_buckets]]
 binding = "MEDIA_BUCKET"
 bucket_name = "jobsreport"
 
-# Routes
-[[routes]]
-pattern = "media.jobsreport.online/*"
-zone_name = "jobsreport.online"
-
-[site]
-bucket = "./dist"
+# =========================
+# Pages Functions compatibility
+# =========================
+[compatibility_flags]
+nodejs_compat = true
