@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import {
   Building2, MapPin, Clock, ExternalLink, ArrowLeft,
   FileText, Eye, ChevronLeft, ChevronRight, X, Download,
-  Briefcase, DollarSign, Calendar, Globe, Share2, Bookmark
+  Briefcase, DollarSign, Calendar, Globe, Share2
 } from 'lucide-react';
 import { useCareerRedirect } from '../context/CareerRedirectContext';
 
@@ -32,6 +32,17 @@ export default function JobDetailPage() {
               jobId.includes(j.id) || j.id.includes(extractedId || '')
             );
           }
+
+          // ✅ Find company website from companies list
+          if (found && data.companies) {
+            const company = data.companies.find(
+              (c: any) => c.name?.toLowerCase() === found.company?.toLowerCase()
+            );
+            if (company?.url) {
+              found.companyWebsite = company.url;
+            }
+          }
+          
           setJob(found || null);
         }
       } catch (err) {
@@ -98,22 +109,31 @@ export default function JobDetailPage() {
 
       {/* ========== HERO HEADER - Full Width ========== */}
       <div className="px-4 py-6 border-b border-white/5">
-        {/* Company Logo + Name */}
+        {/* Company Logo + Name + Website */}
         <div className="flex items-center gap-3 mb-4">
+          {/* Company Logo */}
           <div className="w-12 h-12 rounded-xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
             {job.logoUrl ? (
-              <img src={job.logoUrl} alt={job.company} className="w-full h-full object-cover rounded-xl" referrerPolicy="no-referrer" />
+              <img 
+                src={job.logoUrl} 
+                alt={job.company} 
+                className="w-full h-full object-cover rounded-xl" 
+                referrerPolicy="no-referrer" 
+              />
             ) : (
               <div className="w-full h-full bg-gradient-to-br from-blue-600 to-violet-600 flex items-center justify-center text-white font-bold text-lg">
                 {job.company?.charAt(0)?.toUpperCase() || '?'}
               </div>
             )}
           </div>
+          
           <div className="min-w-0">
             <h2 className="text-sm font-bold text-white">{job.company}</h2>
-            {job.url && (
+            
+            {/* ✅ Company Website - from companies table (NOT job application link) */}
+            {job.companyWebsite ? (
               <a 
-                href={job.url} 
+                href={job.companyWebsite} 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors"
@@ -121,13 +141,16 @@ export default function JobDetailPage() {
                 <Globe size={11} />
                 {(() => {
                   try {
-                    if (job.url.startsWith('mailto:')) return job.url.replace('mailto:', '');
-                    const url = new URL(job.url);
+                    const url = new URL(job.companyWebsite);
                     return url.hostname.replace('www.', '');
-                  } catch { return 'Website'; }
+                  } catch {
+                    return 'Company Website';
+                  }
                 })()}
                 <ExternalLink size={10} />
               </a>
+            ) : (
+              <span className="text-[11px] text-gray-600">No website listed</span>
             )}
           </div>
         </div>
@@ -158,7 +181,7 @@ export default function JobDetailPage() {
           )}
         </div>
 
-        {/* Badges */}
+        {/* Role Badge */}
         <div className="flex items-center gap-2 mt-3">
           <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-500/10 text-blue-400 uppercase tracking-wider">
             {job.role || 'General'}
@@ -173,6 +196,18 @@ export default function JobDetailPage() {
 
       {/* ========== APPLY BUTTON - Sticky Bottom Bar ========== */}
       <div className="sticky bottom-0 z-40 bg-black/95 backdrop-blur border-t border-white/5 px-4 py-3">
+        {/* ✅ Application link info */}
+        {job.url && (
+          <p className="text-[10px] text-gray-500 text-center mb-2 truncate px-4">
+            {isEmailLink ? '📧 ' : '🔗 '}
+            {isEmailLink ? job.url.replace('mailto:', '') : (() => {
+              try {
+                const url = new URL(job.url);
+                return url.hostname.replace('www.', '') + url.pathname;
+              } catch { return job.url; }
+            })()}
+          </p>
+        )}
         <button
           onClick={() => job.url && triggerRedirect(job.url, job.company, job.title)}
           disabled={!job.url}
@@ -201,6 +236,13 @@ export default function JobDetailPage() {
         </div>
       )}
 
+      {!hasDescription && (
+        <div className="px-4 py-6 border-b border-white/5 text-center">
+          <FileText size={32} className="text-gray-600 mx-auto mb-3" />
+          <p className="text-gray-500 text-sm">No detailed description available for this listing.</p>
+        </div>
+      )}
+
       {/* ========== ATTACHMENTS - Flat Section ========== */}
       {hasFiles && (
         <div className="px-4 py-6 border-b border-white/5">
@@ -209,7 +251,6 @@ export default function JobDetailPage() {
             Attachments ({job.images.length})
           </h3>
           
-          {/* Horizontal scroll for mobile, grid for desktop */}
           <div className="flex md:grid md:grid-cols-4 gap-2 overflow-x-auto scrollbar-none">
             {job.images.map((img: any, index: number) => {
               const isPDF = img.type === 'pdf' || img.name?.toLowerCase().endsWith('.pdf');
