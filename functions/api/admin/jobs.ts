@@ -4,7 +4,7 @@ type Env = {
   DB: D1Database;
 };
 
-// POST - Create job
+// POST - Create job with full schema
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
 
@@ -41,10 +41,21 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       companyResult = { id: companyId };
     }
 
-    // ✅ Insert job with description
+    // Generate canonical URL if not provided
+    const canonicalUrl = body.canonical_url || 
+      `https://jobsreport.online/market/${body.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${id}`;
+
+    // ✅ Insert job with ALL schema fields
     await DB.prepare(`
-      INSERT INTO jobs (id, title, role_id, company_id, location, apply_url, salary, posted_at, expires_at, is_active, description)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+      INSERT INTO jobs (
+        id, title, role_id, company_id, location, apply_url, salary,
+        posted_at, expires_at, is_active, description,
+        job_category, industry, employment_type, workplace_type,
+        education_level, experience_months, skills, benefits,
+        salary_min, salary_max, salary_currency,
+        city, region, postcode, canonical_url
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       id,
       body.title?.trim(),
@@ -55,10 +66,26 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       body.salary || '',
       new Date().toISOString().split('T')[0],
       body.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      body.description || ''  // ✅ Job description HTML
+      body.is_active !== undefined ? body.is_active : 1,
+      body.description || '',
+      body.job_category || 'Other',
+      body.industry || '',
+      body.employment_type || 'FULL_TIME',
+      body.workplace_type || 'Onsite',
+      body.education_level || 'Any',
+      body.experience_months || 0,
+      JSON.stringify(body.skills || []),
+      JSON.stringify(body.benefits || []),
+      body.salary_min || null,
+      body.salary_max || null,
+      body.salary_currency || 'TZS',
+      body.city || '',
+      body.region || '',
+      body.postcode || '',
+      canonicalUrl
     ).run();
 
-    // Save files (images, PDFs, documents)
+    // Save files with SEO metadata
     const savedFiles: any[] = [];
     if (body.images && Array.isArray(body.images) && body.images.length > 0) {
       for (let i = 0; i < body.images.length; i++) {
@@ -68,23 +95,20 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         
         try {
           await DB.prepare(`
-            INSERT INTO job_images (id, job_id, url, thumbnail_url, name, sort_order, type)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO job_images (id, job_id, url, thumbnail_url, name, sort_order, type, seo_title, seo_description)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           `).bind(
-            imageId, 
-            id, 
-            file.url || '', 
-            file.thumbnail || file.url || '', 
-            file.name || 'file', 
-            i,
-            fileType
+            imageId, id,
+            file.url || '', file.thumbnail || file.url || '',
+            file.name || 'file', i, fileType,
+            file.seoTitle || file.name || '',
+            file.seoDescription || ''
           ).run();
           
           savedFiles.push({ 
-            url: file.url, 
-            thumbnail: file.thumbnail || file.url, 
-            name: file.name,
-            type: fileType
+            url: file.url, thumbnail: file.thumbnail || file.url,
+            name: file.name, type: fileType,
+            seoTitle: file.seoTitle, seoDescription: file.seoDescription
           });
         } catch (dbErr) {
           console.error(`Failed to save file ${i}:`, dbErr);
@@ -100,10 +124,25 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       location: body.location || 'Remote',
       url: body.url || '',
       salary: body.salary || '',
-      description: body.description || '',  // ✅ Return description
+      description: body.description || '',
+      job_category: body.job_category || 'Other',
+      employment_type: body.employment_type || 'FULL_TIME',
+      workplace_type: body.workplace_type || 'Onsite',
+      education_level: body.education_level || 'Any',
+      experience_months: body.experience_months || 0,
+      skills: body.skills || [],
+      benefits: body.benefits || [],
+      salary_min: body.salary_min || null,
+      salary_max: body.salary_max || null,
+      salary_currency: body.salary_currency || 'TZS',
+      city: body.city || '',
+      region: body.region || '',
+      country: 'Tanzania',
+      postcode: body.postcode || '',
+      canonical_url: canonicalUrl,
       postedAt: new Date().toISOString().split('T')[0],
       expiresAt: body.expiresAt || '',
-      active: true,
+      active: body.is_active !== undefined ? body.is_active === 1 : true,
       images: savedFiles
     }), {
       status: 201,
@@ -119,7 +158,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
 };
 
-// PUT - Update job
+// PUT - Update job with full schema
 export const onRequestPut: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
   const url = new URL(context.request.url);
@@ -155,10 +194,15 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       companyResult = { id: companyId };
     }
 
-    // ✅ Update job with description
+    // ✅ Update job with ALL schema fields
     await DB.prepare(`
       UPDATE jobs 
-      SET title = ?, role_id = ?, company_id = ?, location = ?, apply_url = ?, salary = ?, expires_at = ?, description = ?
+      SET title = ?, role_id = ?, company_id = ?, location = ?, apply_url = ?, salary = ?,
+          expires_at = ?, is_active = ?, description = ?,
+          job_category = ?, industry = ?, employment_type = ?, workplace_type = ?,
+          education_level = ?, experience_months = ?, skills = ?, benefits = ?,
+          salary_min = ?, salary_max = ?, salary_currency = ?,
+          city = ?, region = ?, postcode = ?, canonical_url = ?
       WHERE id = ?
     `).bind(
       body.title?.trim(),
@@ -168,7 +212,23 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       body.url || '',
       body.salary || '',
       body.expiresAt || '',
-      body.description || '',  // ✅ Update description
+      body.is_active !== undefined ? body.is_active : 1,
+      body.description || '',
+      body.job_category || 'Other',
+      body.industry || '',
+      body.employment_type || 'FULL_TIME',
+      body.workplace_type || 'Onsite',
+      body.education_level || 'Any',
+      body.experience_months || 0,
+      JSON.stringify(body.skills || []),
+      JSON.stringify(body.benefits || []),
+      body.salary_min || null,
+      body.salary_max || null,
+      body.salary_currency || 'TZS',
+      body.city || '',
+      body.region || '',
+      body.postcode || '',
+      body.canonical_url || '',
       id
     ).run();
 
@@ -183,23 +243,20 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         const fileType = file.type || 'image';
         
         await DB.prepare(`
-          INSERT INTO job_images (id, job_id, url, thumbnail_url, name, sort_order, type)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO job_images (id, job_id, url, thumbnail_url, name, sort_order, type, seo_title, seo_description)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(
-          imageId, 
-          id, 
-          file.url || '', 
-          file.thumbnail || file.url || '', 
-          file.name || 'file', 
-          i,
-          fileType
+          imageId, id,
+          file.url || '', file.thumbnail || file.url || '',
+          file.name || 'file', i, fileType,
+          file.seoTitle || file.name || '',
+          file.seoDescription || ''
         ).run();
         
         savedFiles.push({ 
-          url: file.url, 
-          thumbnail: file.thumbnail || file.url, 
-          name: file.name,
-          type: fileType
+          url: file.url, thumbnail: file.thumbnail || file.url,
+          name: file.name, type: fileType,
+          seoTitle: file.seoTitle, seoDescription: file.seoDescription
         });
       }
     }
@@ -212,10 +269,24 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       location: body.location || 'Remote',
       url: body.url || '',
       salary: body.salary || '',
-      description: body.description || '',  // ✅ Return description
+      description: body.description || '',
+      job_category: body.job_category || 'Other',
+      employment_type: body.employment_type || 'FULL_TIME',
+      workplace_type: body.workplace_type || 'Onsite',
+      education_level: body.education_level || 'Any',
+      experience_months: body.experience_months || 0,
+      skills: body.skills || [],
+      benefits: body.benefits || [],
+      salary_min: body.salary_min || null,
+      salary_max: body.salary_max || null,
+      salary_currency: body.salary_currency || 'TZS',
+      city: body.city || '',
+      region: body.region || '',
+      postcode: body.postcode || '',
+      canonical_url: body.canonical_url || '',
       postedAt: new Date().toISOString().split('T')[0],
       expiresAt: body.expiresAt || '',
-      active: true,
+      active: body.is_active !== undefined ? body.is_active === 1 : true,
       images: savedFiles
     }), {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
@@ -240,7 +311,6 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
   try {
     // Delete files first (foreign key)
     await DB.prepare('DELETE FROM job_images WHERE job_id = ?').bind(id).run();
-    
     // Then delete job
     await DB.prepare('DELETE FROM jobs WHERE id = ?').bind(id).run();
     
