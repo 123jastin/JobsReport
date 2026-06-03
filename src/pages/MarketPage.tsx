@@ -318,6 +318,7 @@ export default function MarketPage() {
                 const jobWithImages = job as any;
                 const hasFiles = jobWithImages.images && jobWithImages.images.length > 0;
                 const hasDescription = jobWithImages.description && jobWithImages.description.trim().length > 0;
+                const companyLogo = getCompanyLogo(job.company);
                 
                 return (
                   <motion.div
@@ -328,18 +329,25 @@ export default function MarketPage() {
                     key={job.id || idx}
                     className="group p-5 bg-white/[0.01] border hover:bg-white/[0.03] border-white/5 rounded-3xl transition-all duration-300 flex flex-col justify-between"
                   >
-                    {/* Job Header with Logo and Details */}
+                    {/* Company Logo + Role Badge + Title + Details */}
                     <div className="flex gap-4 items-start">
                       {/* Company Logo */}
                       <div className="flex-shrink-0 w-12 h-12 rounded-2xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center p-0.5 mt-0.5">
-                        {getCompanyLogo(job.company) ? (
+                        {companyLogo ? (
                           <img 
-                            src={getCompanyLogo(job.company)} 
+                            src={companyLogo} 
                             alt={`${job.company} logo`} 
                             referrerPolicy="no-referrer"
                             className="w-full h-full object-cover rounded-xl"
-                            onError={(e) => { 
-                              (e.target as HTMLImageElement).style.display = 'none'; 
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                              const parent = (e.target as HTMLImageElement).parentElement;
+                              if (parent) {
+                                const fallback = document.createElement('div');
+                                fallback.className = 'w-full h-full bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400 font-mono';
+                                fallback.textContent = job.company?.charAt(0).toUpperCase() || '?';
+                                parent.appendChild(fallback);
+                              }
                             }}
                           />
                         ) : (
@@ -383,27 +391,37 @@ export default function MarketPage() {
                             {job.salary}
                           </span>
                         )}
-
-                        {/* ✅ View Job Description Button - After details, before images */}
-                        {hasDescription && (
-                          <button
-                            onClick={() => {
-                              setSelectedDescription(jobWithImages.description);
-                              setDescriptionJobTitle(job.title);
-                            }}
-                            className="mt-2 px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600/20 to-violet-600/20 border border-blue-500/20 hover:border-blue-500/40 text-blue-400 text-[10px] font-bold flex items-center gap-1.5 transition-all group/desc"
-                          >
-                            <FileText size={12} className="group-hover/desc:scale-110 transition-transform" />
-                            <span>View Job Description</span>
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="group-hover/desc:translate-x-0.5 transition-transform">
-                              <polyline points="9 18 15 12 9 6"></polyline>
-                            </svg>
-                          </button>
-                        )}
                       </div>
                     </div>
 
-                    {/* ✅ Job Images/PDFs Strip - After description button */}
+                    {/* ✅ View Job Description Button (Original Card Style - Emerald Green) */}
+                    {hasDescription && (
+                      <div 
+                        className="relative w-full mt-3 rounded-2xl overflow-hidden bg-gradient-to-r from-emerald-600/20 to-teal-600/20 border border-white/5 cursor-pointer group/desc"
+                        onClick={() => {
+                          setSelectedDescription(jobWithImages.description);
+                          setDescriptionJobTitle(job.title);
+                        }}
+                      >
+                        <div className="flex items-center justify-between p-3">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-emerald-500/20 rounded-xl">
+                              <FileText size={20} className="text-emerald-400" />
+                            </div>
+                            <div>
+                              <span className="text-white text-xs font-bold block">View Job Description</span>
+                              <span className="text-[9px] text-gray-400 mt-0.5">Full details, requirements & responsibilities</span>
+                            </div>
+                          </div>
+                          <Eye size={16} className="text-emerald-400 opacity-0 group-hover/desc:opacity-100 transition-opacity" />
+                        </div>
+                        <div className="absolute top-2 right-2 px-2 py-0.5 bg-black/60 backdrop-blur rounded-lg text-[8px] font-mono text-emerald-400">
+                          JD
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ✅ Job Images/PDFs Strip */}
                     {hasFiles && (
                       <div className="relative w-full mt-3 rounded-2xl overflow-hidden bg-gradient-to-r from-blue-600/20 to-violet-600/20 border border-white/5">
                         <div className="flex overflow-x-auto gap-2 p-2 scrollbar-none">
