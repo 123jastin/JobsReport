@@ -38,7 +38,8 @@ import {
   Underline,
   List,
   Code,
-  Link as LinkIcon
+  Link as LinkIcon,
+  File
 } from 'lucide-react';
 import { RawJob, Trend, Report, Company, ActivityLog, MediaAsset, RoleDefinition } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -108,9 +109,8 @@ export default function AdminPage() {
     expiresAt: ''
   });
   
-  // ✅ JOB IMAGES STATES
-  const [jobImages, setJobImages] = useState<string[]>([]);
-  const [uploadedJobImages, setUploadedJobImages] = useState<{url: string, thumbnail: string, name: string, file?: File}[]>([]);
+  // ✅ JOB FILES STATES (Supports images + documents)
+  const [jobFiles, setJobFiles] = useState<{url: string, thumbnail: string, name: string, type: string, file?: File}[]>([]);
   
   const [isCreatingNewCompanyInline, setIsCreatingNewCompanyInline] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
@@ -346,46 +346,104 @@ export default function AdminPage() {
     });
   };
 
-  // ✅ Handle multiple image upload for jobs with thumbnails
-  const handleJobImageUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+  // ✅ Generate PDF/Document icon thumbnail
+  const generateDocumentThumbnail = (fileName: string, fileType: string): string => {
+    const isPDF = fileType === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf');
+    const isDoc = fileName.match(/\.(doc|docx)$/i);
+    const isSheet = fileName.match(/\.(xls|xlsx)$/i);
+    const isPPT = fileName.match(/\.(ppt|pptx)$/i);
+    
+    let fileIcon = 'PDF';
+    let bgColor = '#ef4444';
+    
+    if (isDoc) {
+      fileIcon = 'DOC';
+      bgColor = '#3b82f6';
+    } else if (isSheet) {
+      fileIcon = 'XLS';
+      bgColor = '#10b981';
+    } else if (isPPT) {
+      fileIcon = 'PPT';
+      bgColor = '#f59e0b';
+    }
+    
+    return 'data:image/svg+xml,' + encodeURIComponent(`
+      <svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+        <rect fill="${bgColor}" width="200" height="200" rx="12"/>
+        <text fill="white" font-size="48" font-weight="bold" text-anchor="middle" x="100" y="90">${fileIcon}</text>
+        <text fill="#e2e8f0" font-size="14" text-anchor="middle" x="100" y="130">Document</text>
+      </svg>
+    `);
+  };
+
+  // ✅ Handle multiple file upload for jobs (images + documents)
+  const handleJobFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
     setActionLoading(true);
-    const newImages: {url: string, thumbnail: string, name: string, file: File}[] = [];
+    const newFiles: {url: string, thumbnail: string, name: string, type: string, file: File}[] = [];
+    let processedCount = 0;
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
+      const isImage = file.type.startsWith('image/');
+      const isPDF = file.type === 'application/pdf';
+      const isDoc = file.type.includes('document') || file.name.match(/\.(doc|docx|xls|xlsx|ppt|pptx)$/i);
       
-      // Generate thumbnail silently
-      const thumbnail = await generateThumbnail(file, 400);
-      
-      // Original as base64 for preview
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const originalUrl = reader.result as string;
-        newImages.push({ 
-          url: originalUrl, 
-          thumbnail: thumbnail,
-          name: file.name, 
-          file 
-        });
-        
-        // When all files processed
-        if (newImages.length === files.length) {
-          setUploadedJobImages(prev => [...prev, ...newImages]);
+      if (isImage) {
+        // Generate thumbnail for images
+        const thumbnail = await generateThumbnail(file, 400);
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          newFiles.push({ 
+            url: reader.result as string, 
+            thumbnail: thumbnail,
+            name: file.name, 
+            type: 'image',
+            file 
+          });
+          processedCount++;
+          if (processedCount === files.length) {
+            setJobFiles(prev => [...prev, ...newFiles]);
+            setActionLoading(false);
+            showFeedback('success', `${files.length} file(s) ready`);
+          }
+        };
+        reader.readAsDataURL(file);
+      } else if (isPDF || isDoc) {
+        // For PDFs/documents, generate appropriate icon thumbnail
+        const docThumbnail = generateDocumentThumbnail(file.name, file.type);
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          newFiles.push({ 
+            url: reader.result as string, 
+            thumbnail: docThumbnail,
+            name: file.name, 
+            type: isPDF ? 'pdf' : 'document',
+            file 
+          });
+          processedCount++;
+          if (processedCount === files.length) {
+            setJobFiles(prev => [...prev, ...newFiles]);
+            setActionLoading(false);
+            showFeedback('success', `${files.length} file(s) ready`);
+          }
+        };
+        reader.readAsDataURL(file);
+      } else {
+        processedCount++;
+        if (processedCount === files.length) {
           setActionLoading(false);
-          showFeedback('success', `${files.length} image(s) with thumbnails ready`);
+          showFeedback('error', `Unsupported file type: ${file.name}`);
         }
-      };
-      reader.readAsDataURL(file);
+      }
     }
   };
 
-  // ✅ Remove a job image
-  const handleRemoveJobImage = (index: number) => {
-    setUploadedJobImages(prev => prev.filter((_, i) => i !== index));
-    setJobImages(prev => prev.filter((_, i) => i !== index));
+  // ✅ Remove a job file
+  const handleRemoveJobFile = (index: number) => {
+    setJobFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   // --- LOGO / IMAGE LOCAL FILE UPLOADER TO BASE64 ---
@@ -463,9 +521,8 @@ export default function AdminPage() {
       expiresAt: job.expiresAt || ''
     });
     setIsCreatingNewCompanyInline(false);
-    // Clear images - will be re-uploaded if needed
-    setUploadedJobImages([]);
-    setJobImages([]);
+    // Clear files - will be re-uploaded if needed
+    setJobFiles([]);
     window.scrollTo({ top: 300, behavior: 'smooth' });
   };
 
@@ -484,8 +541,7 @@ export default function AdminPage() {
       salary: '',
       expiresAt: ''
     });
-    setUploadedJobImages([]);
-    setJobImages([]);
+    setJobFiles([]);
     setIsCreatingNewCompanyInline(false);
   };
 
@@ -507,7 +563,7 @@ export default function AdminPage() {
   };
 
   // 1. Ingest Job Telemetry
-const handleIngestJob = async (e: FormEvent) => {
+  const handleIngestJob = async (e: FormEvent) => {
     e.preventDefault();
     
     const targetCompany = isCreatingNewCompanyInline 
@@ -532,40 +588,43 @@ const handleIngestJob = async (e: FormEvent) => {
         return;
       }
 
-      // ✅ Upload images to R2 first using /api/upload
-      const uploadedImages: {url: string, thumbnail: string, name: string}[] = [];
+      // ✅ Upload files to R2 first using /api/upload
+      const uploadedFiles: {url: string, thumbnail: string, name: string, type: string}[] = [];
       
-      for (const img of uploadedJobImages) {
-        const imageData: {url: string, thumbnail: string, name: string} = {
-          url: img.url,
-          thumbnail: img.thumbnail,
-          name: img.name
+      for (const file of jobFiles) {
+        const fileData: {url: string, thumbnail: string, name: string, type: string} = {
+          url: file.url,
+          thumbnail: file.thumbnail,
+          name: file.name,
+          type: file.type
         };
 
         // Upload original if it's a file
-        if (img.file) {
+        if (file.file) {
           const originalFormData = new FormData();
-          originalFormData.append('file', img.file, img.name);
+          originalFormData.append('file', file.file, file.name);
           
           const originalRes = await fetch('/api/upload', { method: 'POST', body: originalFormData });
           if (originalRes.ok) {
             const originalData = await originalRes.json();
-            imageData.url = originalData.url; // R2 URL
+            fileData.url = originalData.url; // R2 URL
           }
           
-          // Upload thumbnail (convert base64 to blob)
-          const thumbBlob = await fetch(img.thumbnail).then(r => r.blob());
-          const thumbFormData = new FormData();
-          thumbFormData.append('file', thumbBlob, `thumb-${img.name}`);
-          
-          const thumbRes = await fetch('/api/upload', { method: 'POST', body: thumbFormData });
-          if (thumbRes.ok) {
-            const thumbData = await thumbRes.json();
-            imageData.thumbnail = thumbData.url; // R2 URL
+          // Upload thumbnail (convert base64 to blob for images, skip for documents)
+          if (file.type === 'image') {
+            const thumbBlob = await fetch(file.thumbnail).then(r => r.blob());
+            const thumbFormData = new FormData();
+            thumbFormData.append('file', thumbBlob, `thumb-${file.name}`);
+            
+            const thumbRes = await fetch('/api/upload', { method: 'POST', body: thumbFormData });
+            if (thumbRes.ok) {
+              const thumbData = await thumbRes.json();
+              fileData.thumbnail = thumbData.url; // R2 URL
+            }
           }
         }
         
-        uploadedImages.push(imageData);
+        uploadedFiles.push(fileData);
       }
 
       const url = editingJobId ? `/api/admin/jobs/${editingJobId}` : '/api/admin/jobs';
@@ -583,7 +642,7 @@ const handleIngestJob = async (e: FormEvent) => {
           salary: jobForm.salary,
           country: selectedCountry,
           expiresAt: jobForm.expiresAt,
-          images: uploadedImages  // ✅ R2 URLs
+          images: uploadedFiles  // ✅ R2 URLs with type info
         })
       });
 
@@ -611,8 +670,7 @@ const handleIngestJob = async (e: FormEvent) => {
           expiresAt: ''
         });
         setIsCreatingNewCompanyInline(false);
-        setUploadedJobImages([]);
-        setJobImages([]);
+        setJobFiles([]);
         setEditingJobId(null);
         
         await fetchSystemData();
@@ -628,7 +686,7 @@ const handleIngestJob = async (e: FormEvent) => {
     }
   };
 
-const handleToggleJobActive = async (id: string, currentStatus: boolean) => {
+  const handleToggleJobActive = async (id: string, currentStatus: boolean) => {
     if (userRole === 'editor') {
       showFeedback('error', 'PERMISSION DENIED.');
       return;
@@ -650,8 +708,7 @@ const handleToggleJobActive = async (id: string, currentStatus: boolean) => {
     }
   };
  
-
-const handleDeleteJob = async (id: string) => {
+  const handleDeleteJob = async (id: string) => {
     if (userRole === 'editor') {
       showFeedback('error', 'PERMISSION DENIED.');
       return;
@@ -660,7 +717,6 @@ const handleDeleteJob = async (id: string) => {
     if (!confirm("Are you sure you want to delete this job listing?")) return;
 
     try {
-      // ✅ Use admin endpoint
       const res = await fetch(`/api/admin/jobs/${id}`, { method: 'DELETE' });
       if (res.ok) {
         setJobs(prev => prev.filter(j => j.id !== id));
@@ -673,11 +729,6 @@ const handleDeleteJob = async (id: string) => {
       showFeedback('error', 'Failed delete operation.');
     }
   };
-
-
-  
-     
-  
 
   // 2. Action: Corporate Node Management
   const handleCreateCompany = async (e: FormEvent) => {
@@ -1395,7 +1446,7 @@ const handleDeleteJob = async (id: string) => {
           </div>
 
           <p className="text-xs text-gray-500 mt-2 max-w-xl font-mono leading-relaxed">
-            Deduplicate listings, map normalized roles, direct custom images, catalog company spotlights, and write dynamic charts insight articles.
+            Deduplicate listings, map normalized roles, direct custom images and documents, catalog company spotlights, and write dynamic charts insight articles.
           </p>
         </div>
 
@@ -1638,7 +1689,7 @@ const handleDeleteJob = async (id: string) => {
       )}
 
       {/* ---------------------------------------------------- */}
-      {/* 📥 TAB 2: JOB INPUT SYSTEM WITH IMAGE UPLOAD */}
+      {/* 📥 TAB 2: JOB INPUT SYSTEM WITH FILE UPLOAD (IMAGES + DOCUMENTS) */}
       {/* ---------------------------------------------------- */}
       {activeTab === 'jobs' && (
         <motion.div 
@@ -1653,7 +1704,7 @@ const handleDeleteJob = async (id: string) => {
                 <h3 className="text-base font-extrabold uppercase tracking-widest flex items-center gap-1.5 font-sans text-stone-100">
                   <Briefcase size={16} className="text-blue-500" /> {editingJobId ? 'Edit Placement' : 'Ingest Real-Time Placement'}
                 </h3>
-                <p className="text-xs text-gray-500 mt-1">Automatic categorizations are applied based on keyword matching logic.</p>
+                <p className="text-xs text-gray-500 mt-1">Automatic categorizations are applied based on keyword matching logic. Supports images, PDFs, Word, Excel, PowerPoint files.</p>
               </div>
 
               <form onSubmit={handleIngestJob} className="space-y-4">
@@ -1825,48 +1876,55 @@ const handleDeleteJob = async (id: string) => {
                   />
                 </div>
 
-                {/* ✅ Job Images Upload Section */}
+                {/* ✅ Job Files Upload Section (Images + Documents) */}
                 <div className="space-y-2 border-t border-white/5 pt-4 mt-2">
                   <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">
-                    Job Listing Images / Ad Banners
+                    Job Listing Files (Images, PDFs, Documents)
                   </label>
                   
                   {/* Upload Button */}
                   <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-white/10 hover:border-blue-500/30 rounded-2xl cursor-pointer transition-all group">
                     <input 
                       type="file" 
-                      accept="image/*" 
+                      accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx" 
                       multiple 
-                      onChange={handleJobImageUpload}
+                      onChange={handleJobFileUpload}
                       className="hidden"
                     />
                     <Upload size={16} className="text-gray-500 group-hover:text-blue-400 transition-colors" />
                     <span className="text-[10px] text-gray-500 group-hover:text-blue-400 font-mono uppercase tracking-wider">
-                      {uploadedJobImages.length > 0 
-                        ? `${uploadedJobImages.length} image(s) selected` 
-                        : 'Click to upload multiple images'}
+                      {jobFiles.length > 0 
+                        ? `${jobFiles.length} file(s) selected` 
+                        : 'Click to upload images, PDFs & documents'}
                     </span>
                   </label>
 
-                  {/* Image Preview Grid */}
-                  {uploadedJobImages.length > 0 && (
+                  {/* File Preview Grid */}
+                  {jobFiles.length > 0 && (
                     <div className="grid grid-cols-3 gap-2 mt-2">
-                      {uploadedJobImages.map((img, index) => (
-                        <div key={index} className="relative group/img rounded-xl overflow-hidden border border-white/5">
-                          <img 
-                            src={img.thumbnail || img.url} 
-                            alt={img.name} 
-                            className="w-full h-20 object-cover"
-                          />
+                      {jobFiles.map((file, index) => (
+                        <div key={index} className="relative group/file rounded-xl overflow-hidden border border-white/5 bg-slate-900/50">
+                          {(file.type === 'image') ? (
+                            <img 
+                              src={file.thumbnail || file.url} 
+                              alt={file.name} 
+                              className="w-full h-20 object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-20 flex flex-col items-center justify-center bg-slate-800/50 p-2">
+                              <File size={24} className="text-blue-400" />
+                              <span className="text-[8px] text-gray-400 mt-1 truncate w-full text-center">{file.name}</span>
+                            </div>
+                          )}
                           <button
                             type="button"
-                            onClick={() => handleRemoveJobImage(index)}
-                            className="absolute top-1 right-1 p-1 bg-red-500/80 hover:bg-red-500 rounded-full text-white opacity-0 group-hover/img:opacity-100 transition-opacity"
+                            onClick={() => handleRemoveJobFile(index)}
+                            className="absolute top-1 right-1 p-1 bg-red-500/80 hover:bg-red-500 rounded-full text-white opacity-0 group-hover/file:opacity-100 transition-opacity"
                           >
                             <Trash2 size={10} />
                           </button>
                           <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1.5 py-0.5">
-                            <span className="text-[7px] text-gray-300 truncate block">{img.name}</span>
+                            <span className="text-[7px] text-gray-300 truncate block">{file.name}</span>
                           </div>
                         </div>
                       ))}
@@ -1874,7 +1932,7 @@ const handleDeleteJob = async (id: string) => {
                   )}
                   
                   <p className="text-[9px] text-gray-500 font-mono">
-                    Upload banner images for this job listing. First image will be the main banner. Thumbnails generated automatically.
+                    Upload images, PDFs, Word docs, Excel sheets, or PowerPoint files. PDFs will open in a fullscreen viewer.
                   </p>
                 </div>
 
@@ -1961,12 +2019,12 @@ const handleDeleteJob = async (id: string) => {
                       )}
                     </div>
                     
-                    {/* Show image count if available */}
+                    {/* Show file count if available */}
                     {(job as any).images && (job as any).images.length > 0 && (
                       <div className="flex items-center gap-1 mt-1">
-                        <ImageIcon size={10} className="text-blue-400" />
+                        <File size={10} className="text-blue-400" />
                         <span className="text-[8px] text-gray-500 font-mono">
-                          {(job as any).images.length} image(s)
+                          {(job as any).images.length} file(s)
                         </span>
                       </div>
                     )}
