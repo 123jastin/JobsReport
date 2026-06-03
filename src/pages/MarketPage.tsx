@@ -17,7 +17,8 @@ import {
   File,
   X,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Download
 } from 'lucide-react';
 import { RawJob, Company } from '../types';
 import { Link, useSearchParams, useParams } from 'react-router-dom';
@@ -487,7 +488,7 @@ export default function MarketPage() {
         </Link>
       </div>
 
-      {/* ✅ Fullscreen File Viewer (Supports Images and PDFs) */}
+      {/* ✅ Fullscreen File Viewer (Supports Images and Embedded PDFs) */}
       {selectedFile && (
         <div 
           className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center"
@@ -528,16 +529,50 @@ export default function MarketPage() {
             </button>
           )}
 
-          {/* Main Content - PDF iframe or Image */}
-          {fileList[currentFileIndex]?.type === 'pdf' || 
-           fileList[currentFileIndex]?.url?.toLowerCase().endsWith('.pdf') ? (
-            <iframe 
-              src={selectedFile}
-              className="w-full max-w-5xl h-[90vh] rounded-xl bg-white"
-              title="PDF Viewer"
+          {/* Main Content - Embedded PDF Viewer or Image */}
+          {(fileList[currentFileIndex]?.type === 'pdf' || 
+            fileList[currentFileIndex]?.url?.toLowerCase().endsWith('.pdf')) ? (
+            <div 
+              className="w-full max-w-5xl h-[90vh] flex flex-col bg-white rounded-xl overflow-hidden"
               onClick={(e) => e.stopPropagation()}
-              style={{ border: 'none' }}
-            />
+            >
+              {/* PDF Toolbar */}
+              <div className="flex items-center justify-between p-3 bg-gray-100 border-b border-gray-200">
+                <span className="text-gray-800 text-xs font-mono truncate max-w-[50%]">
+                  {fileList[currentFileIndex]?.name || 'Document'}
+                </span>
+                <div className="flex items-center gap-2">
+                  <a 
+                    href={fileList[currentFileIndex]?.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-800 text-[10px] font-bold rounded-lg flex items-center gap-1 transition-colors"
+                  >
+                    <ExternalLink size={12} />
+                    Open
+                  </a>
+                  <a 
+                    href={fileList[currentFileIndex]?.url} 
+                    download
+                    onClick={(e) => e.stopPropagation()}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold rounded-lg flex items-center gap-1 transition-colors"
+                  >
+                    <Download size={12} />
+                    Download
+                  </a>
+                </div>
+              </div>
+              
+              {/* PDF Embedded Viewer - Using #toolbar=0&view=FitH for inline display */}
+              <iframe 
+                src={`${fileList[currentFileIndex]?.url}#toolbar=0&view=FitH`}
+                className="w-full flex-1"
+                title="PDF Viewer"
+                onClick={(e) => e.stopPropagation()}
+                style={{ border: 'none' }}
+              />
+            </div>
           ) : (
             <img 
               src={selectedFile} 
@@ -597,13 +632,6 @@ export default function MarketPage() {
           {fileList.length > 1 && (
             <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-50 text-white/50 text-xs font-mono">
               Tap arrows to navigate
-            </div>
-          )}
-
-          {/* File name display */}
-          {fileList[currentFileIndex]?.name && (
-            <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-50 px-3 py-1.5 bg-black/60 backdrop-blur rounded-full text-white/80 text-[10px] font-mono whitespace-nowrap">
-              {fileList[currentFileIndex].name}
             </div>
           )}
         </div>
