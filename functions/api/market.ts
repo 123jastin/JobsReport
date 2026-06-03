@@ -30,19 +30,20 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       LIMIT 100
     `).all();
 
-    // ✅ Map jobs and fetch images for each (with thumbnails)
+    // ✅ Map jobs and fetch files for each (images, PDFs, documents with type)
     const jobs = await Promise.all(
       jobsResult.results.map(async (job: any) => {
-        // Fetch images for this job
+        // Fetch files for this job
         let images: any[] = [];
         try {
           const imagesResult = await DB.prepare(
-            'SELECT url, thumbnail_url, name FROM job_images WHERE job_id = ? ORDER BY sort_order'
+            'SELECT url, thumbnail_url, name, type FROM job_images WHERE job_id = ? ORDER BY sort_order'
           ).bind(job.id).all();
           images = (imagesResult.results || []).map((img: any) => ({
-            url: img.url,                              // ✅ Original R2 URL
-            thumbnail: img.thumbnail_url || img.url,   // ✅ Thumbnail URL (fallback to original)
-            name: img.name
+            url: img.url,
+            thumbnail: img.thumbnail_url || img.url,
+            name: img.name,
+            type: img.type || 'image'  // ✅ Include file type (image, pdf, document)
           }));
         } catch (err) {
           // Table might not exist yet
@@ -62,7 +63,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           active: job.is_active === 1,
           logoUrl: job.logo_url || '',
           country: 'Tanzania',
-          images: images  // ✅ Include images with thumbnails
+          images: images  // ✅ Include files with type
         };
       })
     );
