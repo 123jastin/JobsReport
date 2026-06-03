@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Sparkles, TrendingUp, RefreshCw, ArrowRight, Zap, BarChart3, Building2, Globe } from 'lucide-react';
+import { Sparkles, TrendingUp, RefreshCw, ArrowRight, Zap, BarChart3, Building2, Globe, Clock, MapPin, Briefcase, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import TrendingCard from '../components/TrendingCard';
 import ReportCard from '../components/ReportCard';
@@ -9,6 +9,7 @@ import { useCountry } from '../context/CountryContext';
 export default function HomePage() {
   const [trends, setTrends] = useState<any[]>([]);
   const [reports, setReports] = useState<any[]>([]);
+  const [jobs, setJobs] = useState<any[]>([]);
   const [spotlightCompanies, setSpotlightCompanies] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const { selectedCountry, setSelectedCountry, currentFlag } = useCountry();
@@ -16,14 +17,23 @@ export default function HomePage() {
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const response = await fetch('/api/home');
+        const [homeRes, marketRes] = await Promise.all([
+          fetch('/api/home'),
+          fetch('/api/market')
+        ]);
         
-        if (response.ok) {
-          const data = await response.json();
+        if (homeRes.ok) {
+          const data = await homeRes.json();
           console.log('Home data loaded:', data);
           setTrends(Array.isArray(data.trends) ? data.trends : []);
           setReports(Array.isArray(data.reports) ? data.reports : []);
           setSpotlightCompanies(Array.isArray(data.spotlightCompanies) ? data.spotlightCompanies : []);
+        }
+
+        if (marketRes.ok) {
+          const marketData = await marketRes.json();
+          const activeJobs = (marketData.jobs || []).filter((j: any) => j.active !== false);
+          setJobs(activeJobs.slice(0, 5)); // ✅ Top 5 jobs
         }
       } catch (err) {
         console.error("Failed to load dashboard:", err);
@@ -35,22 +45,15 @@ export default function HomePage() {
     fetchDashboardData();
   }, []);
 
-  // Filter and sort reports by country
-  const displayedReports = reports
-    .filter((report: any) => {
-      if (selectedCountry === 'Worldwide') return true;
-      return (report.country || '').toLowerCase() === selectedCountry.toLowerCase();
-    })
-    .sort((a: any, b: any) => {
-      return new Date(b.updatedAt || '').getTime() - new Date(a.updatedAt || '').getTime();
-    })
-    .slice(0, 6);
+  // Top 3 reports
+  const topReports = reports.slice(0, 3);
+  // Top 5 jobs already set from market API
 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
         <RefreshCw size={24} className="text-blue-500 animate-spin" />
-        <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest">
+        <span className="text-[10px] font-mono text-gray-500 tracking-widest uppercase">
           Compiling Live Market Intelligence...
         </span>
       </div>
@@ -97,11 +100,80 @@ export default function HomePage() {
             <div className="flex items-center gap-2 text-sm">
               <Building2 size={16} className="text-violet-500" />
               <span className="text-gray-400">
-                <span className="text-white font-bold">{spotlightCompanies.length}</span> Active Employers
+                <span className="text-white font-bold">{jobs.length}</span> Active Jobs
               </span>
             </div>
           </div>
         </motion.div>
+      </section>
+
+      {/* 🔥 Top 5 Jobs Section */}
+      <section>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-lg font-bold text-white uppercase tracking-widest flex items-center gap-3">
+              <div className="w-1.5 h-6 bg-blue-500"></div>
+              Latest Opportunities
+            </h2>
+            <p className="text-xs text-gray-500 mt-1 font-mono">
+              Top active job listings from the market telemetry stream
+            </p>
+          </div>
+          <Link 
+            to="/market" 
+            className="flex items-center gap-1 text-[10px] text-blue-500 hover:text-blue-400 font-bold uppercase tracking-wider transition-colors group"
+          >
+            View All Jobs
+            <ArrowRight size={12} className="group-hover:translate-x-1 transition-transform" />
+          </Link>
+        </div>
+
+        {jobs.length === 0 ? (
+          <div className="text-center py-12 text-gray-500 text-sm font-mono">
+            No active job listings yet. Market signals incoming...
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {jobs.map((job: any, idx: number) => (
+              <Link 
+                key={job.id} 
+                to={`/market/${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${job.id}`}
+                className="block p-4 bg-white/[0.01] border border-white/5 rounded-2xl hover:bg-white/[0.03] transition-all group"
+              >
+                <div className="flex items-start gap-3">
+                  {/* Company Logo */}
+                  <div className="w-10 h-10 rounded-xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
+                    {job.logoUrl ? (
+                      <img src={job.logoUrl} alt="" className="w-full h-full object-cover rounded-xl" />
+                    ) : (
+                      <div className="w-full h-full bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400">
+                        {job.company?.charAt(0)?.toUpperCase() || '?'}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="px-1.5 py-0.5 rounded text-[7px] font-bold bg-blue-500/10 text-blue-400 uppercase">
+                        {job.role || 'General'}
+                      </span>
+                    </div>
+                    <h3 className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors truncate">
+                      {job.title}
+                    </h3>
+                    <div className="flex items-center gap-2 mt-1.5 text-[10px] text-gray-500">
+                      <span className="flex items-center gap-1"><Building2 size={10} />{job.company}</span>
+                      <span className="flex items-center gap-1"><MapPin size={10} />{job.location || 'Remote'}</span>
+                    </div>
+                    {job.salary && (
+                      <span className="text-[9px] text-emerald-400 font-mono mt-1 block">{job.salary}</span>
+                    )}
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* 🔥 Trending Section */}
@@ -135,62 +207,35 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 📰 Latest Reports Section */}
-      <section id="reports-section" className="grid grid-cols-1 lg:grid-cols-4 gap-12 font-sans">
-        <div className="lg:col-span-1">
-          <div className="sticky top-24">
-            <h2 className="text-lg font-bold text-white uppercase tracking-widest mb-2 flex items-center gap-2">
-              <span>{currentFlag}</span>
-              <span>{selectedCountry === 'Worldwide' ? 'Global' : selectedCountry} Reports</span>
-            </h2>
-            <p className="text-xs text-gray-500 leading-relaxed mb-6 font-medium">
-              Deep-dive sectoral growth analysis and telemetry in <b>{selectedCountry}</b>.
-            </p>
-            <div className="p-4 bg-white/5 border border-white/5 rounded-2xl space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-[10px] text-gray-500 font-mono uppercase tracking-widest font-bold">Local Stream</p>
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
-              </div>
-              <div className="text-stone-300 font-mono text-xs">
-                {displayedReports.length} Intelligence Report{displayedReports.length !== 1 ? 's' : ''} Active
-              </div>
-              <Link 
-                to="/reports" 
-                className="flex items-center gap-1 text-[10px] text-blue-500 hover:text-blue-400 font-bold uppercase tracking-wider transition-colors"
-              >
-                View All Reports
-                <ArrowRight size={12} />
-              </Link>
+      {/* 📰 Top 3 Reports Section */}
+      {topReports.length > 0 && (
+        <section>
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-lg font-bold text-white uppercase tracking-widest flex items-center gap-3">
+                <div className="w-1.5 h-6 bg-violet-500"></div>
+                Latest Reports
+              </h2>
+              <p className="text-xs text-gray-500 mt-1 font-mono">
+                Market intelligence reports and sector analysis
+              </p>
             </div>
+            <Link 
+              to="/reports" 
+              className="flex items-center gap-1 text-[10px] text-blue-500 hover:text-blue-400 font-bold uppercase tracking-wider transition-colors group"
+            >
+              View All Reports
+              <ArrowRight size={12} className="group-hover:translate-x-1 transition-transform" />
+            </Link>
           </div>
-        </div>
-        
-        <div className="lg:col-span-3">
-          {displayedReports.length === 0 ? (
-            <div className="p-12 text-center bg-white/[0.01] rounded-[2rem] border border-dashed border-white/10 flex flex-col items-center justify-center space-y-4">
-              <Globe size={32} className="text-gray-600 animate-[pulse_3s_infinite]" />
-              <div>
-                <p className="text-white font-bold text-sm">No Local Intelligence Documents Available</p>
-                <p className="text-xs text-gray-500 mt-1 max-w-sm text-center">
-                  We are compiling local telemetry reports for {selectedCountry} {currentFlag}. In the meantime, you can access the full Worldwide grid context.
-                </p>
-              </div>
-              <button 
-                onClick={() => setSelectedCountry('Worldwide')}
-                className="px-4 py-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all"
-              >
-                Show All Global Reports
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {displayedReports.map((report: any) => (
-                <ReportCard key={report.id} report={report} />
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {topReports.map((report: any) => (
+              <ReportCard key={report.id} report={report} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* 🏢 Weekly Spotlight */}
       <section id="companies-section">
@@ -233,7 +278,6 @@ export default function HomePage() {
             )}
           </div>
           
-          {/* Background Effects */}
           <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl" />
           <div className="absolute bottom-0 left-0 w-24 h-24 bg-blue-500/5 rounded-full blur-2xl" />
         </div>
