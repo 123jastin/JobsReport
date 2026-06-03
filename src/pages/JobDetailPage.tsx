@@ -25,7 +25,25 @@ export default function JobDetailPage() {
         const res = await fetch('/api/market');
         if (res.ok) {
           const data = await res.json();
-          const found = data.jobs?.find((j: any) => j.id === jobId);
+          
+          // ✅ Extract the actual job ID from the URL slug
+          // URL format: /market/reservation-manager-nungwi-zanzibar-job-mpy7xvojyhxs
+          // The job ID is the part after "job-"
+          const jobIdMatch = jobId?.match(/job-([a-z0-9]+)$/i);
+          const extractedId = jobIdMatch ? `job-${jobIdMatch[1]}` : jobId;
+          
+          console.log('Looking for job ID:', extractedId, 'from slug:', jobId);
+          
+          // Find by exact ID match
+          let found = data.jobs?.find((j: any) => j.id === extractedId);
+          
+          // If not found, try matching by ID contained in slug
+          if (!found && jobId) {
+            found = data.jobs?.find((j: any) => 
+              jobId.includes(j.id) || j.id.includes(extractedId || '')
+            );
+          }
+          
           setJob(found || null);
         }
       } catch (err) {
@@ -72,79 +90,54 @@ export default function JobDetailPage() {
       {/* Job Header Card */}
       <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl">
         <div className="flex items-start gap-4">
-          {/* Company Logo */}
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 flex items-center justify-center text-white font-bold text-xl shrink-0">
             {job.company?.charAt(0)?.toUpperCase() || '?'}
           </div>
           
           <div className="flex-1 min-w-0">
-            {/* Role Badge */}
             <div className="flex items-center gap-2 mb-2">
               <span className="px-2 py-0.5 rounded text-[8px] font-bold bg-blue-500/10 text-blue-400 uppercase tracking-wider">
                 {job.role || 'General'}
               </span>
               <span className="text-[10px] text-gray-500 flex items-center gap-1">
-                <Calendar size={11} />
-                Posted: {job.postedAt || 'Recent'}
+                <Calendar size={11} /> Posted: {job.postedAt || 'Recent'}
               </span>
               {job.expiresAt && (
                 <span className="text-[10px] text-gray-500 flex items-center gap-1">
-                  <Clock size={11} />
-                  Expires: {job.expiresAt}
+                  <Clock size={11} /> Expires: {job.expiresAt}
                 </span>
               )}
             </div>
 
-            {/* Job Title */}
             <h1 className="text-2xl md:text-3xl font-bold text-white mb-3">{job.title}</h1>
 
-            {/* Meta Info */}
             <div className="flex flex-wrap items-center gap-3 text-sm">
-              <span className="flex items-center gap-1.5 text-gray-400">
-                <Building2 size={14} className="text-stone-500" />
-                {job.company}
-              </span>
+              <span className="flex items-center gap-1.5 text-gray-400"><Building2 size={14} />{job.company}</span>
               <span className="text-gray-600">•</span>
-              <span className="flex items-center gap-1.5 text-gray-400">
-                <MapPin size={14} className="text-stone-500" />
-                {job.location || 'Remote'}
-              </span>
+              <span className="flex items-center gap-1.5 text-gray-400"><MapPin size={14} />{job.location || 'Remote'}</span>
               {job.salary && (
                 <>
                   <span className="text-gray-600">•</span>
-                  <span className="flex items-center gap-1.5 text-emerald-400 font-bold">
-                    <DollarSign size={14} />
-                    {job.salary}
-                  </span>
+                  <span className="flex items-center gap-1.5 text-emerald-400 font-bold"><DollarSign size={14} />{job.salary}</span>
                 </>
               )}
               <span className="text-gray-600">•</span>
-              <span className="flex items-center gap-1.5 text-gray-400">
-                <Briefcase size={14} className="text-stone-500" />
-                {job.role}
-              </span>
+              <span className="flex items-center gap-1.5 text-gray-400"><Briefcase size={14} />{job.role}</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Main Content Grid */}
+      {/* Main Content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Left: Description + Media */}
         <div className="lg:col-span-2 space-y-6">
-          
           {/* Job Description */}
           {hasDescription && (
             <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl">
               <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                <FileText size={18} className="text-blue-400" />
-                Job Description
+                <FileText size={18} className="text-blue-400" /> Job Description
               </h2>
-              <div 
-                className="text-stone-300 text-sm leading-relaxed space-y-4"
-                dangerouslySetInnerHTML={{ __html: job.description }}
-              />
+              <div className="text-stone-300 text-sm leading-relaxed space-y-4" dangerouslySetInnerHTML={{ __html: job.description }} />
             </div>
           )}
 
@@ -155,12 +148,11 @@ export default function JobDetailPage() {
             </div>
           )}
 
-          {/* Attachments / Media */}
+          {/* Attachments */}
           {hasFiles && (
             <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl">
               <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                <Eye size={18} className="text-blue-400" />
-                Attachments ({job.images.length})
+                <Eye size={18} className="text-blue-400" /> Attachments ({job.images.length})
               </h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {job.images.map((img: any, index: number) => {
@@ -203,60 +195,36 @@ export default function JobDetailPage() {
           )}
         </div>
 
-        {/* Right Sidebar: Apply Button + Info */}
+        {/* Sidebar */}
         <div className="space-y-4">
-          {/* Apply Now Button */}
           <button
             onClick={() => job.url && triggerRedirect(job.url, job.company, job.title)}
             disabled={!job.url}
             className={`w-full py-4 rounded-2xl font-bold text-sm uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
-              job.url 
-                ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20' 
-                : 'bg-white/5 text-gray-600 cursor-not-allowed'
+              job.url ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20' : 'bg-white/5 text-gray-600 cursor-not-allowed'
             }`}
           >
             Apply Now <ExternalLink size={16} />
           </button>
 
-          {/* Job Info Card */}
           <div className="p-5 bg-white/[0.01] border border-white/5 rounded-3xl space-y-3">
             <h3 className="text-xs font-bold text-white uppercase tracking-widest border-b border-white/5 pb-2">Job Details</h3>
             <div className="space-y-2 text-xs">
-              <div className="flex justify-between">
-                <span className="text-gray-500">Role</span>
-                <span className="text-white font-bold">{job.role || 'N/A'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Company</span>
-                <span className="text-white font-bold">{job.company}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Location</span>
-                <span className="text-white font-bold">{job.location || 'Remote'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Salary</span>
-                <span className="text-emerald-400 font-bold">{job.salary || 'Not specified'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Posted</span>
-                <span className="text-white font-bold">{job.postedAt || 'Recent'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Signal ID</span>
-                <span className="text-white font-mono text-[10px]">JR-{job.id?.slice(0, 8).toUpperCase()}</span>
-              </div>
+              <div className="flex justify-between"><span className="text-gray-500">Role</span><span className="text-white font-bold">{job.role || 'N/A'}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Company</span><span className="text-white font-bold">{job.company}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Location</span><span className="text-white font-bold">{job.location || 'Remote'}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Salary</span><span className="text-emerald-400 font-bold">{job.salary || 'Not specified'}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Posted</span><span className="text-white font-bold">{job.postedAt || 'Recent'}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Signal ID</span><span className="text-white font-mono text-[10px]">JR-{job.id?.slice(0, 8).toUpperCase()}</span></div>
             </div>
           </div>
 
-          {/* Share Link */}
           <button
             onClick={() => {
               if (navigator.share) {
                 navigator.share({ title: job.title, url: window.location.href });
               } else {
                 navigator.clipboard.writeText(window.location.href);
-                alert('Link copied!');
               }
             }}
             className="w-full py-3 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white text-xs font-bold uppercase tracking-wider rounded-2xl transition-all"
@@ -266,7 +234,7 @@ export default function JobDetailPage() {
         </div>
       </div>
 
-      {/* Fullscreen File Viewer */}
+      {/* Fullscreen Viewer */}
       {viewerOpen && viewerFiles.length > 0 && (
         <div className="fixed inset-0 z-50 bg-[#0a0a0a] flex flex-col">
           <div className="flex items-center justify-between p-4 bg-black/90 shrink-0">
@@ -280,32 +248,21 @@ export default function JobDetailPage() {
               </button>
             </div>
           </div>
-          
           <div className="flex-1 flex items-center justify-center p-4">
             {viewerFiles[viewerIndex]?.type === 'pdf' || viewerFiles[viewerIndex]?.name?.endsWith('.pdf') ? (
               <iframe
                 src={`https://docs.google.com/viewer?url=${encodeURIComponent(viewerFiles[viewerIndex].url)}&embedded=true`}
-                className="w-full h-full rounded-xl"
-                style={{ border: 'none' }}
+                className="w-full h-full rounded-xl" style={{ border: 'none' }}
               />
             ) : (
               <img src={viewerFiles[viewerIndex]?.url} alt="" className="max-w-full max-h-full object-contain" />
             )}
           </div>
-          
           <div className="flex justify-center gap-4 p-4 bg-black/90 shrink-0">
-            <button
-              onClick={() => setViewerIndex(Math.max(0, viewerIndex - 1))}
-              disabled={viewerIndex === 0}
-              className="p-2 bg-white/10 rounded-full text-white disabled:opacity-30"
-            >
+            <button onClick={() => setViewerIndex(Math.max(0, viewerIndex - 1))} disabled={viewerIndex === 0} className="p-2 bg-white/10 rounded-full text-white disabled:opacity-30">
               <ChevronLeft size={20} />
             </button>
-            <button
-              onClick={() => setViewerIndex(Math.min(viewerFiles.length - 1, viewerIndex + 1))}
-              disabled={viewerIndex === viewerFiles.length - 1}
-              className="p-2 bg-white/10 rounded-full text-white disabled:opacity-30"
-            >
+            <button onClick={() => setViewerIndex(Math.min(viewerFiles.length - 1, viewerIndex + 1))} disabled={viewerIndex === viewerFiles.length - 1} className="p-2 bg-white/10 rounded-full text-white disabled:opacity-30">
               <ChevronRight size={20} />
             </button>
           </div>
