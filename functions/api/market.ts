@@ -13,6 +13,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       SELECT 
         j.id,
         j.title,
+        j.description,
         r.name as role,
         c.name as company,
         j.location,
@@ -43,16 +44,16 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
             url: img.url,
             thumbnail: img.thumbnail_url || img.url,
             name: img.name,
-            type: img.type || 'image'  // ✅ Include file type (image, pdf, document)
+            type: img.type || 'image'
           }));
         } catch (err) {
-          // Table might not exist yet
           images = [];
         }
 
         return {
           id: job.id,
           title: job.title,
+          description: job.description || '',  // ✅ Job description HTML
           role: job.role,
           company: job.company,
           location: job.location || 'Remote',
@@ -63,7 +64,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           active: job.is_active === 1,
           logoUrl: job.logo_url || '',
           country: 'Tanzania',
-          images: images  // ✅ Include files with type
+          images: images
         };
       })
     );
