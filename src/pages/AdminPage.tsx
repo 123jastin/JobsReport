@@ -104,7 +104,6 @@ const renderJobDescription = (data: JobTemplateData, variant: 'standard' | 'prem
     `;
   }
   
-  // Standard template
   return `
     <div class="job-description">
       <h2 class="text-xl font-bold text-white mb-3 border-b border-white/10 pb-2">${data.title}</h2>
@@ -185,9 +184,8 @@ export default function AdminPage() {
   // ✅ JOB FILES STATES (Supports images + documents)
   const [jobFiles, setJobFiles] = useState<{url: string, thumbnail: string, name: string, type: string, file?: File}[]>([]);
   
-  // ✅ JOB DESCRIPTION STATE
+  // ✅ JOB DESCRIPTION STATE - Always visible
   const [jobDescription, setJobDescription] = useState('');
-  const [showJobDescEditor, setShowJobDescEditor] = useState(false);
   const jobDescEditorRef = useRef<HTMLDivElement>(null);
   
   // ✅ AI Job Parser States
@@ -282,7 +280,6 @@ export default function AdminPage() {
     if (jobForm.title) {
       const lowerTitle = jobForm.title.toLowerCase().trim();
       
-      // Look up if any of our roles maps this
       let foundMatchingRole = '';
       for (const r of rolesState) {
         if (r.title.toLowerCase() === lowerTitle) {
@@ -302,12 +299,11 @@ export default function AdminPage() {
         setJobForm(prev => ({ ...prev, roleSelected: foundMatchingRole }));
       }
 
-      // Inline Duplicate warning check
       const duplicateExists = jobs.some(j => 
         j.title.toLowerCase().trim() === lowerTitle &&
         j.company.toLowerCase().trim() === (isCreatingNewCompanyInline ? jobForm.companyNewName.toLowerCase().trim() : jobForm.companySelected.toLowerCase().trim()) &&
         j.location.toLowerCase().trim() === jobForm.location.toLowerCase().trim() &&
-        j.id !== editingJobId // Exclude current job when editing
+        j.id !== editingJobId
       );
 
       if (duplicateExists) {
@@ -344,11 +340,9 @@ export default function AdminPage() {
 
       if (marketRes.ok) {
         const marketData = await marketRes.json();
-        console.log('Market data loaded:', marketData);
         
         if (marketData.jobs && Array.isArray(marketData.jobs)) {
           setJobs(marketData.jobs);
-          console.log('Jobs loaded:', marketData.jobs.length);
         }
         
         if (marketData.companies && marketData.companies.length > 0) {
@@ -414,7 +408,7 @@ export default function AdminPage() {
       const result = await res.json();
 
       if (result.success && result.data) {
-        // ✅ Auto-fill job form with validated data
+        // Auto-fill form
         setJobForm(prev => ({
           ...prev,
           title: result.data.title || prev.title,
@@ -424,7 +418,8 @@ export default function AdminPage() {
           companySelected: result.data.company || prev.companySelected,
         }));
 
-        // ✅ Apply TEMPLATE to AI data
+        // Apply TEMPLATE to AI data
+        let templateHTML = '';
         if (result.data.sections) {
           const templateData: JobTemplateData = {
             title: result.data.title || '',
@@ -434,38 +429,37 @@ export default function AdminPage() {
             role: result.data.role || 'General',
             sections: result.data.sections
           };
-          
-          // Render using template (premium for better formatting)
-          const templateHTML = renderJobDescription(templateData, 'premium');
-          
-          setJobDescription(templateHTML);
-          setShowJobDescEditor(true);
-          setTimeout(() => {
-            if (jobDescEditorRef.current) {
-              jobDescEditorRef.current.innerHTML = templateHTML;
-            }
-          }, 100);
+          templateHTML = renderJobDescription(templateData, 'premium');
         } else if (result.data.description) {
-          // Fallback to raw description if no structured sections
-          setJobDescription(result.data.description);
-          setShowJobDescEditor(true);
+          templateHTML = result.data.description;
+        }
+        
+        if (templateHTML) {
+          setJobDescription(templateHTML);
+          
+          // Auto-scroll to editor and highlight
           setTimeout(() => {
-            if (jobDescEditorRef.current) {
-              jobDescEditorRef.current.innerHTML = result.data.description;
+            const editor = jobDescEditorRef.current;
+            if (editor) {
+              editor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              editor.innerHTML = templateHTML;
+              editor.style.borderColor = '#10b981';
+              editor.style.borderWidth = '2px';
+              setTimeout(() => {
+                editor.style.borderColor = '';
+                editor.style.borderWidth = '';
+              }, 2000);
             }
-          }, 100);
+          }, 200);
         }
 
-        showFeedback('success', `Job parsed with template${result.attempts > 1 ? ` (took ${result.attempts} attempts)` : ''}! Review and submit.`);
+        showFeedback('success', `Job parsed with template! Review and submit.`);
         setShowAIPaste(false);
         setRawJobText('');
       } else {
-        // ✅ Show specific error from API
         const errorMsg = result.error || 'AI processing failed';
-        const debug = result.debug ? ` (${result.debug})` : '';
-        showFeedback('error', errorMsg + debug);
+        showFeedback('error', errorMsg);
         
-        // If partial data available, still try to fill what we can
         if (result.partial && result.partial.title) {
           setJobForm(prev => ({
             ...prev,
@@ -494,7 +488,6 @@ export default function AdminPage() {
           let width = img.width;
           let height = img.height;
           
-          // Resize for thumbnail
           if (width > maxWidth) {
             height = (height * maxWidth) / width;
             width = maxWidth;
@@ -505,7 +498,6 @@ export default function AdminPage() {
           const ctx = canvas.getContext('2d');
           ctx!.drawImage(img, 0, 0, width, height);
           
-          // WebP thumbnail at 70% quality
           const thumbnail = canvas.toDataURL('image/webp', 0.7);
           resolve(thumbnail);
         };
@@ -546,7 +538,7 @@ export default function AdminPage() {
     `);
   };
 
-  // ✅ Handle multiple file upload for jobs (images + documents)
+  // ✅ Handle multiple file upload for jobs
   const handleJobFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -562,7 +554,6 @@ export default function AdminPage() {
       const isDoc = file.type.includes('document') || file.name.match(/\.(doc|docx|xls|xlsx|ppt|pptx)$/i);
       
       if (isImage) {
-        // Generate thumbnail for images
         const thumbnail = await generateThumbnail(file, 400);
         const reader = new FileReader();
         reader.onloadend = () => {
@@ -582,7 +573,6 @@ export default function AdminPage() {
         };
         reader.readAsDataURL(file);
       } else if (isPDF || isDoc) {
-        // For PDFs/documents, generate appropriate icon thumbnail
         const docThumbnail = generateDocumentThumbnail(file.name, file.type);
         const reader = new FileReader();
         reader.onloadend = () => {
@@ -611,12 +601,10 @@ export default function AdminPage() {
     }
   };
 
-  // ✅ Remove a job file
   const handleRemoveJobFile = (index: number) => {
     setJobFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  // --- LOGO / IMAGE LOCAL FILE UPLOADER TO BASE64 ---
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>, target: 'media' | 'company' | 'article') => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -633,16 +621,15 @@ export default function AdminPage() {
       } else if (target === 'company') {
         setJobForm(prev => ({ ...prev, companyNewLogo: base64String }));
         setCompanyForm(prev => ({ ...prev, logoUrl: base64String }));
-        showFeedback('success', `Logo "${file.name}" cached. Will be compressed to WebP on save.`);
+        showFeedback('success', `Logo "${file.name}" cached.`);
       } else if (target === 'article') {
         setNewRichMediaUrl(base64String);
-        showFeedback('success', 'Article inline graphic cached to image buffer.');
+        showFeedback('success', 'Article inline graphic cached.');
       }
     };
     reader.readAsDataURL(file);
   };
 
-  // ✅ Compress image to WebP format
   const compressToWebP = (file: File, maxWidth: number = 200): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -653,7 +640,6 @@ export default function AdminPage() {
           let width = img.width;
           let height = img.height;
           
-          // Resize if too large
           if (width > maxWidth) {
             height = (height * maxWidth) / width;
             width = maxWidth;
@@ -664,7 +650,6 @@ export default function AdminPage() {
           const ctx = canvas.getContext('2d');
           ctx!.drawImage(img, 0, 0, width, height);
           
-          // Convert to WebP with 0.8 quality
           const webpBase64 = canvas.toDataURL('image/webp', 0.8);
           resolve(webpBase64);
         };
@@ -675,7 +660,6 @@ export default function AdminPage() {
     });
   };
 
-  // ✅ Load job for editing
   const handleEditJob = (job: RawJob) => {
     setEditingJobId(job.id);
     setJobForm({
@@ -691,20 +675,16 @@ export default function AdminPage() {
       expiresAt: job.expiresAt || ''
     });
     setJobDescription((job as any).description || '');
-    if ((job as any).description) {
-      setShowJobDescEditor(true);
-      setTimeout(() => {
-        if (jobDescEditorRef.current) {
-          jobDescEditorRef.current.innerHTML = (job as any).description;
-        }
-      }, 100);
-    }
+    setTimeout(() => {
+      if (jobDescEditorRef.current) {
+        jobDescEditorRef.current.innerHTML = (job as any).description || '';
+      }
+    }, 100);
     setIsCreatingNewCompanyInline(false);
     setJobFiles([]);
     window.scrollTo({ top: 300, behavior: 'smooth' });
   };
 
-  // ✅ Cancel editing job
   const handleCancelEditJob = () => {
     setEditingJobId(null);
     setJobForm({
@@ -720,7 +700,6 @@ export default function AdminPage() {
       expiresAt: ''
     });
     setJobDescription('');
-    setShowJobDescEditor(false);
     if (jobDescEditorRef.current) {
       jobDescEditorRef.current.innerHTML = '';
     }
@@ -728,7 +707,6 @@ export default function AdminPage() {
     setIsCreatingNewCompanyInline(false);
   };
 
-  // ✅ Load company for editing
   const handleEditCompany = (company: Company) => {
     setEditingCompanyId(company.id);
     setCompanyForm({
@@ -739,13 +717,11 @@ export default function AdminPage() {
     window.scrollTo({ top: 300, behavior: 'smooth' });
   };
 
-  // ✅ Cancel editing company
   const handleCancelEditCompany = () => {
     setEditingCompanyId(null);
     setCompanyForm({ name: '', url: '', logoUrl: '' });
   };
 
-  // 1. Ingest Job Telemetry
   const handleIngestJob = async (e: FormEvent) => {
     e.preventDefault();
     
@@ -771,7 +747,6 @@ export default function AdminPage() {
         return;
       }
 
-      // ✅ Upload files to R2 first using /api/upload
       const uploadedFiles: {url: string, thumbnail: string, name: string, type: string}[] = [];
       
       for (const file of jobFiles) {
@@ -782,7 +757,6 @@ export default function AdminPage() {
           type: file.type
         };
 
-        // Upload original if it's a file
         if (file.file) {
           const originalFormData = new FormData();
           originalFormData.append('file', file.file, file.name);
@@ -790,10 +764,9 @@ export default function AdminPage() {
           const originalRes = await fetch('/api/upload', { method: 'POST', body: originalFormData });
           if (originalRes.ok) {
             const originalData = await originalRes.json();
-            fileData.url = originalData.url; // R2 URL
+            fileData.url = originalData.url;
           }
           
-          // Upload thumbnail (convert base64 to blob for images, skip for documents)
           if (file.type === 'image') {
             const thumbBlob = await fetch(file.thumbnail).then(r => r.blob());
             const thumbFormData = new FormData();
@@ -802,7 +775,7 @@ export default function AdminPage() {
             const thumbRes = await fetch('/api/upload', { method: 'POST', body: thumbFormData });
             if (thumbRes.ok) {
               const thumbData = await thumbRes.json();
-              fileData.thumbnail = thumbData.url; // R2 URL
+              fileData.thumbnail = thumbData.url;
             }
           }
         }
@@ -825,7 +798,7 @@ export default function AdminPage() {
           salary: jobForm.salary,
           country: selectedCountry,
           expiresAt: jobForm.expiresAt,
-          description: jobDescription, // ✅ Add job description
+          description: jobDescription,
           images: uploadedFiles
         })
       });
@@ -854,7 +827,6 @@ export default function AdminPage() {
           expiresAt: ''
         });
         setJobDescription('');
-        setShowJobDescEditor(false);
         if (jobDescEditorRef.current) {
           jobDescEditorRef.current.innerHTML = '';
         }
@@ -919,7 +891,6 @@ export default function AdminPage() {
     }
   };
 
-  // 2. Action: Corporate Node Management
   const handleCreateCompany = async (e: FormEvent) => {
     e.preventDefault();
     if (!companyForm.name) return;
@@ -929,7 +900,6 @@ export default function AdminPage() {
       return;
     }
 
-    // Check for duplicate (only when creating new)
     if (!editingCompanyId) {
       const duplicateExists = companiesState.some(
         c => c.name.toLowerCase() === companyForm.name.toLowerCase().trim()
@@ -1009,7 +979,6 @@ export default function AdminPage() {
     }
   };
 
-  // 3. Action: Roles Management
   const handleAddKeywordToRole = () => {
     if (!roleForm.keywordInput.trim()) return;
     const cleanWord = roleForm.keywordInput.trim().toLowerCase();
@@ -1067,7 +1036,7 @@ export default function AdminPage() {
       return;
     }
 
-    if (!confirm("Expel this role mapping category? Future automated parse scripts will fallback on other active selectors.")) return;
+    if (!confirm("Expel this role mapping category?")) return;
 
     try {
       const res = await fetch(`/api/admin/roles/${id}`, { method: 'DELETE' });
@@ -1079,42 +1048,6 @@ export default function AdminPage() {
     } catch (err) {
       showFeedback('error', 'Could not purge role mapping.');
     }
-  };
-
-  // 4. Action: Rich Text Article Builder
-  const handleAddRichElement = () => {
-    if (!newRichText.trim() && newRichType !== 'image') return;
-    
-    if (newRichType === 'list') {
-      setRichLines(prev => [...prev, {
-        type: 'list',
-        text: newRichText,
-        subItems: newRichSubList
-      }]);
-      setNewRichSubList([]);
-      setNewRichSubItem('');
-    } else if (newRichType === 'image') {
-      setRichLines(prev => [...prev, {
-        type: 'image',
-        text: newRichAltText || 'Embedded analytical illustration',
-        mediaUrl: newRichMediaUrl || 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=400&q=80'
-      }]);
-      setNewRichMediaUrl('');
-      setNewRichAltText('');
-    } else {
-      setRichLines(prev => [...prev, {
-        type: newRichType as 'h2' | 'p',
-        text: newRichText
-      }]);
-    }
-    
-    setNewRichText('');
-  };
-
-  const handleAddSubItemToBuffer = () => {
-    if (!newRichSubItem.trim()) return;
-    setNewRichSubList(prev => [...prev, newRichSubItem.trim()]);
-    setNewRichSubItem('');
   };
 
   const handlePostReport = async (e: FormEvent) => {
@@ -1181,7 +1114,6 @@ export default function AdminPage() {
 
       if (res.ok) {
         const savedReport = await res.json();
-        console.log('Report saved:', savedReport);
         
         const msg = editingReportId 
           ? `Insight Report "${reportForm.title}" updated successfully!` 
@@ -1219,7 +1151,6 @@ export default function AdminPage() {
     }
   };
 
-  // 5. Action: Media Assets Catalog Upload
   const handleUploadMedia = async (e: FormEvent) => {
     e.preventDefault();
     if (!selectedFileBase64) {
@@ -1301,7 +1232,6 @@ export default function AdminPage() {
     }
   };
 
-  // --- REPORTS MANAGER ACTIONS ---
   const handleLoadReportToEdit = (rep: Report) => {
     setEditingReportId(rep.id);
     setReportForm({
@@ -1422,7 +1352,6 @@ export default function AdminPage() {
     isEditingRef.current = false;
   };
 
-  // 6. Action: Deduplication & Re-calc Pipeline Trigger
   const handleTriggerPipeline = async () => {
     setActionLoading(true);
     try {
@@ -1443,10 +1372,8 @@ export default function AdminPage() {
     }
   };
 
-  // Colors dictionary for Recharts Cell rendering
   const CHART_COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#6366f1'];
 
-  // Calculate dynamic charts from current live jobs list
   const getDynamicBarChartData = () => {
     return rolesState.map(r => {
       const activeCount = jobs.filter(j => j.role.toLowerCase() === r.title.toLowerCase() && j.active).length;
@@ -1474,7 +1401,6 @@ export default function AdminPage() {
     return parsedArray;
   };
 
-  // ✅ SHOW LOGIN FORM IF NOT AUTHENTICATED
   if (!isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
@@ -1546,11 +1472,10 @@ export default function AdminPage() {
     );
   }
 
-  // ✅ MAIN ADMIN DASHBOARD (shown only when authenticated)
   return (
     <div className="space-y-8 pb-12 mt-4 text-white">
       
-      {/* 🔐 Admin & Editor Permissions Banner Toggle */}
+      {/* Admin & Editor Permissions Banner Toggle */}
       <div className="p-4 bg-orange-950/20 border border-orange-500/20 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="p-2 h-10 w-10 flex items-center justify-center bg-orange-500/10 text-orange-400 rounded-full border border-orange-500/25">
@@ -1588,7 +1513,7 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* 🔮 Active Feedback Toast Marker */}
+      {/* Active Feedback Toast Marker */}
       <AnimatePresence>
         {operationMessage && (
           <motion.div 
@@ -1694,9 +1619,7 @@ export default function AdminPage() {
         ))}
       </div>
 
-      {/* ---------------------------------------------------- */}
-      {/* 📊 TAB 1: DASHBOARD OVERVIEW SECTION */}
-      {/* ---------------------------------------------------- */}
+      {/* TAB 1: DASHBOARD OVERVIEW SECTION */}
       {activeTab === 'dashboard' && (
         <motion.div 
           initial={{ opacity: 0 }}
@@ -1877,17 +1800,15 @@ export default function AdminPage() {
         </motion.div>
       )}
 
-      {/* ---------------------------------------------------- */}
-      {/* 📥 TAB 2: JOB INPUT SYSTEM WITH AI PARSER & FILE UPLOAD */}
-      {/* ---------------------------------------------------- */}
+      {/* TAB 2: JOB INPUT SYSTEM WITH AI PARSER & FILE UPLOAD - FULL WIDTH */}
       {activeTab === 'jobs' && (
         <motion.div 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="grid grid-cols-1 lg:grid-cols-12 gap-8"
+          className="space-y-8"
         >
-          {/* Main insertion form */}
-          <div className="lg:col-span-5 space-y-6">
+          {/* Main insertion form - Full width */}
+          <div className="space-y-6">
             <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-5">
               <div>
                 <h3 className="text-base font-extrabold uppercase tracking-widest flex items-center gap-1.5 font-sans text-stone-100">
@@ -1896,7 +1817,7 @@ export default function AdminPage() {
                 <p className="text-xs text-gray-500 mt-1">Automatic categorizations are applied based on keyword matching logic. Supports images, PDFs, Word, Excel, PowerPoint files.</p>
               </div>
 
-              {/* ✅ AI Job Parser - Smart Paste */}
+              {/* AI Job Parser - Smart Paste */}
               <div className="pb-4 border-b border-white/5">
                 <button
                   type="button"
@@ -1907,7 +1828,6 @@ export default function AdminPage() {
                   {showAIPaste ? '✕ Close AI Parser' : '⚡ AI Auto-Fill from Job Description'}
                 </button>
 
-                {/* AI Paste Area */}
                 {showAIPaste && (
                   <motion.div 
                     initial={{ opacity: 0, height: 0 }}
@@ -1968,20 +1888,32 @@ export default function AdminPage() {
 
               <form onSubmit={handleIngestJob} className="space-y-4">
                 
-                {/* Job title */}
-                <div className="space-y-1">
-                  <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Job Title</label>
-                  <input 
-                    type="text" 
-                    value={jobForm.title}
-                    onChange={(e) => setJobForm(prev => ({ ...prev, title: e.target.value }))}
-                    placeholder="e.g. Senior Frontend React Engineer"
-                    className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors font-sans"
-                    required
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Job Title</label>
+                    <input 
+                      type="text" 
+                      value={jobForm.title}
+                      onChange={(e) => setJobForm(prev => ({ ...prev, title: e.target.value }))}
+                      placeholder="e.g. Senior Frontend React Engineer"
+                      className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors font-sans"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Location parameters</label>
+                    <input 
+                      type="text" 
+                      value={jobForm.location}
+                      onChange={(e) => setJobForm(prev => ({ ...prev, location: e.target.value }))}
+                      placeholder="Remote / Silicon Valley"
+                      className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none"
+                      required
+                    />
+                  </div>
                 </div>
 
-                {/* Automation highlight indicator */}
                 {jobForm.title && (
                   <div className="p-3 rounded-xl bg-blue-950/20 border border-blue-500/20 text-[10px] font-mono leading-relaxed space-y-1">
                     <div className="flex items-center gap-1.5 text-blue-400 uppercase font-extrabold">
@@ -1993,7 +1925,6 @@ export default function AdminPage() {
                   </div>
                 )}
 
-                {/* Duplicate block status */}
                 {duplicateWarning && (
                   <div className="p-3 rounded-xl bg-red-950/20 border border-red-500/20 text-[10px] font-mono leading-relaxed space-y-1">
                     <div className="flex items-center gap-1.5 text-red-400 uppercase font-extrabold">
@@ -2003,7 +1934,6 @@ export default function AdminPage() {
                   </div>
                 )}
 
-                {/* Company Selection Mode Toggle */}
                 <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-2">
                   <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Company Source</label>
                   <button 
@@ -2016,7 +1946,7 @@ export default function AdminPage() {
                 </div>
 
                 {isCreatingNewCompanyInline ? (
-                  <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-white/[0.02] border border-white/5 rounded-2xl">
                     <div className="space-y-1">
                       <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">New Company Name</label>
                       <input 
@@ -2040,7 +1970,7 @@ export default function AdminPage() {
                       />
                     </div>
 
-                    <div className="space-y-1">
+                    <div className="md:col-span-2 space-y-1">
                       <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Logo (Drag / Click to upload)</label>
                       <div className="border border-dashed border-white/10 hover:border-white/20 p-4 rounded-xl text-center relative cursor-pointer group">
                         <input 
@@ -2072,8 +2002,7 @@ export default function AdminPage() {
                   </div>
                 )}
 
-                {/* Category overriding */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Default Role Match</label>
                     <select
@@ -2088,19 +2017,18 @@ export default function AdminPage() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Location parameters</label>
+                    <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Salary estimates (Optional)</label>
                     <input 
                       type="text" 
-                      value={jobForm.location}
-                      onChange={(e) => setJobForm(prev => ({ ...prev, location: e.target.value }))}
-                      placeholder="Remote / Silicon Valley"
+                      value={jobForm.salary}
+                      onChange={(e) => setJobForm(prev => ({ ...prev, salary: e.target.value }))}
+                      placeholder="e.g. $140,000 - $170,000"
                       className="w-full bg-black/40 border border-white/15 px-3 py-2 rounded-2xl text-xs text-white focus:outline-none"
-                      required
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Apply URL Careers</label>
                     <input 
@@ -2113,35 +2041,23 @@ export default function AdminPage() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Salary estimates (Optional)</label>
+                    <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Job Expiry Date</label>
                     <input 
-                      type="text" 
-                      value={jobForm.salary}
-                      onChange={(e) => setJobForm(prev => ({ ...prev, salary: e.target.value }))}
-                      placeholder="e.g. $140,000 - $170,000"
-                      className="w-full bg-black/40 border border-white/15 px-3 py-2 rounded-2xl text-xs text-white focus:outline-none"
+                      type="date" 
+                      value={jobForm.expiresAt}
+                      onChange={(e) => setJobForm(prev => ({ ...prev, expiresAt: e.target.value }))}
+                      className="w-full bg-black/40 border border-white/15 px-3 py-2 rounded-2xl text-xs text-white focus:outline-none cursor-pointer"
+                      required
                     />
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Job Expiry Date</label>
-                  <input 
-                    type="date" 
-                    value={jobForm.expiresAt}
-                    onChange={(e) => setJobForm(prev => ({ ...prev, expiresAt: e.target.value }))}
-                    className="w-full bg-black/40 border border-white/15 px-3 py-2 rounded-2xl text-xs text-white focus:outline-none cursor-pointer"
-                    required
-                  />
-                </div>
-
-                {/* ✅ Job Files Upload Section (Images + Documents) */}
+                {/* Job Files Upload Section */}
                 <div className="space-y-2 border-t border-white/5 pt-4 mt-2">
                   <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">
                     Job Listing Files (Images, PDFs, Documents)
                   </label>
                   
-                  {/* Upload Button */}
                   <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-white/10 hover:border-blue-500/30 rounded-2xl cursor-pointer transition-all group">
                     <input 
                       type="file" 
@@ -2158,21 +2074,20 @@ export default function AdminPage() {
                     </span>
                   </label>
 
-                  {/* File Preview Grid */}
                   {jobFiles.length > 0 && (
-                    <div className="grid grid-cols-3 gap-2 mt-2">
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mt-2">
                       {jobFiles.map((file, index) => (
                         <div key={index} className="relative group/file rounded-xl overflow-hidden border border-white/5 bg-slate-900/50">
                           {(file.type === 'image') ? (
                             <img 
                               src={file.thumbnail || file.url} 
                               alt={file.name} 
-                              className="w-full h-20 object-cover"
+                              className="w-full h-16 object-cover"
                             />
                           ) : (
-                            <div className="w-full h-20 flex flex-col items-center justify-center bg-slate-800/50 p-2">
-                              <File size={24} className="text-blue-400" />
-                              <span className="text-[8px] text-gray-400 mt-1 truncate w-full text-center">{file.name}</span>
+                            <div className="w-full h-16 flex flex-col items-center justify-center bg-slate-800/50 p-1">
+                              <File size={16} className="text-blue-400" />
+                              <span className="text-[6px] text-gray-400 mt-1 truncate w-full text-center">{file.name.slice(0, 10)}</span>
                             </div>
                           )}
                           <button
@@ -2180,73 +2095,104 @@ export default function AdminPage() {
                             onClick={() => handleRemoveJobFile(index)}
                             className="absolute top-1 right-1 p-1 bg-red-500/80 hover:bg-red-500 rounded-full text-white opacity-0 group-hover/file:opacity-100 transition-opacity"
                           >
-                            <Trash2 size={10} />
+                            <Trash2 size={8} />
                           </button>
-                          <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1.5 py-0.5">
-                            <span className="text-[7px] text-gray-300 truncate block">{file.name}</span>
-                          </div>
                         </div>
                       ))}
                     </div>
                   )}
                   
                   <p className="text-[9px] text-gray-500 font-mono">
-                    Upload images, PDFs, Word docs, Excel sheets, or PowerPoint files. PDFs will open in a fullscreen viewer.
+                    Upload images, PDFs, Word docs, Excel sheets, or PowerPoint files.
                   </p>
                 </div>
 
-                {/* ✅ Job Description Editor - LARGER */}
+                {/* Job Description Editor - ALWAYS VISIBLE */}
                 <div className="space-y-2 border-t border-white/5 pt-4">
                   <div className="flex items-center justify-between">
                     <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">
-                      Job Description
+                      Job Description {jobDescription && <span className="text-emerald-400 ml-1">• Ready</span>}
                     </label>
-                    <button
-                      type="button"
-                      onClick={() => setShowJobDescEditor(!showJobDescEditor)}
-                      className="text-[9px] font-mono font-bold text-blue-500 uppercase flex items-center gap-1 hover:text-blue-400"
-                    >
-                      <FileText size={12} />
-                      {showJobDescEditor ? 'Hide Editor' : jobDescription ? '✏️ Edit' : '+ Add Description'}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {jobDescription && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(jobDescription);
+                              showFeedback('success', 'Description copied!');
+                            }}
+                            className="text-[9px] font-mono font-bold text-gray-500 hover:text-white uppercase flex items-center gap-1 transition-colors"
+                          >
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                            Copy
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirm('Clear description?')) {
+                                setJobDescription('');
+                                if (jobDescEditorRef.current) {
+                                  jobDescEditorRef.current.innerHTML = '';
+                                }
+                              }
+                            }}
+                            className="text-[9px] font-mono font-bold text-red-500 hover:text-red-400 uppercase transition-colors"
+                          >
+                            Clear
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
 
-                  {showJobDescEditor && (
-                    <div className="space-y-2">
-                      {/* Mini Toolbar */}
-                      <div className="p-1.5 bg-black/50 border border-white/10 rounded-xl flex flex-wrap items-center gap-0.5">
-                        <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('bold'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><Bold size={12}/></button>
-                        <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('italic'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><Italic size={12}/></button>
-                        <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('underline'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><Underline size={12}/></button>
-                        <span className="w-px h-4 bg-white/10 mx-0.5"/>
-                        <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('formatBlock', false, 'h3'); }} className="p-1.5 hover:bg-white/10 rounded-lg text-[9px] font-bold">H3</button>
-                        <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('formatBlock', false, 'h4'); }} className="p-1.5 hover:bg-white/10 rounded-lg text-[9px] font-bold">H4</button>
-                        <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('insertUnorderedList'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><List size={12}/></button>
-                        <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('insertOrderedList'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><List size={12}/></button>
-                      </div>
-                      
-                      {/* Editor - LARGER */}
-                      <div 
-                        ref={jobDescEditorRef}
-                        contentEditable
-                        suppressContentEditableWarning
-                        className="w-full min-h-[250px] bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-stone-200 focus:outline-none focus:border-blue-500/50 overflow-y-auto"
-                        style={{ fontSize: '14px', lineHeight: '1.8' }}
-                        onInput={() => {
-                          if (jobDescEditorRef.current) {
-                            setJobDescription(jobDescEditorRef.current.innerHTML);
-                          }
-                        }}
-                      />
-                      
-                      <p className="text-[8px] text-gray-500 font-mono text-right">
-                        Rich text supported • HTML formatting allowed
+                  {/* Mini Toolbar */}
+                  <div className="p-1.5 bg-black/50 border border-white/10 rounded-xl flex flex-wrap items-center gap-0.5">
+                    <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('bold'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><Bold size={12}/></button>
+                    <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('italic'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><Italic size={12}/></button>
+                    <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('underline'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><Underline size={12}/></button>
+                    <span className="w-px h-4 bg-white/10 mx-0.5"/>
+                    <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('formatBlock', false, 'h3'); }} className="p-1.5 hover:bg-white/10 rounded-lg text-[9px] font-bold">H3</button>
+                    <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('formatBlock', false, 'h4'); }} className="p-1.5 hover:bg-white/10 rounded-lg text-[9px] font-bold">H4</button>
+                    <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('formatBlock', false, 'p'); }} className="p-1.5 hover:bg-white/10 rounded-lg text-[9px]">P</button>
+                    <span className="w-px h-4 bg-white/10 mx-0.5"/>
+                    <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('insertUnorderedList'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><List size={12}/></button>
+                    <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('insertOrderedList'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><List size={12}/></button>
+                    <span className="w-px h-4 bg-white/10 mx-0.5"/>
+                    <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('removeFormat'); }} className="p-1.5 hover:bg-white/10 rounded-lg text-[9px] text-gray-400">Clear fmt</button>
+                  </div>
+                  
+                  {/* Editor - ALWAYS VISIBLE, full width */}
+                  <div 
+                    ref={jobDescEditorRef}
+                    contentEditable
+                    suppressContentEditableWarning
+                    className="w-full min-h-[250px] bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-stone-200 focus:outline-none focus:border-blue-500/50 overflow-y-auto"
+                    style={{ fontSize: '14px', lineHeight: '1.8' }}
+                    onInput={() => {
+                      if (jobDescEditorRef.current) {
+                        setJobDescription(jobDescEditorRef.current.innerHTML);
+                      }
+                    }}
+                    data-placeholder="Write job description here or use AI Auto-Fill above..."
+                  />
+                  
+                  <div className="flex items-center justify-between">
+                    <p className="text-[8px] text-gray-500 font-mono">
+                      {jobDescription ? `${jobDescription.length} characters` : 'Rich text editor • AI content will appear here'}
+                    </p>
+                    {jobDescription && (
+                      <p className="text-[8px] text-emerald-500 font-mono">
+                        ✓ Content will be saved with job listing
                       </p>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex gap-2 pt-2">
                   {editingJobId && (
                     <button
                       type="button"
@@ -2270,7 +2216,7 @@ export default function AdminPage() {
           </div>
 
           {/* Recently Added Job postings catalog preview */}
-          <div className="lg:col-span-7 space-y-4">
+          <div className="space-y-4">
             <div className="flex items-center justify-between px-1">
               <span className="text-xs font-bold text-white uppercase tracking-widest font-mono flex items-center gap-2">
                 <Database size={13} className="text-blue-500" /> Real-Time placements directory ({jobs.length} total)
@@ -2286,14 +2232,14 @@ export default function AdminPage() {
               </span>
             </div>
 
-            <div className="bg-white/[0.01] border border-white/5 rounded-3xl overflow-hidden divide-y divide-white/5 max-h-[600px] overflow-y-auto scrollbar-none">
+            <div className="bg-white/[0.01] border border-white/5 rounded-3xl overflow-hidden divide-y divide-white/5 max-h-[500px] overflow-y-auto">
               
               {jobs.map((job) => (
                 <div 
                   key={job.id}
                   className="p-4 flex items-center justify-between gap-4 hover:bg-white/[0.02] transition-colors"
                 >
-                  <div className="space-y-1 min-w-0">
+                  <div className="space-y-1 min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-xs font-bold text-stone-100 truncate">{job.title}</span>
                       <span className="px-1.5 py-0.5 rounded text-[8px] bg-white/5 text-gray-400 font-mono">
@@ -2329,7 +2275,6 @@ export default function AdminPage() {
                       )}
                     </div>
                     
-                    {/* Show file count if available */}
                     {(job as any).images && (job as any).images.length > 0 && (
                       <div className="flex items-center gap-1 mt-1">
                         <File size={10} className="text-blue-400" />
@@ -2339,7 +2284,6 @@ export default function AdminPage() {
                       </div>
                     )}
 
-                    {/* Show description indicator */}
                     {(job as any).description && (
                       <div className="flex items-center gap-1 mt-1">
                         <FileText size={10} className="text-emerald-400" />
@@ -2351,7 +2295,6 @@ export default function AdminPage() {
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
-                    {/* ✅ Edit Button */}
                     <button
                       onClick={() => handleEditJob(job)}
                       className="p-2 bg-blue-500/10 hover:bg-blue-500/25 text-blue-400 rounded-xl transition-colors"
@@ -2363,7 +2306,6 @@ export default function AdminPage() {
                       </svg>
                     </button>
 
-                    {/* Active/Offline Toggle */}
                     <button
                       onClick={() => handleToggleJobActive(job.id, job.active)}
                       className={`px-2 py-1 rounded text-[8px] font-mono tracking-widest uppercase font-bold border transition-all ${
@@ -2376,7 +2318,6 @@ export default function AdminPage() {
                       {job.active ? "● ACTIVE" : "○ OFFLINE"}
                     </button>
 
-                    {/* Delete Button */}
                     <button
                       onClick={() => handleDeleteJob(job.id)}
                       className="p-2 bg-red-500/10 hover:bg-red-500/25 text-red-400 rounded-xl transition-all"
@@ -2397,9 +2338,7 @@ export default function AdminPage() {
         </motion.div>
       )}
 
-      {/* ---------------------------------------------------- */}
-      {/* 🏢 TAB 3: COMPANY MANAGEMENT */}
-      {/* ---------------------------------------------------- */}
+      {/* TAB 3: COMPANY MANAGEMENT */}
       {activeTab === 'companies' && (
         <motion.div 
           initial={{ opacity: 0 }}
@@ -2511,7 +2450,6 @@ export default function AdminPage() {
                   </div>
 
                   <div className="flex items-center gap-1">
-                    {/* ✅ Edit Button */}
                     <button
                       onClick={() => handleEditCompany(co)}
                       className="p-2 bg-blue-500/10 hover:bg-blue-500/25 text-blue-400 rounded-xl transition-colors"
@@ -2523,7 +2461,6 @@ export default function AdminPage() {
                       </svg>
                     </button>
                     
-                    {/* Delete Button */}
                     <button
                       onClick={() => handleDeleteCompany(co.id)}
                       className="p-2 bg-red-500/10 hover:bg-red-500/25 text-red-400 rounded-xl transition-colors"
@@ -2539,9 +2476,7 @@ export default function AdminPage() {
         </motion.div>
       )}
 
-      {/* ---------------------------------------------------- */}
-      {/* ⚙️ TAB 4: ROLES MANAGEMENT */}
-      {/* ---------------------------------------------------- */}
+      {/* TAB 4: ROLES MANAGEMENT */}
       {activeTab === 'roles' && (
         <motion.div 
           initial={{ opacity: 0 }}
@@ -2679,13 +2614,10 @@ export default function AdminPage() {
         </motion.div>
       )}
   
-      {/* ---------------------------------------------------- */}
-      {/* 📰 TAB 5: REPORT CREATION SYSTEM - FULL WIDTH FLAT */}
-      {/* ---------------------------------------------------- */}
+      {/* TAB 5: REPORT CREATION SYSTEM - FULL WIDTH FLAT */}
       {activeTab === 'reports' && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
           
-          {/* ========== TINYMCE EDITOR - FULL WIDTH ========== */}
           <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
             <div className="flex items-center justify-between border-b border-white/5 pb-3">
               <div className="flex items-center gap-3">
@@ -2697,7 +2629,6 @@ export default function AdminPage() {
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                {/* Push to Live / Copy Buttons */}
                 <button
                   type="button"
                   onClick={() => {
@@ -2720,7 +2651,6 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* Toolbar */}
             <div className="p-2 bg-black/50 border border-white/10 rounded-2xl flex flex-wrap items-center gap-1">
               <button onClick={() => handleToolbarClick('bold','','<strong>','</strong>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold"><Bold size={13}/> Bold</button>
               <button onClick={() => handleToolbarClick('italic','','<em>','</em>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold"><Italic size={13}/> Italic</button>
@@ -2737,7 +2667,6 @@ export default function AdminPage() {
               <button onClick={() => handleToolbarClick('highlight','','<span class=\"text-blue-400\">','</span>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold text-blue-400">Highlight</button>
             </div>
 
-            {/* Editor Area - FULL WIDTH LARGE */}
             <div className="border border-white/10 rounded-2xl overflow-hidden bg-black/45">
               {editorMode==='visual' && (
                 <div className="p-6">
@@ -2773,7 +2702,6 @@ export default function AdminPage() {
               )}
             </div>
 
-            {/* Templates + Publish Row */}
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div className="flex gap-2">
                 <button onClick={()=>handleInsertTemplate('insights')} className="px-3 py-2 bg-black/40 border border-white/5 rounded-xl text-[10px] font-bold text-white">Key Insights</button>
@@ -2817,7 +2745,6 @@ export default function AdminPage() {
             </div>
           </div>
 
-          {/* ========== PUBLISHED REPORTS ========== */}
           <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-extrabold uppercase text-stone-100">
@@ -2843,9 +2770,7 @@ export default function AdminPage() {
         </motion.div>
       )}
 
-      {/* ---------------------------------------------------- */}
-      {/* 🖼️ TAB 6: MEDIA MANAGEMENT */}
-      {/* ---------------------------------------------------- */}
+      {/* TAB 6: MEDIA MANAGEMENT */}
       {activeTab === 'media' && (
         <motion.div 
           initial={{ opacity: 0 }}
