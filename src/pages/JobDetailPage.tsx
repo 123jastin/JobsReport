@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { motion } from 'motion/react';
 import {
   Building2, MapPin, Clock, ExternalLink, ArrowLeft,
   FileText, Eye, ChevronLeft, ChevronRight, X, Download,
-  Briefcase, DollarSign, Calendar
+  Briefcase, DollarSign, Calendar, Globe
 } from 'lucide-react';
 import { useCareerRedirect } from '../context/CareerRedirectContext';
 
@@ -14,7 +13,6 @@ export default function JobDetailPage() {
   const [loading, setLoading] = useState(true);
   const { triggerRedirect } = useCareerRedirect();
   
-  // Image/PDF viewer state
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerIndex, setViewerIndex] = useState(0);
   const [viewerFiles, setViewerFiles] = useState<any[]>([]);
@@ -25,25 +23,15 @@ export default function JobDetailPage() {
         const res = await fetch('/api/market');
         if (res.ok) {
           const data = await res.json();
-          
-          // ✅ Extract the actual job ID from the URL slug
-          // URL format: /market/reservation-manager-nungwi-zanzibar-job-mpy7xvojyhxs
-          // The job ID is the part after "job-"
           const jobIdMatch = jobId?.match(/job-([a-z0-9]+)$/i);
           const extractedId = jobIdMatch ? `job-${jobIdMatch[1]}` : jobId;
           
-          console.log('Looking for job ID:', extractedId, 'from slug:', jobId);
-          
-          // Find by exact ID match
           let found = data.jobs?.find((j: any) => j.id === extractedId);
-          
-          // If not found, try matching by ID contained in slug
           if (!found && jobId) {
             found = data.jobs?.find((j: any) => 
               jobId.includes(j.id) || j.id.includes(extractedId || '')
             );
           }
-          
           setJob(found || null);
         }
       } catch (err) {
@@ -87,14 +75,27 @@ export default function JobDetailPage() {
         Back to Market
       </Link>
 
-      {/* Job Header Card */}
+      {/* ✅ Job Header Card - With Company Logo + Website */}
       <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl">
         <div className="flex items-start gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 flex items-center justify-center text-white font-bold text-xl shrink-0">
-            {job.company?.charAt(0)?.toUpperCase() || '?'}
+          {/* ✅ Company Logo - Shows actual logo if available */}
+          <div className="w-16 h-16 rounded-2xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
+            {job.logoUrl ? (
+              <img 
+                src={job.logoUrl} 
+                alt={job.company} 
+                className="w-full h-full object-cover rounded-xl"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-blue-600 to-violet-600 flex items-center justify-center text-white font-bold text-2xl">
+                {job.company?.charAt(0)?.toUpperCase() || '?'}
+              </div>
+            )}
           </div>
           
           <div className="flex-1 min-w-0">
+            {/* Role Badge + Dates */}
             <div className="flex items-center gap-2 mb-2">
               <span className="px-2 py-0.5 rounded text-[8px] font-bold bg-blue-500/10 text-blue-400 uppercase tracking-wider">
                 {job.role || 'General'}
@@ -109,20 +110,50 @@ export default function JobDetailPage() {
               )}
             </div>
 
-            <h1 className="text-2xl md:text-3xl font-bold text-white mb-3">{job.title}</h1>
+            {/* Job Title */}
+            <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">{job.title}</h1>
 
+            {/* ✅ Company Name + Website Link */}
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-sm text-gray-400 font-medium">{job.company}</span>
+              {job.url && (
+                <a 
+                  href={job.url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors"
+                >
+                  <Globe size={12} />
+                  {(() => {
+                    try {
+                      const url = new URL(job.url);
+                      return url.hostname.replace('www.', '');
+                    } catch {
+                      return 'Company Website';
+                    }
+                  })()}
+                  <ExternalLink size={10} />
+                </a>
+              )}
+            </div>
+
+            {/* Location + Salary + Role */}
             <div className="flex flex-wrap items-center gap-3 text-sm">
-              <span className="flex items-center gap-1.5 text-gray-400"><Building2 size={14} />{job.company}</span>
-              <span className="text-gray-600">•</span>
-              <span className="flex items-center gap-1.5 text-gray-400"><MapPin size={14} />{job.location || 'Remote'}</span>
+              <span className="flex items-center gap-1.5 text-gray-400">
+                <MapPin size={14} className="text-stone-500" /> {job.location || 'Remote'}
+              </span>
               {job.salary && (
                 <>
                   <span className="text-gray-600">•</span>
-                  <span className="flex items-center gap-1.5 text-emerald-400 font-bold"><DollarSign size={14} />{job.salary}</span>
+                  <span className="flex items-center gap-1.5 text-emerald-400 font-bold">
+                    <DollarSign size={14} /> {job.salary}
+                  </span>
                 </>
               )}
               <span className="text-gray-600">•</span>
-              <span className="flex items-center gap-1.5 text-gray-400"><Briefcase size={14} />{job.role}</span>
+              <span className="flex items-center gap-1.5 text-gray-400">
+                <Briefcase size={14} className="text-stone-500" /> {job.role}
+              </span>
             </div>
           </div>
         </div>
@@ -195,7 +226,7 @@ export default function JobDetailPage() {
           )}
         </div>
 
-        {/* Sidebar */}
+        {/* Sidebar - Apply Now + Details */}
         <div className="space-y-4">
           <button
             onClick={() => job.url && triggerRedirect(job.url, job.company, job.title)}
@@ -243,17 +274,12 @@ export default function JobDetailPage() {
               <a href={viewerFiles[viewerIndex]?.url} download className="px-3 py-1.5 bg-white/10 text-white text-xs rounded-lg flex items-center gap-1">
                 <Download size={12} /> Download
               </a>
-              <button onClick={() => setViewerOpen(false)} className="p-1.5 bg-white/10 rounded-full text-white">
-                <X size={18} />
-              </button>
+              <button onClick={() => setViewerOpen(false)} className="p-1.5 bg-white/10 rounded-full text-white"><X size={18} /></button>
             </div>
           </div>
           <div className="flex-1 flex items-center justify-center p-4">
             {viewerFiles[viewerIndex]?.type === 'pdf' || viewerFiles[viewerIndex]?.name?.endsWith('.pdf') ? (
-              <iframe
-                src={`https://docs.google.com/viewer?url=${encodeURIComponent(viewerFiles[viewerIndex].url)}&embedded=true`}
-                className="w-full h-full rounded-xl" style={{ border: 'none' }}
-              />
+              <iframe src={`https://docs.google.com/viewer?url=${encodeURIComponent(viewerFiles[viewerIndex].url)}&embedded=true`} className="w-full h-full rounded-xl" style={{ border: 'none' }} />
             ) : (
               <img src={viewerFiles[viewerIndex]?.url} alt="" className="max-w-full max-h-full object-contain" />
             )}
