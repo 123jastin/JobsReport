@@ -195,6 +195,13 @@ export default function AdminPage() {
   
   const [isCreatingNewCompanyInline, setIsCreatingNewCompanyInline] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
+  
+  // ✅ Description Edit Mode
+  const [descEditMode, setDescEditMode] = useState<'visual' | 'code'>('visual');
+  
+  // ✅ Draft and Application Type States
+  const [isDraft, setIsDraft] = useState(false);
+  const [applicationType, setApplicationType] = useState<'url' | 'email'>('url');
 
   // --- COMPANY FORM STATES ---
   const [companyForm, setCompanyForm] = useState({
@@ -423,6 +430,7 @@ export default function AdminPage() {
         
         if (descriptionHTML) {
           setJobDescription(descriptionHTML);
+          setDescEditMode('visual'); // Always start in visual mode for AI content
           
           // Load into editor
           setTimeout(() => {
@@ -665,6 +673,7 @@ export default function AdminPage() {
       expiresAt: job.expiresAt || ''
     });
     setJobDescription((job as any).description || '');
+    setDescEditMode('visual');
     setTimeout(() => {
       if (jobDescEditorRef.current) {
         jobDescEditorRef.current.innerHTML = (job as any).description || '';
@@ -731,7 +740,7 @@ export default function AdminPage() {
 
     setActionLoading(true);
     try {
-      if (duplicateWarning) {
+      if (!isDraft && duplicateWarning) {
         showFeedback('error', 'Duplicate insertion blocked.');
         setActionLoading(false);
         return;
@@ -773,6 +782,15 @@ export default function AdminPage() {
         uploadedFiles.push(fileData);
       }
 
+      // ✅ Build application URL with email support
+      let applyUrl = jobForm.url;
+      if (applicationType === 'email' && applyUrl && !applyUrl.startsWith('mailto:')) {
+        applyUrl = `mailto:${applyUrl}`;
+        if (jobForm.companyNewUrl) {
+          applyUrl += `?subject=${encodeURIComponent(jobForm.companyNewUrl)}`;
+        }
+      }
+
       const url = editingJobId ? `/api/admin/jobs/${editingJobId}` : '/api/admin/jobs';
       const method = editingJobId ? 'PUT' : 'POST';
 
@@ -784,11 +802,12 @@ export default function AdminPage() {
           role: jobForm.roleSelected,
           company: targetCompany,
           location: jobForm.location || 'Remote',
-          url: jobForm.url,
+          url: applyUrl,
           salary: jobForm.salary,
           country: selectedCountry,
           expiresAt: jobForm.expiresAt,
           description: jobDescription,
+          is_active: isDraft ? 0 : 1, // ✅ Draft = inactive
           images: uploadedFiles
         })
       });
@@ -801,28 +820,34 @@ export default function AdminPage() {
           showFeedback('success', `Updated "${jobForm.title}" successfully.`);
         } else {
           setJobs(prev => [addedJob, ...prev]);
-          showFeedback('success', `Ingested "${jobForm.title}" for ${targetCompany} successfully.`);
+          showFeedback('success', isDraft 
+            ? `Draft saved! You can edit and publish later.` 
+            : `Published "${jobForm.title}" for ${targetCompany} successfully.`
+          );
         }
         
-        setJobForm({
-          title: '',
-          roleSelected: 'Software Developer',
-          companySelected: '',
-          companyNewName: '',
-          companyNewUrl: '',
-          companyNewLogo: '',
-          location: '',
-          url: '',
-          salary: '',
-          expiresAt: ''
-        });
-        setJobDescription('');
-        if (jobDescEditorRef.current) {
-          jobDescEditorRef.current.innerHTML = '';
+        if (!isDraft || editingJobId) {
+          // Reset form only on publish or update
+          setJobForm({
+            title: '',
+            roleSelected: 'Software Developer',
+            companySelected: '',
+            companyNewName: '',
+            companyNewUrl: '',
+            companyNewLogo: '',
+            location: '',
+            url: '',
+            salary: '',
+            expiresAt: ''
+          });
+          setJobDescription('');
+          if (jobDescEditorRef.current) {
+            jobDescEditorRef.current.innerHTML = '';
+          }
+          setIsCreatingNewCompanyInline(false);
+          setJobFiles([]);
+          setEditingJobId(null);
         }
-        setIsCreatingNewCompanyInline(false);
-        setJobFiles([]);
-        setEditingJobId(null);
         
         await fetchSystemData();
       } else {
@@ -834,6 +859,7 @@ export default function AdminPage() {
       console.error('Job error:', err);
     } finally {
       setActionLoading(false);
+      setIsDraft(false);
     }
   };
 
@@ -2018,28 +2044,80 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Apply URL Careers</label>
-                    <input 
-                      type="url" 
-                      value={jobForm.url}
-                      onChange={(e) => setJobForm(prev => ({ ...prev, url: e.target.value }))}
-                      placeholder="https://company.com/apply"
-                      className="w-full bg-black/40 border border-white/15 px-3 py-2 rounded-2xl text-xs text-white focus:outline-none"
-                    />
+                {/* Apply Method Selection */}
+                <div className="space-y-2 border-t border-white/5 pt-4">
+                  <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">
+                    Application Method
+                  </label>
+                  
+                  {/* Toggle URL/Email */}
+                  <div className="flex bg-black/40 p-1 rounded-xl border border-white/5 w-fit">
+                    <button
+                      type="button"
+                      onClick={() => setApplicationType('url')}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
+                        applicationType === 'url' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'
+                      }`}
+                    >
+                      🔗 URL
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setApplicationType('email')}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
+                        applicationType === 'email' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'
+                      }`}
+                    >
+                      ✉️ Email
+                    </button>
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Job Expiry Date</label>
-                    <input 
-                      type="date" 
-                      value={jobForm.expiresAt}
-                      onChange={(e) => setJobForm(prev => ({ ...prev, expiresAt: e.target.value }))}
-                      className="w-full bg-black/40 border border-white/15 px-3 py-2 rounded-2xl text-xs text-white focus:outline-none cursor-pointer"
-                      required
-                    />
-                  </div>
+                  {applicationType === 'url' ? (
+                    <div className="space-y-1">
+                      <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Application URL</label>
+                      <input 
+                        type="url" 
+                        value={jobForm.url}
+                        onChange={(e) => setJobForm(prev => ({ ...prev, url: e.target.value }))}
+                        placeholder="https://company.com/careers/apply"
+                        className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                      />
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Application Email</label>
+                        <input 
+                          type="email" 
+                          value={jobForm.url}
+                          onChange={(e) => setJobForm(prev => ({ ...prev, url: e.target.value }))}
+                          placeholder="careers@company.com"
+                          className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Email Subject (Optional)</label>
+                        <input 
+                          type="text" 
+                          value={jobForm.companyNewUrl}
+                          onChange={(e) => setJobForm(prev => ({ ...prev, companyNewUrl: e.target.value }))}
+                          placeholder={`Application for ${jobForm.title || 'Position'}`}
+                          className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Job Expiry Date</label>
+                  <input 
+                    type="date" 
+                    value={jobForm.expiresAt}
+                    onChange={(e) => setJobForm(prev => ({ ...prev, expiresAt: e.target.value }))}
+                    className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors cursor-pointer"
+                    required
+                  />
                 </div>
 
                 {/* Job Files Upload Section */}
@@ -2097,91 +2175,142 @@ export default function AdminPage() {
                   </p>
                 </div>
 
-                {/* Job Description Editor - ALWAYS VISIBLE */}
+                {/* Job Description Editor - Always Visible with Edit Modes */}
                 <div className="space-y-2 border-t border-white/5 pt-4">
                   <div className="flex items-center justify-between">
                     <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">
                       Job Description {jobDescription && <span className="text-emerald-400 ml-1">• Ready</span>}
                     </label>
                     <div className="flex items-center gap-2">
+                      {/* ✅ Edit Mode Toggle */}
                       {jobDescription && (
-                        <>
+                        <div className="flex bg-black/60 p-0.5 rounded-lg font-mono text-[9px] font-bold">
                           <button
                             type="button"
-                            onClick={() => {
-                              navigator.clipboard.writeText(jobDescription);
-                              showFeedback('success', 'Description copied!');
-                            }}
-                            className="text-[9px] font-mono font-bold text-gray-500 hover:text-white uppercase flex items-center gap-1 transition-colors"
+                            onClick={() => setDescEditMode('visual')}
+                            className={`px-2 py-1 rounded-md uppercase transition-all ${descEditMode === 'visual' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}
                           >
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                            </svg>
-                            Copy
+                            Visual
                           </button>
                           <button
                             type="button"
                             onClick={() => {
-                              if (confirm('Clear description?')) {
-                                setJobDescription('');
-                                if (jobDescEditorRef.current) {
-                                  jobDescEditorRef.current.innerHTML = '';
-                                }
+                              setDescEditMode('code');
+                              // Sync code view with editor content
+                              if (jobDescEditorRef.current) {
+                                setJobDescription(jobDescEditorRef.current.innerHTML);
                               }
                             }}
-                            className="text-[9px] font-mono font-bold text-red-500 hover:text-red-400 uppercase transition-colors"
+                            className={`px-2 py-1 rounded-md uppercase transition-all ${descEditMode === 'code' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}
                           >
-                            Clear
+                            HTML
                           </button>
-                        </>
+                        </div>
+                      )}
+                      {/* Copy button */}
+                      {jobDescription && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(
+                              descEditMode === 'code' ? jobDescription : (jobDescEditorRef.current?.innerHTML || jobDescription)
+                            );
+                            showFeedback('success', 'Description copied!');
+                          }}
+                          className="text-[9px] font-mono font-bold text-gray-500 hover:text-white uppercase flex items-center gap-1 transition-colors"
+                        >
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                          </svg>
+                          Copy
+                        </button>
+                      )}
+                      {/* Clear button */}
+                      {jobDescription && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm('Clear description?')) {
+                              setJobDescription('');
+                              if (jobDescEditorRef.current) {
+                                jobDescEditorRef.current.innerHTML = '';
+                              }
+                            }
+                          }}
+                          className="text-[9px] font-mono font-bold text-red-500 hover:text-red-400 uppercase transition-colors"
+                        >
+                          Clear
+                        </button>
                       )}
                     </div>
                   </div>
 
-                  {/* Mini Toolbar */}
-                  <div className="p-1.5 bg-black/50 border border-white/10 rounded-xl flex flex-wrap items-center gap-0.5">
-                    <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('bold'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><Bold size={12}/></button>
-                    <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('italic'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><Italic size={12}/></button>
-                    <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('underline'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><Underline size={12}/></button>
-                    <span className="w-px h-4 bg-white/10 mx-0.5"/>
-                    <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('formatBlock', false, 'h3'); }} className="p-1.5 hover:bg-white/10 rounded-lg text-[9px] font-bold">H3</button>
-                    <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('formatBlock', false, 'h4'); }} className="p-1.5 hover:bg-white/10 rounded-lg text-[9px] font-bold">H4</button>
-                    <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('formatBlock', false, 'p'); }} className="p-1.5 hover:bg-white/10 rounded-lg text-[9px]">P</button>
-                    <span className="w-px h-4 bg-white/10 mx-0.5"/>
-                    <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('insertUnorderedList'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><List size={12}/></button>
-                    <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('insertOrderedList'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><List size={12}/></button>
-                    <span className="w-px h-4 bg-white/10 mx-0.5"/>
-                    <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('removeFormat'); }} className="p-1.5 hover:bg-white/10 rounded-lg text-[9px] text-gray-400">Clear fmt</button>
-                  </div>
+                  {/* Mini Toolbar - Only in visual mode */}
+                  {descEditMode === 'visual' && (
+                    <div className="p-1.5 bg-black/50 border border-white/10 rounded-xl flex flex-wrap items-center gap-0.5">
+                      <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('bold'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><Bold size={12}/></button>
+                      <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('italic'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><Italic size={12}/></button>
+                      <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('underline'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><Underline size={12}/></button>
+                      <span className="w-px h-4 bg-white/10 mx-0.5"/>
+                      <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('formatBlock', false, 'h3'); }} className="p-1.5 hover:bg-white/10 rounded-lg text-[9px] font-bold">H3</button>
+                      <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('formatBlock', false, 'h4'); }} className="p-1.5 hover:bg-white/10 rounded-lg text-[9px] font-bold">H4</button>
+                      <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('formatBlock', false, 'p'); }} className="p-1.5 hover:bg-white/10 rounded-lg text-[9px]">P</button>
+                      <span className="w-px h-4 bg-white/10 mx-0.5"/>
+                      <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('insertUnorderedList'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><List size={12}/></button>
+                      <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('insertOrderedList'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><List size={12}/></button>
+                      <span className="w-px h-4 bg-white/10 mx-0.5"/>
+                      <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('removeFormat'); }} className="p-1.5 hover:bg-white/10 rounded-lg text-[9px] text-gray-400">Clear fmt</button>
+                    </div>
+                  )}
                   
-                  {/* Editor - ALWAYS VISIBLE, full width */}
-                  <div 
-                    ref={jobDescEditorRef}
-                    contentEditable
-                    suppressContentEditableWarning
-                    className="w-full min-h-[250px] bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-stone-200 focus:outline-none focus:border-blue-500/50 overflow-y-auto"
-                    style={{ fontSize: '14px', lineHeight: '1.8' }}
-                    onInput={() => {
-                      if (jobDescEditorRef.current) {
-                        setJobDescription(jobDescEditorRef.current.innerHTML);
-                      }
-                    }}
-                    data-placeholder="Write job description here or use AI Auto-Fill above..."
-                  />
+                  {/* ✅ Visual Editor */}
+                  {descEditMode === 'visual' && (
+                    <div 
+                      ref={jobDescEditorRef}
+                      contentEditable
+                      suppressContentEditableWarning
+                      className="w-full min-h-[250px] bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-stone-200 focus:outline-none focus:border-blue-500/50 overflow-y-auto"
+                      style={{ fontSize: '14px', lineHeight: '1.8' }}
+                      onInput={() => {
+                        if (jobDescEditorRef.current) {
+                          setJobDescription(jobDescEditorRef.current.innerHTML);
+                        }
+                      }}
+                      data-placeholder="Write job description here or use AI Auto-Fill above..."
+                    />
+                  )}
+
+                  {/* ✅ Code/HTML Editor */}
+                  {descEditMode === 'code' && (
+                    <textarea
+                      value={jobDescription}
+                      onChange={(e) => {
+                        setJobDescription(e.target.value);
+                        // Also update visual editor
+                        if (jobDescEditorRef.current) {
+                          jobDescEditorRef.current.innerHTML = e.target.value;
+                        }
+                      }}
+                      className="w-full min-h-[250px] bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-blue-400 font-mono focus:outline-none focus:border-blue-500/50 overflow-y-auto resize-none"
+                      style={{ fontSize: '13px', lineHeight: '1.8' }}
+                      placeholder="Edit HTML directly..."
+                    />
+                  )}
                   
                   <div className="flex items-center justify-between">
                     <p className="text-[8px] text-gray-500 font-mono">
-                      {jobDescription ? `${jobDescription.length} characters` : 'Rich text editor • AI content will appear here'}
+                      {jobDescription ? `${jobDescription.length} characters • ${descEditMode === 'code' ? 'HTML' : 'Visual'} mode` : 'Rich text editor • AI content will appear here'}
                     </p>
                     {jobDescription && (
                       <p className="text-[8px] text-emerald-500 font-mono">
-                        ✓ Content will be saved with job listing
+                        ✓ Ready to save
                       </p>
                     )}
                   </div>
                 </div>
 
+                {/* Action Buttons - Save Draft + Publish */}
                 <div className="flex gap-2 pt-2">
                   {editingJobId && (
                     <button
@@ -2192,12 +2321,45 @@ export default function AdminPage() {
                       Cancel
                     </button>
                   )}
+                  
+                  {/* ✅ Save Draft Button */}
+                  <button
+                    type="button"
+                    onClick={async (e) => {
+                      setIsDraft(true);
+                      await handleIngestJob(e as any);
+                      setIsDraft(false);
+                    }}
+                    disabled={actionLoading || !jobForm.title}
+                    className="flex-1 py-3 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/30 text-amber-400 font-extrabold text-[10px] uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                    {actionLoading && isDraft ? 'Saving...' : 'Save Draft'}
+                  </button>
+                  
+                  {/* ✅ Publish Button */}
                   <button
                     type="submit"
                     disabled={actionLoading || !!duplicateWarning}
-                    className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-500 text-stone-100 font-extrabold text-[11px] uppercase tracking-widest rounded-2xl transition-all cursor-pointer"
+                    className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-500 text-stone-100 font-extrabold text-[10px] uppercase tracking-wider rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
                   >
-                    {actionLoading ? "Processing..." : editingJobId ? "UPDATE PLACEMENT" : "COMMIT PLACEMENT TELEMETRY"}
+                    {actionLoading && !isDraft ? (
+                      <>
+                        <RefreshCw size={12} className="animate-spin" />
+                        Publishing...
+                      </>
+                    ) : editingJobId ? (
+                      'Update Placement'
+                    ) : (
+                      <>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                        Publish Job
+                      </>
+                    )}
                   </button>
                 </div>
 
@@ -2265,6 +2427,15 @@ export default function AdminPage() {
                       )}
                     </div>
                     
+                    {/* ✅ Draft Badge */}
+                    {job.active === false && (
+                      <div className="flex items-center gap-1 mt-1">
+                        <span className="px-1.5 py-0.5 rounded text-[7px] font-bold bg-amber-500/10 text-amber-400 uppercase">
+                          📝 Draft
+                        </span>
+                      </div>
+                    )}
+
                     {(job as any).images && (job as any).images.length > 0 && (
                       <div className="flex items-center gap-1 mt-1">
                         <File size={10} className="text-blue-400" />
