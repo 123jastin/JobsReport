@@ -742,8 +742,7 @@ const handleEditJob = (job: RawJob) => {
     setJobFiles([]);
     setIsCreatingNewCompanyInline(false);
   };
-
-  const handleIngestJob = async (e: FormEvent) => {
+const handleIngestJob = async (e: FormEvent) => {
     e.preventDefault();
     
     const targetCompany = isCreatingNewCompanyInline 
@@ -768,24 +767,51 @@ const handleEditJob = (job: RawJob) => {
         return;
       }
 
-      const uploadedFiles: {url: string, thumbnail: string, name: string, type: string, seoTitle: string, seoDescription: string}[] = [];
+      // ✅ Upload company logo to R2 if creating new company inline
+      let companyLogoUrl = '';
+      if (isCreatingNewCompanyInline && jobForm.companyNewLogo) {
+        if (jobForm.companyNewLogo.startsWith('data:image')) {
+          const fileInput = document.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement;
+          const file = fileInput?.files?.[0];
+          if (file) {
+            try {
+              const compressedLogo = await compressToWebP(file, 200);
+              const response = await fetch(compressedLogo);
+              const blob = await response.blob();
+              const formData = new FormData();
+              const logoFileName = `logo-${jobForm.companyNewName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}.webp`;
+              formData.append('file', blob, logoFileName);
+              formData.append('name', logoFileName);
+              formData.append('altText', `${jobForm.companyNewName} logo`);
+              
+              const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+              if (uploadRes.ok) {
+                const uploadData = await uploadRes.json();
+                companyLogoUrl = uploadData.url; // R2 URL
+              }
+            } catch (logoErr) {
+              console.error('Logo upload failed:', logoErr);
+            }
+          }
+        }
+      }
+
+      // ✅ Upload job files to R2 with SEO metadata
+      const uploadedFiles: {url: string; thumbnail: string; name: string; type: string; seoTitle: string; seoDescription: string}[] = [];
       
       for (const file of jobFiles) {
         const fileData: any = {
-          url: file.url,
-          thumbnail: file.thumbnail,
-          name: file.name,
-          type: file.type,
-          seoTitle: file.seoTitle || file.name,
-          seoDescription: file.seoDescription || ''
+          url: file.url, thumbnail: file.thumbnail, name: file.name, type: file.type,
+          seoTitle: (file as any).seoTitle || file.name,
+          seoDescription: (file as any).seoDescription || ''
         };
 
         if (file.file) {
           // Upload original with SEO-friendly filename
           const originalFormData = new FormData();
-          originalFormData.append('file', file.file, file.seoSlug || file.name);
-          originalFormData.append('name', file.seoSlug || file.name);
-          originalFormData.append('altText', file.seoTitle || file.name);
+          originalFormData.append('file', file.file, (file as any).seoSlug || file.name);
+          originalFormData.append('name', (file as any).seoSlug || file.name);
+          originalFormData.append('altText', (file as any).seoTitle || file.name);
           
           const originalRes = await fetch('/api/upload', { method: 'POST', body: originalFormData });
           if (originalRes.ok) {
@@ -793,14 +819,13 @@ const handleEditJob = (job: RawJob) => {
             fileData.url = originalData.url;
           }
           
-          // Upload thumbnail for images
           if (file.type === 'image') {
             const thumbBlob = await fetch(file.thumbnail).then(r => r.blob());
             const thumbFormData = new FormData();
-            const thumbSlug = `thumb-${file.seoSlug || file.name}`;
+            const thumbSlug = `thumb-${(file as any).seoSlug || file.name}`;
             thumbFormData.append('file', thumbBlob, thumbSlug);
             thumbFormData.append('name', thumbSlug);
-            thumbFormData.append('altText', `Thumbnail: ${file.seoTitle || file.name}`);
+            thumbFormData.append('altText', `Thumbnail: ${(file as any).seoTitle || file.name}`);
             
             const thumbRes = await fetch('/api/upload', { method: 'POST', body: thumbFormData });
             if (thumbRes.ok) {
@@ -839,10 +864,13 @@ const handleEditJob = (job: RawJob) => {
           expiresAt: jobForm.expiresAt,
           description: jobDescription,
           is_active: isDraft ? 0 : 1,
-          // ✅ Include all schema data
+          // ✅ Company logo URL (R2 URL or empty)
+          logoUrl: companyLogoUrl || undefined,
+          // ✅ Schema data
           ...schemaData,
           skills: schemaData.skills,
           benefits: schemaData.benefits,
+          // ✅ Job files
           images: uploadedFiles
         })
       });
@@ -863,44 +891,15 @@ const handleEditJob = (job: RawJob) => {
         
         if (!isDraft || editingJobId) {
           setJobForm({
-            title: '',
-            roleSelected: 'Software Developer',
-            companySelected: '',
-            companyNewName: '',
-            companyNewUrl: '',
-            companyNewLogo: '',
-            location: '',
-            url: '',
-            salary: '',
-            expiresAt: ''
+            title: '', roleSelected: 'Software Developer', companySelected: '',
+            companyNewName: '', companyNewUrl: '', companyNewLogo: '',
+            location: '', url: '', salary: '', expiresAt: ''
           });
           setJobDescription('');
-          if (jobDescEditorRef.current) {
-            jobDescEditorRef.current.innerHTML = '';
-          }
+          if (jobDescEditorRef.current) jobDescEditorRef.current.innerHTML = '';
           setIsCreatingNewCompanyInline(false);
           setJobFiles([]);
           setEditingJobId(null);
-          // Reset schema data
-          setSchemaData({
-            job_category: 'Other',
-            industry: '',
-            employment_type: 'FULL_TIME',
-            workplace_type: 'Onsite',
-            education_level: 'Any',
-            experience_months: 0,
-            skills: [],
-            benefits: [],
-            salary_min: null,
-            salary_max: null,
-            salary_currency: 'TZS',
-            city: '',
-            region: '',
-            country: 'Tanzania',
-            postcode: '',
-            slug: '',
-            canonical_url: ''
-          });
         }
         
         await fetchSystemData();
@@ -916,6 +915,8 @@ const handleEditJob = (job: RawJob) => {
       setIsDraft(false);
     }
   };
+
+
 
   const handleToggleJobActive = async (id: string, currentStatus: boolean) => {
     if (userRole === 'editor') {
