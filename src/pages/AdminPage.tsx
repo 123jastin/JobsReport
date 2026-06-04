@@ -377,7 +377,7 @@ export default function AdminPage() {
   };
 
   // ✅ AI Job Parser with Template Support
-  const handleAIProcessJob = async () => {
+ const handleAIProcessJob = async () => {
     if (!rawJobText.trim() || rawJobText.trim().length < 20) {
       showFeedback('error', 'Please paste a complete job description (at least 20 characters).');
       return;
@@ -394,6 +394,7 @@ export default function AdminPage() {
       const result = await res.json();
 
       if (result.success && result.data) {
+        // Auto-fill form
         setJobForm(prev => ({
           ...prev,
           title: result.data.title || prev.title,
@@ -403,12 +404,11 @@ export default function AdminPage() {
           companySelected: result.data.company || prev.companySelected,
         }));
 
+        // Load description
         const descriptionHTML = result.data.description || '';
-        
         if (descriptionHTML) {
           setJobDescription(descriptionHTML);
           setDescEditMode('visual');
-          
           setTimeout(() => {
             const editor = jobDescEditorRef.current;
             if (editor) {
@@ -416,21 +416,37 @@ export default function AdminPage() {
               editor.scrollIntoView({ behavior: 'smooth', block: 'center' });
               editor.style.borderColor = '#10b981';
               editor.style.borderWidth = '2px';
-              setTimeout(() => {
-                editor.style.borderColor = '';
-                editor.style.borderWidth = '';
-              }, 2000);
+              setTimeout(() => { editor.style.borderColor = ''; editor.style.borderWidth = ''; }, 2000);
             }
           }, 300);
         }
 
-        showFeedback('success', 'Job parsed! Description loaded in editor below.');
+        // ✅ Also extract schema data
+        try {
+          const schemaRes = await fetch('/api/ai/extract-schema', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: result.data.title || jobForm.title,
+              description: descriptionHTML || jobDescription,
+              location: result.data.location || jobForm.location,
+              company: result.data.company || jobForm.companySelected
+            })
+          });
+          const schemaResult = await schemaRes.json();
+          if (schemaResult.success && schemaResult.schema) {
+            setSchemaData(prev => ({ ...prev, ...schemaResult.schema }));
+            console.log('Schema extracted:', schemaResult.schema);
+          }
+        } catch (schemaErr) {
+          console.log('Schema extraction skipped:', schemaErr);
+        }
+
+        showFeedback('success', 'Job parsed! Description and schema loaded.');
         setShowAIPaste(false);
         setRawJobText('');
       } else {
-        const errorMsg = result.error || 'AI processing failed';
-        showFeedback('error', errorMsg);
-        
+        showFeedback('error', result.error || 'AI processing failed');
         if (result.partial && result.partial.title) {
           setJobForm(prev => ({
             ...prev,
@@ -446,6 +462,9 @@ export default function AdminPage() {
       setAiProcessing(false);
     }
   };
+
+  
+
   
   // ✅ Generate thumbnail from image file
   const generateThumbnail = (file: File, maxWidth: number = 400): Promise<string> => {
@@ -643,8 +662,8 @@ export default function AdminPage() {
       reader.readAsDataURL(file);
     });
   };
-
-  const handleEditJob = (job: RawJob) => {
+  
+const handleEditJob = (job: RawJob) => {
     setEditingJobId(job.id);
     setJobForm({
       title: job.title,
@@ -660,6 +679,36 @@ export default function AdminPage() {
     });
     setJobDescription((job as any).description || '');
     setDescEditMode('visual');
+    
+    // ✅ Load schema data when editing
+    const j = job as any;
+    setSchemaData({
+      job_category: j.job_category || 'Other',
+      industry: j.industry || '',
+      employment_type: j.employment_type || 'FULL_TIME',
+      workplace_type: j.workplace_type || 'Onsite',
+      education_level: j.education_level || 'Any',
+      experience_months: j.experience_months || 0,
+      skills: Array.isArray(j.skills) ? j.skills : (typeof j.skills === 'string' ? JSON.parse(j.skills || '[]') : []),
+      benefits: Array.isArray(j.benefits) ? j.benefits : (typeof j.benefits === 'string' ? JSON.parse(j.benefits || '[]') : []),
+      salary_min: j.salary_min || null,
+      salary_max: j.salary_max || null,
+      salary_currency: j.salary_currency || 'TZS',
+      city: j.city || '',
+      region: j.region || '',
+      country: j.country || 'Tanzania',
+      postcode: j.postcode || '',
+      slug: j.slug || '',
+      canonical_url: j.canonical_url || ''
+    });
+    
+    // Set application type
+    if (j.url && j.url.startsWith('mailto:')) {
+      setApplicationType('email');
+    } else {
+      setApplicationType('url');
+    }
+    
     setTimeout(() => {
       if (jobDescEditorRef.current) {
         jobDescEditorRef.current.innerHTML = (job as any).description || '';
@@ -669,6 +718,8 @@ export default function AdminPage() {
     setJobFiles([]);
     window.scrollTo({ top: 300, behavior: 'smooth' });
   };
+
+
 
   const handleCancelEditJob = () => {
     setEditingJobId(null);
