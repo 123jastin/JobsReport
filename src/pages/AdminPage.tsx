@@ -764,7 +764,8 @@ const handleIngestJob = async (e: FormEvent) => {
 
     setActionLoading(true);
     try {
-      if (!isDraft && duplicateWarning) {
+      // Skip duplicate check when updating
+      if (!editingJobId && !isDraft && duplicateWarning) {
         showFeedback('error', 'Duplicate insertion blocked.');
         setActionLoading(false);
         return;
@@ -772,34 +773,32 @@ const handleIngestJob = async (e: FormEvent) => {
 
       // Upload company logo to R2 if creating new company inline
       let companyLogoUrl = '';
-      if (isCreatingNewCompanyInline && jobForm.companyNewLogo) {
-        if (jobForm.companyNewLogo.startsWith('data:image')) {
-          const fileInput = document.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement;
-          const file = fileInput?.files?.[0];
-          if (file) {
-            try {
-              const compressedLogo = await compressToWebP(file, 200);
-              const response = await fetch(compressedLogo);
-              const blob = await response.blob();
-              const formData = new FormData();
-              const logoFileName = `logo-${jobForm.companyNewName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}.webp`;
-              formData.append('file', blob, logoFileName);
-              formData.append('name', logoFileName);
-              formData.append('altText', `${jobForm.companyNewName} logo`);
-              const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
-              if (uploadRes.ok) {
-                const uploadData = await uploadRes.json();
-                companyLogoUrl = uploadData.url;
-              }
-            } catch (logoErr) {
-              console.error('Logo upload failed:', logoErr);
+      if (isCreatingNewCompanyInline && jobForm.companyNewLogo && jobForm.companyNewLogo.startsWith('data:image')) {
+        const fileInput = document.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement;
+        const file = fileInput?.files?.[0];
+        if (file) {
+          try {
+            const compressedLogo = await compressToWebP(file, 200);
+            const response = await fetch(compressedLogo);
+            const blob = await response.blob();
+            const formData = new FormData();
+            const logoFileName = `logo-${jobForm.companyNewName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}.webp`;
+            formData.append('file', blob, logoFileName);
+            formData.append('name', logoFileName);
+            formData.append('altText', `${jobForm.companyNewName} logo`);
+            const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+            if (uploadRes.ok) {
+              const uploadData = await uploadRes.json();
+              companyLogoUrl = uploadData.url;
             }
+          } catch (logoErr) {
+            console.error('Logo upload failed:', logoErr);
           }
         }
       }
 
       // Upload job files to R2
-      const uploadedFiles: {url: string; thumbnail: string; name: string; type: string; seoTitle: string; seoDescription: string}[] = [];
+      const uploadedFiles: any[] = [];
       for (const file of jobFiles) {
         const fileData: any = {
           url: file.url, thumbnail: file.thumbnail, name: file.name, type: file.type,
@@ -820,7 +819,6 @@ const handleIngestJob = async (e: FormEvent) => {
             const thumbBlob = await fetch(file.thumbnail).then(r => r.blob());
             const thumbFormData = new FormData();
             thumbFormData.append('file', thumbBlob, `thumb-${(file as any).seoSlug || file.name}`);
-            thumbFormData.append('name', `thumb-${(file as any).seoSlug || file.name}`);
             const thumbRes = await fetch('/api/upload', { method: 'POST', body: thumbFormData });
             if (thumbRes.ok) {
               const thumbData = await thumbRes.json();
@@ -838,11 +836,15 @@ const handleIngestJob = async (e: FormEvent) => {
         if (jobForm.companyNewUrl) applyUrl += `?subject=${encodeURIComponent(jobForm.companyNewUrl)}`;
       }
 
-      const url = editingJobId ? `/api/admin/jobs/${editingJobId}` : '/api/admin/jobs';
+      // ✅ CORRECT URL for create vs update
+      const apiUrl = editingJobId 
+        ? `/api/admin/jobs/${editingJobId}` 
+        : '/api/admin/jobs';
       const method = editingJobId ? 'PUT' : 'POST';
 
-      // ✅ COMPLETE API CALL WITH ALL SCHEMA DATA
-      const res = await fetch(url, {
+      console.log(`${method} request to: ${apiUrl}`, editingJobId ? '(updating)' : '(creating)');
+
+      const res = await fetch(apiUrl, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -856,7 +858,6 @@ const handleIngestJob = async (e: FormEvent) => {
           description: jobDescription,
           is_active: isDraft ? 0 : 1,
           logoUrl: companyLogoUrl || undefined,
-          // Schema data
           job_category: schemaData.job_category || 'Other',
           industry: schemaData.industry || '',
           employment_type: schemaData.employment_type || 'FULL_TIME',
@@ -868,7 +869,6 @@ const handleIngestJob = async (e: FormEvent) => {
           salary_min: schemaData.salary_min || null,
           salary_max: schemaData.salary_max || null,
           salary_currency: schemaData.salary_currency || 'TZS',
-          // Location for Google Schema
           city: schemaData.city || '',
           region: schemaData.region || '',
           country: schemaData.country || 'Tanzania',
@@ -885,12 +885,13 @@ const handleIngestJob = async (e: FormEvent) => {
           showFeedback('success', `Updated "${jobForm.title}" successfully.`);
         } else {
           setJobs(prev => [addedJob, ...prev]);
-          showFeedback('success', isDraft ? `Draft saved!` : `Published "${jobForm.title}" successfully.`);
+          showFeedback('success', isDraft ? `Draft saved!` : `Published successfully.`);
         }
         if (!isDraft || editingJobId) {
           setJobForm({ title: '', roleSelected: 'Software Developer', companySelected: '', companyNewName: '', companyNewUrl: '', companyNewLogo: '', location: '', url: '', salary: '', expiresAt: '' });
           setJobDescription('');
           if (jobDescEditorRef.current) jobDescEditorRef.current.innerHTML = '';
+          setSchemaData({ job_category: 'Other', industry: '', employment_type: 'FULL_TIME', workplace_type: 'Onsite', education_level: 'Any', experience_months: 0, skills: [], benefits: [], salary_min: null, salary_max: null, salary_currency: 'TZS', city: '', region: '', country: 'Tanzania', postcode: '', slug: '', canonical_url: '' });
           setIsCreatingNewCompanyInline(false);
           setJobFiles([]);
           setEditingJobId(null);
@@ -898,7 +899,7 @@ const handleIngestJob = async (e: FormEvent) => {
         await fetchSystemData();
       } else {
         const errObj = await res.json();
-        showFeedback('error', errObj.message || 'Validation error');
+        showFeedback('error', errObj.message || errObj.error || 'Validation error');
       }
     } catch (err) {
       showFeedback('error', 'Failed to save job.');
@@ -908,7 +909,7 @@ const handleIngestJob = async (e: FormEvent) => {
       setIsDraft(false);
     }
   };
-  
+
 
 
 
