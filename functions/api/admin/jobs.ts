@@ -36,9 +36,44 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     if (!companyResult) {
       const companyId = 'comp-' + Date.now().toString(36);
       await DB.prepare('INSERT INTO companies (id, name, logo_url, website) VALUES (?, ?, ?, ?)')
-        .bind(companyId, body.company?.trim(), '', body.url || '')
+        .bind(companyId, body.company?.trim(), body.logoUrl || '', body.url || '')
         .run();
       companyResult = { id: companyId };
+    }
+
+    // ✅ SAVE LOCATION TO LOCATIONS TABLE (grow database automatically)
+    if (body.city && body.city.trim()) {
+      const existingLocation = await DB.prepare(
+        'SELECT id FROM locations WHERE LOWER(name) = LOWER(?)'
+      ).bind(body.city.trim()).first();
+      
+      if (!existingLocation) {
+        const locId = 'loc-' + Date.now().toString(36);
+        await DB.prepare(
+          'INSERT INTO locations (id, name, region, country, postcode) VALUES (?, ?, ?, ?, ?)'
+        ).bind(
+          locId,
+          body.city.trim(),
+          body.region?.trim() || '',
+          body.country?.trim() || 'Tanzania',
+          body.postcode?.trim() || ''
+        ).run();
+        console.log('Added new location:', body.city);
+      } else {
+        // Update with latest data if provided
+        await DB.prepare(
+          `UPDATE locations SET 
+            region = CASE WHEN ? != '' THEN ? ELSE region END,
+            country = CASE WHEN ? != '' THEN ? ELSE country END,
+            postcode = CASE WHEN ? != '' THEN ? ELSE postcode END
+          WHERE LOWER(name) = LOWER(?)`
+        ).bind(
+          body.region?.trim() || '', body.region?.trim() || '',
+          body.country?.trim() || '', body.country?.trim() || '',
+          body.postcode?.trim() || '', body.postcode?.trim() || '',
+          body.city.trim()
+        ).run();
+      }
     }
 
     // Generate canonical URL if not provided
@@ -137,7 +172,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       salary_currency: body.salary_currency || 'TZS',
       city: body.city || '',
       region: body.region || '',
-      country: 'Tanzania',
+      country: body.country || 'Tanzania',
       postcode: body.postcode || '',
       canonical_url: canonicalUrl,
       postedAt: new Date().toISOString().split('T')[0],
@@ -189,12 +224,45 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     if (!companyResult) {
       const companyId = 'comp-' + Date.now().toString(36);
       await DB.prepare('INSERT INTO companies (id, name, logo_url, website) VALUES (?, ?, ?, ?)')
-        .bind(companyId, body.company?.trim(), '', body.url || '')
+        .bind(companyId, body.company?.trim(), body.logoUrl || '', body.url || '')
         .run();
       companyResult = { id: companyId };
     }
 
-    // ✅ Update job with ALL schema fields
+    // ✅ SAVE LOCATION TO LOCATIONS TABLE
+    if (body.city && body.city.trim()) {
+      const existingLocation = await DB.prepare(
+        'SELECT id FROM locations WHERE LOWER(name) = LOWER(?)'
+      ).bind(body.city.trim()).first();
+      
+      if (!existingLocation) {
+        const locId = 'loc-' + Date.now().toString(36);
+        await DB.prepare(
+          'INSERT INTO locations (id, name, region, country, postcode) VALUES (?, ?, ?, ?, ?)'
+        ).bind(
+          locId,
+          body.city.trim(),
+          body.region?.trim() || '',
+          body.country?.trim() || 'Tanzania',
+          body.postcode?.trim() || ''
+        ).run();
+      } else {
+        await DB.prepare(
+          `UPDATE locations SET 
+            region = CASE WHEN ? != '' THEN ? ELSE region END,
+            country = CASE WHEN ? != '' THEN ? ELSE country END,
+            postcode = CASE WHEN ? != '' THEN ? ELSE postcode END
+          WHERE LOWER(name) = LOWER(?)`
+        ).bind(
+          body.region?.trim() || '', body.region?.trim() || '',
+          body.country?.trim() || '', body.country?.trim() || '',
+          body.postcode?.trim() || '', body.postcode?.trim() || '',
+          body.city.trim()
+        ).run();
+      }
+    }
+
+    // Update job with ALL schema fields
     await DB.prepare(`
       UPDATE jobs 
       SET title = ?, role_id = ?, company_id = ?, location = ?, apply_url = ?, salary = ?,
@@ -309,9 +377,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
   const id = pathParts[pathParts.length - 1];
 
   try {
-    // Delete files first (foreign key)
     await DB.prepare('DELETE FROM job_images WHERE job_id = ?').bind(id).run();
-    // Then delete job
     await DB.prepare('DELETE FROM jobs WHERE id = ?').bind(id).run();
     
     return new Response(JSON.stringify({ success: true }), {
