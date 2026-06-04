@@ -681,7 +681,7 @@ const handleEditJob = (job: RawJob) => {
     setJobDescription((job as any).description || '');
     setDescEditMode('visual');
     
-    // ✅ Load schema data when editing
+    // ✅ Load all schema data when editing
     const j = job as any;
     setSchemaData({
       job_category: j.job_category || 'Other',
@@ -695,6 +695,8 @@ const handleEditJob = (job: RawJob) => {
       salary_min: j.salary_min || null,
       salary_max: j.salary_max || null,
       salary_currency: j.salary_currency || 'TZS',
+      // ✅ Location fields for Google Schema
+      street_address: j.street_address || '',
       city: j.city || '',
       region: j.region || '',
       country: j.country || 'Tanzania',
@@ -719,7 +721,7 @@ const handleEditJob = (job: RawJob) => {
     setJobFiles([]);
     window.scrollTo({ top: 300, behavior: 'smooth' });
   };
-
+    
 
   
 
