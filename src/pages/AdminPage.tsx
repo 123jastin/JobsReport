@@ -2361,52 +2361,63 @@ const handleEditJob = (job: RawJob) => {
                     )}
                   </div>
                 </div>
-
-                {/* ✅ Schema Data Section */}
-                <div className="space-y-2 border-t border-white/5 pt-4">
-                  <div className="flex items-center justify-between">
-                    <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">
-                      Schema & SEO Data
-                    </label>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (!jobForm.title) {
-                          showFeedback('error', 'Please enter a job title first');
-                          return;
-                        }
-                        setActionLoading(true);
-                        try {
-                          const res = await fetch('/api/ai/extract-schema', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              title: jobForm.title,
-                              description: jobDescription,
-                              location: jobForm.location,
-                              company: isCreatingNewCompanyInline ? jobForm.companyNewName : jobForm.companySelected
-                            })
-                          });
-                          const result = await res.json();
-                          if (result.success && result.schema) {
-                            setSchemaData(prev => ({ ...prev, ...result.schema }));
-                            showFeedback('success', 'Schema data auto-extracted!');
-                          } else {
-                            showFeedback('error', result.error || 'Schema extraction failed');
-                          }
-                        } catch (err) {
-                          showFeedback('error', 'AI service unavailable');
-                        } finally {
-                          setActionLoading(false);
-                        }
-                      }}
-                      disabled={actionLoading || !jobForm.title}
-                      className="text-[9px] font-mono font-bold text-violet-500 hover:text-violet-400 disabled:text-gray-600 uppercase flex items-center gap-1 transition-colors"
-                    >
-                      <Sparkles size={12} />
-                      Auto-Extract Schema
-                    </button>
-                  </div>
+     {/* ✅ Schema Data Section */}
+<div className="space-y-2 border-t border-white/5 pt-4">
+  <div className="flex items-center justify-between">
+    <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">
+      Schema & SEO Data
+    </label>
+    <button
+      type="button"
+      onClick={async () => {  // <-- THIS IS THE HANDLER YOU'RE ASKING ABOUT
+        if (!jobForm.title) {
+          showFeedback('error', 'Please enter a job title first');
+          return;
+        }
+        setActionLoading(true);
+        try {
+          const res = await fetch('/api/ai/extract-schema', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: jobForm.title,
+              description: jobDescription,
+              location: jobForm.location,
+              company: isCreatingNewCompanyInline ? jobForm.companyNewName : jobForm.companySelected
+            })
+          });
+          const result = await res.json();
+          console.log('Schema API response:', result);
+          
+          if (result.success && result.schema) {
+            setSchemaData(prev => ({
+              ...prev,
+              ...result.schema,
+              skills: Array.isArray(result.schema.skills) ? result.schema.skills : 
+                     (typeof result.schema.skills === 'string' ? result.schema.skills.split(',').map((s: string) => s.trim()) : prev.skills),
+              benefits: Array.isArray(result.schema.benefits) ? result.schema.benefits : 
+                       (typeof result.schema.benefits === 'string' ? result.schema.benefits.split(',').map((s: string) => s.trim()) : prev.benefits),
+              salary_min: result.schema.salary_min ? Number(result.schema.salary_min) : prev.salary_min,
+              salary_max: result.schema.salary_max ? Number(result.schema.salary_max) : prev.salary_max,
+            }));
+            showFeedback('success', 'Schema data auto-extracted!');
+          } else {
+            showFeedback('error', result.error || 'Schema extraction failed. Fill manually.');
+          }
+        } catch (err) {
+          console.error('Schema extraction error:', err);
+          showFeedback('error', 'AI service unavailable. Fill manually.');
+        } finally {
+          setActionLoading(false);
+        }
+      }}
+      disabled={actionLoading || !jobForm.title}
+      className="text-[9px] font-mono font-bold text-violet-500 hover:text-violet-400 disabled:text-gray-600 uppercase flex items-center gap-1 transition-colors"
+    >
+      <Sparkles size={12} />
+      Auto-Extract Schema
+    </button>
+  </div>
 
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                     <select value={schemaData.job_category} onChange={(e) => setSchemaData(prev => ({...prev, job_category: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
