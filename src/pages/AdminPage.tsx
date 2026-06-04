@@ -770,7 +770,7 @@ const handleIngestJob = async (e: FormEvent) => {
         return;
       }
 
-      // ✅ Upload company logo to R2 if creating new company inline
+      // Upload company logo to R2 if creating new company inline
       let companyLogoUrl = '';
       if (isCreatingNewCompanyInline && jobForm.companyNewLogo) {
         if (jobForm.companyNewLogo.startsWith('data:image')) {
@@ -786,7 +786,6 @@ const handleIngestJob = async (e: FormEvent) => {
               formData.append('file', blob, logoFileName);
               formData.append('name', logoFileName);
               formData.append('altText', `${jobForm.companyNewName} logo`);
-              
               const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
               if (uploadRes.ok) {
                 const uploadData = await uploadRes.json();
@@ -799,36 +798,29 @@ const handleIngestJob = async (e: FormEvent) => {
         }
       }
 
-      // ✅ Upload job files to R2 with SEO metadata
+      // Upload job files to R2
       const uploadedFiles: {url: string; thumbnail: string; name: string; type: string; seoTitle: string; seoDescription: string}[] = [];
-      
       for (const file of jobFiles) {
         const fileData: any = {
           url: file.url, thumbnail: file.thumbnail, name: file.name, type: file.type,
           seoTitle: (file as any).seoTitle || file.name,
           seoDescription: (file as any).seoDescription || ''
         };
-
         if (file.file) {
           const originalFormData = new FormData();
           originalFormData.append('file', file.file, (file as any).seoSlug || file.name);
           originalFormData.append('name', (file as any).seoSlug || file.name);
           originalFormData.append('altText', (file as any).seoTitle || file.name);
-          
           const originalRes = await fetch('/api/upload', { method: 'POST', body: originalFormData });
           if (originalRes.ok) {
             const originalData = await originalRes.json();
             fileData.url = originalData.url;
           }
-          
           if (file.type === 'image') {
             const thumbBlob = await fetch(file.thumbnail).then(r => r.blob());
             const thumbFormData = new FormData();
-            const thumbSlug = `thumb-${(file as any).seoSlug || file.name}`;
-            thumbFormData.append('file', thumbBlob, thumbSlug);
-            thumbFormData.append('name', thumbSlug);
-            thumbFormData.append('altText', `Thumbnail: ${(file as any).seoTitle || file.name}`);
-            
+            thumbFormData.append('file', thumbBlob, `thumb-${(file as any).seoSlug || file.name}`);
+            thumbFormData.append('name', `thumb-${(file as any).seoSlug || file.name}`);
             const thumbRes = await fetch('/api/upload', { method: 'POST', body: thumbFormData });
             if (thumbRes.ok) {
               const thumbData = await thumbRes.json();
@@ -836,22 +828,20 @@ const handleIngestJob = async (e: FormEvent) => {
             }
           }
         }
-        
         uploadedFiles.push(fileData);
       }
 
-      // ✅ Build application URL with email support
+      // Build application URL
       let applyUrl = jobForm.url;
       if (applicationType === 'email' && applyUrl && !applyUrl.startsWith('mailto:')) {
         applyUrl = `mailto:${applyUrl}`;
-        if (jobForm.companyNewUrl) {
-          applyUrl += `?subject=${encodeURIComponent(jobForm.companyNewUrl)}`;
-        }
+        if (jobForm.companyNewUrl) applyUrl += `?subject=${encodeURIComponent(jobForm.companyNewUrl)}`;
       }
 
       const url = editingJobId ? `/api/admin/jobs/${editingJobId}` : '/api/admin/jobs';
       const method = editingJobId ? 'PUT' : 'POST';
 
+      // ✅ COMPLETE API CALL WITH ALL SCHEMA DATA
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -866,67 +856,59 @@ const handleIngestJob = async (e: FormEvent) => {
           description: jobDescription,
           is_active: isDraft ? 0 : 1,
           logoUrl: companyLogoUrl || undefined,
-          // ✅ Schema data
-          job_category: schemaData.job_category,
-          industry: schemaData.industry,
-          employment_type: schemaData.employment_type,
-          workplace_type: schemaData.workplace_type,
-          education_level: schemaData.education_level,
-          experience_months: schemaData.experience_months,
-          skills: schemaData.skills,
-          benefits: schemaData.benefits,
-          salary_min: schemaData.salary_min,
-          salary_max: schemaData.salary_max,
-          salary_currency: schemaData.salary_currency,
-          city: schemaData.city,
-          region: schemaData.region,
+          // Schema data
+          job_category: schemaData.job_category || 'Other',
+          industry: schemaData.industry || '',
+          employment_type: schemaData.employment_type || 'FULL_TIME',
+          workplace_type: schemaData.workplace_type || 'Onsite',
+          education_level: schemaData.education_level || 'Any',
+          experience_months: schemaData.experience_months || 0,
+          skills: schemaData.skills || [],
+          benefits: schemaData.benefits || [],
+          salary_min: schemaData.salary_min || null,
+          salary_max: schemaData.salary_max || null,
+          salary_currency: schemaData.salary_currency || 'TZS',
+          // Location for Google Schema
+          city: schemaData.city || '',
+          region: schemaData.region || '',
           country: schemaData.country || 'Tanzania',
-          postcode: schemaData.postcode,
-          canonical_url: schemaData.canonical_url,
+          postcode: schemaData.postcode || '',
+          canonical_url: schemaData.canonical_url || '',
           images: uploadedFiles
         })
       });
 
       if (res.ok) {
         const addedJob = await res.json();
-        
         if (editingJobId) {
           setJobs(prev => prev.map(j => j.id === editingJobId ? { ...j, ...addedJob } : j));
           showFeedback('success', `Updated "${jobForm.title}" successfully.`);
         } else {
           setJobs(prev => [addedJob, ...prev]);
-          showFeedback('success', isDraft 
-            ? `Draft saved! You can edit and publish later.` 
-            : `Published "${jobForm.title}" for ${targetCompany} successfully.`
-          );
+          showFeedback('success', isDraft ? `Draft saved!` : `Published "${jobForm.title}" successfully.`);
         }
-        
         if (!isDraft || editingJobId) {
-          setJobForm({
-            title: '', roleSelected: 'Software Developer', companySelected: '',
-            companyNewName: '', companyNewUrl: '', companyNewLogo: '',
-            location: '', url: '', salary: '', expiresAt: ''
-          });
+          setJobForm({ title: '', roleSelected: 'Software Developer', companySelected: '', companyNewName: '', companyNewUrl: '', companyNewLogo: '', location: '', url: '', salary: '', expiresAt: '' });
           setJobDescription('');
           if (jobDescEditorRef.current) jobDescEditorRef.current.innerHTML = '';
           setIsCreatingNewCompanyInline(false);
           setJobFiles([]);
           setEditingJobId(null);
         }
-        
         await fetchSystemData();
       } else {
         const errObj = await res.json();
         showFeedback('error', errObj.message || 'Validation error');
       }
     } catch (err) {
-      showFeedback('error', 'Failed to communicate with job stream.');
+      showFeedback('error', 'Failed to save job.');
       console.error('Job error:', err);
     } finally {
       setActionLoading(false);
       setIsDraft(false);
     }
   };
+  
 
 
 
