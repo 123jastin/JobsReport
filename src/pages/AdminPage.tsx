@@ -960,8 +960,7 @@ const handleEditJob = (job: RawJob) => {
       showFeedback('error', 'Failed delete operation.');
     }
   };
-
-  const handleCreateCompany = async (e: FormEvent) => {
+const handleCreateCompany = async (e: FormEvent) => {
     e.preventDefault();
     if (!companyForm.name) return;
 
@@ -983,11 +982,36 @@ const handleEditJob = (job: RawJob) => {
     setActionLoading(true);
     try {
       let logoUrl = companyForm.logoUrl;
+      
+      // ✅ Upload logo to R2 if it's a base64 image or file
       if (logoUrl && logoUrl.startsWith('data:image')) {
+        // Get the file from the input
         const fileInput = document.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement;
         const file = fileInput?.files?.[0];
+        
         if (file) {
-          logoUrl = await compressToWebP(file, 200);
+          // Compress to WebP first
+          const compressedLogo = await compressToWebP(file, 200);
+          
+          // Convert base64 to blob for upload
+          const response = await fetch(compressedLogo);
+          const blob = await response.blob();
+          
+          // Upload to R2
+          const formData = new FormData();
+          const logoFileName = `logo-${companyForm.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}.webp`;
+          formData.append('file', blob, logoFileName);
+          formData.append('name', logoFileName);
+          formData.append('altText', `${companyForm.name} logo`);
+          
+          const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+          if (uploadRes.ok) {
+            const uploadData = await uploadRes.json();
+            logoUrl = uploadData.url; // ✅ R2 URL: https://media.jobsreport.online/logo-xxx.webp
+            console.log('Logo uploaded to R2:', logoUrl);
+          } else {
+            showFeedback('error', 'Logo upload failed. Saving anyway.');
+          }
         }
       }
 
@@ -1002,7 +1026,7 @@ const handleEditJob = (job: RawJob) => {
         body: JSON.stringify({
           name: companyForm.name.trim(),
           url: companyForm.url,
-          logoUrl: logoUrl
+          logoUrl: logoUrl // ✅ Now R2 URL
         })
       });
       
@@ -1028,6 +1052,9 @@ const handleEditJob = (job: RawJob) => {
       setActionLoading(false);
     }
   };
+
+
+
 
   const handleDeleteCompany = async (id: string) => {
     if (userRole === 'editor') {
