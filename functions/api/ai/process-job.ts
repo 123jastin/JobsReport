@@ -19,15 +19,13 @@ interface JobTemplateData {
   };
 }
 
-// ========== TEMPLATE ROTATION COUNTER ==========
-let templateCounter = 0;
-
 // ========== 8 PREMIUM TEMPLATES ==========
-function getNextTemplate(data: JobTemplateData): string {
-  const templates = [t1, t2, t3, t4, t5, t6, t7, t8];
-  const template = templates[templateCounter % templates.length];
-  templateCounter++;
-  return template(data);
+const templates = [t1, t2, t3, t4, t5, t6, t7, t8];
+
+// ✅ Random template selection (works with stateless Workers)
+function getRandomTemplate(data: JobTemplateData): { html: string; index: number } {
+  const index = Math.floor(Math.random() * templates.length);
+  return { html: templates[index](data), index: index + 1 };
 }
 
 // Template 1: Executive Boardroom
@@ -47,7 +45,7 @@ function t3(d: JobTemplateData): string {
 
 // Template 4: Minimal Dark
 function t4(d: JobTemplateData): string {
-  return `<div style="font-family:system-ui,sans-serif;background:#18181b;border-radius:20px;padding:36px;color:#d4d4d8;max-width:700px"><div style="text-align:center;margin-bottom:32px"><div style="font-size:40px;margin-bottom:12px">💎</div><h1 style="font-size:26px;font-weight:700;color:#fff;margin:0 0 6px">${d.title}</h1><div style="display:flex;justify-content:center;gap:20px;font-size:12px;color:#71717a"><span>${d.company}</span><span>•</span><span>${d.location}</span>${d.salary?`<span>•</span><span style="color:#34d399">${d.salary}</span>`:''}</div></div><div style="border-top:1px solid #27272a;border-bottom:1px solid #27272a;padding:24px 0;margin-bottom:24px"><p style="font-size:15px;line-height:1.8;color:#a1a1aa;text-align:center;margin:0">${d.sections.overview}</p></div>${d.sections.responsibilities.length?`<div style="margin-bottom:24px"><h3 style="font-size:13px;font-weight:600;color:#fff;letter-spacing:2px;text-transform:uppercase;margin-bottom:16px">What You'll Do</h3>${d.sections.responsibilities.map(r=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0"><span style="color:#a78bfa;font-weight:700">→</span><span style="font-size:14px">${r}</span></div>`).join('')}</div>`:''}${d.sections.requirements.length?`<div style="background:#27272a;border-radius:12px;padding:20px;margin-bottom:24px"><h3 style="font-size:13px;color:#fff;margin-bottom:12px">Requirements</h3>${d.sections.requirements.map(r=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px"><span style="color:#22c55e">✓</span>${r}</div>`).join('')}</div>`:''}${d.sections.benefits.length?`<div style="text-align:center"><h3 style="font-size:13px;color:#fbbf24;margin-bottom:12px">Perks</h3><span style="font-size:13px;color:#a1a1aa">${d.sections.benefits.join(' • ')}</span></div>`:''}</div>`;
+  return `<div style="font-family:system-ui,sans-serif;background:#18181b;border-radius:20px;padding:36px;color:#d4d4d8"><div style="text-align:center;margin-bottom:32px"><div style="font-size:40px;margin-bottom:12px">💎</div><h1 style="font-size:26px;font-weight:700;color:#fff;margin:0 0 6px">${d.title}</h1><div style="display:flex;justify-content:center;gap:20px;font-size:12px;color:#71717a"><span>${d.company}</span><span>•</span><span>${d.location}</span>${d.salary?`<span>•</span><span style="color:#34d399">${d.salary}</span>`:''}</div></div><div style="border-top:1px solid #27272a;border-bottom:1px solid #27272a;padding:24px 0;margin-bottom:24px"><p style="font-size:15px;line-height:1.8;color:#a1a1aa;text-align:center;margin:0">${d.sections.overview}</p></div>${d.sections.responsibilities.length?`<div style="margin-bottom:24px"><h3 style="font-size:13px;font-weight:600;color:#fff;letter-spacing:2px;text-transform:uppercase;margin-bottom:16px">What You'll Do</h3>${d.sections.responsibilities.map(r=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0"><span style="color:#a78bfa;font-weight:700">→</span><span style="font-size:14px">${r}</span></div>`).join('')}</div>`:''}${d.sections.requirements.length?`<div style="background:#27272a;border-radius:12px;padding:20px;margin-bottom:24px"><h3 style="font-size:13px;color:#fff;margin-bottom:12px">Requirements</h3>${d.sections.requirements.map(r=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px"><span style="color:#22c55e">✓</span>${r}</div>`).join('')}</div>`:''}${d.sections.benefits.length?`<div style="text-align:center"><h3 style="font-size:13px;color:#fbbf24;margin-bottom:12px">Perks</h3><span style="font-size:13px;color:#a1a1aa">${d.sections.benefits.join(' • ')}</span></div>`:''}</div>`;
 }
 
 // Template 5: Gradient Modern
@@ -75,17 +73,11 @@ function validateJobData(data: any): { valid: boolean; errors: string[]; cleaned
   const errors: string[] = [];
   const cleaned: any = {};
 
-  if (!data.title || data.title.length < 3) {
-    errors.push('Missing or invalid title');
-  } else {
-    cleaned.title = data.title.trim();
-  }
+  if (!data.title || data.title.length < 3) errors.push('Missing or invalid title');
+  else cleaned.title = data.title.trim();
 
-  if (!data.company || data.company.length < 1) {
-    errors.push('Missing company name');
-  } else {
-    cleaned.company = data.company.trim();
-  }
+  if (!data.company || data.company.length < 1) errors.push('Missing company name');
+  else cleaned.company = data.company.trim();
 
   cleaned.location = data.location?.trim() || 'Remote';
   cleaned.salary = data.salary?.trim() || '';
@@ -98,11 +90,7 @@ function validateJobData(data: any): { valid: boolean; errors: string[]; cleaned
     benefits: Array.isArray(data.benefits) ? data.benefits : [],
   };
 
-  return {
-    valid: errors.length === 0 && !!cleaned.title,
-    errors,
-    cleaned
-  };
+  return { valid: errors.length === 0 && !!cleaned.title, errors, cleaned };
 }
 
 // ========== MAIN HANDLER ==========
@@ -122,8 +110,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     if (!rawText || rawText.length < 20) {
       return new Response(JSON.stringify({ success: false, error: 'Please provide at least 20 characters' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
+        status: 400, headers: { 'Content-Type': 'application/json' }
       });
     }
 
@@ -135,34 +122,24 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       attempts++;
       const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${GROQ_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'llama-3.1-8b-instant',
           messages: [{
             role: 'system',
             content: `You are a job post parser. Return ONLY valid JSON with: {"title":"","company":"","location":"","salary":"","role":"","description_raw":"","responsibilities":[],"requirements":[],"benefits":[]}`
-          }, {
-            role: 'user',
-            content: rawText.substring(0, 4000)
-          }],
-          temperature: 0.2,
-          max_tokens: 1500,
+          }, { role: 'user', content: rawText.substring(0, 4000) }],
+          temperature: 0.2, max_tokens: 1500,
         }),
       });
 
       const data: any = await groqResponse.json();
-      if (data.choices && data.choices[0]) {
-        aiContent = data.choices[0].message.content || '';
-      }
+      if (data.choices?.[0]) aiContent = data.choices[0].message.content || '';
     }
 
     if (!aiContent) {
       return new Response(JSON.stringify({ success: false, error: 'AI could not process this description' }), {
-        status: 422,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        status: 422, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
       });
     }
 
@@ -171,20 +148,17 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       parsed = JSON.parse(aiContent.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim());
     } catch {
       return new Response(JSON.stringify({ success: false, error: 'AI returned invalid format', debug: 'parse_failed' }), {
-        status: 422,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        status: 422, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
       });
     }
 
     const validation = validateJobData(parsed);
     if (!validation.valid) {
       return new Response(JSON.stringify({ success: false, error: 'Required fields missing', details: validation.errors, partial: validation.cleaned }), {
-        status: 422,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        status: 422, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
       });
     }
 
-    // ✅ Apply rotating premium template
     const templateData: JobTemplateData = {
       title: validation.cleaned.title,
       company: validation.cleaned.company,
@@ -194,7 +168,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       sections: validation.cleaned.sections
     };
 
-    const descriptionHtml = getNextTemplate(templateData);
+    // ✅ Random template selection
+    const { html: descriptionHtml, index: templateIndex } = getRandomTemplate(templateData);
 
     return new Response(JSON.stringify({
       success: true,
@@ -206,7 +181,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         role: validation.cleaned.role,
         description: descriptionHtml,
         sections: validation.cleaned.sections,
-        templateIndex: (templateCounter - 1) % 8 + 1
+        templateIndex
       },
       attempts
     }), {
