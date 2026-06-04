@@ -2402,6 +2402,10 @@ const handleCreateCompany = async (e: FormEvent) => {
                   </div>
                 </div>
 
+
+
+      
+
                 {/* ✅ Schema Data Section */}
 <div className="space-y-2 border-t border-white/5 pt-4">
   <div className="flex items-center justify-between">
