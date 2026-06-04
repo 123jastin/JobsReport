@@ -2401,7 +2401,8 @@ const handleCreateCompany = async (e: FormEvent) => {
                     )}
                   </div>
                 </div>
-     {/* ✅ Schema Data Section */}
+
+                {/* ✅ Schema Data Section */}
 <div className="space-y-2 border-t border-white/5 pt-4">
   <div className="flex items-center justify-between">
     <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">
@@ -2409,11 +2410,8 @@ const handleCreateCompany = async (e: FormEvent) => {
     </label>
     <button
       type="button"
-      onClick={async () => {  // <-- THIS IS THE HANDLER YOU'RE ASKING ABOUT
-        if (!jobForm.title) {
-          showFeedback('error', 'Please enter a job title first');
-          return;
-        }
+      onClick={async () => {
+        if (!jobForm.title) { showFeedback('error', 'Please enter a job title first'); return; }
         setActionLoading(true);
         try {
           const res = await fetch('/api/ai/extract-schema', {
@@ -2427,73 +2425,88 @@ const handleCreateCompany = async (e: FormEvent) => {
             })
           });
           const result = await res.json();
-          console.log('Schema API response:', result);
-          
           if (result.success && result.schema) {
             setSchemaData(prev => ({
               ...prev,
-              ...result.schema,
-              skills: Array.isArray(result.schema.skills) ? result.schema.skills : 
-                     (typeof result.schema.skills === 'string' ? result.schema.skills.split(',').map((s: string) => s.trim()) : prev.skills),
-              benefits: Array.isArray(result.schema.benefits) ? result.schema.benefits : 
-                       (typeof result.schema.benefits === 'string' ? result.schema.benefits.split(',').map((s: string) => s.trim()) : prev.benefits),
+              job_category: result.schema.job_category || prev.job_category,
+              industry: result.schema.industry || prev.industry,
+              employment_type: result.schema.employment_type || prev.employment_type,
+              workplace_type: result.schema.workplace_type || prev.workplace_type,
+              education_level: result.schema.education_level || prev.education_level,
+              experience_months: result.schema.experience_months || prev.experience_months,
+              skills: Array.isArray(result.schema.skills) ? result.schema.skills : prev.skills,
+              benefits: Array.isArray(result.schema.benefits) ? result.schema.benefits : prev.benefits,
               salary_min: result.schema.salary_min ? Number(result.schema.salary_min) : prev.salary_min,
               salary_max: result.schema.salary_max ? Number(result.schema.salary_max) : prev.salary_max,
+              salary_currency: result.schema.salary_currency || prev.salary_currency,
             }));
-            showFeedback('success', 'Schema data auto-extracted!');
+            showFeedback('success', 'Schema extracted!');
           } else {
-            showFeedback('error', result.error || 'Schema extraction failed. Fill manually.');
+            showFeedback('error', result.error || 'Schema extraction failed');
           }
-        } catch (err) {
-          console.error('Schema extraction error:', err);
-          showFeedback('error', 'AI service unavailable. Fill manually.');
-        } finally {
-          setActionLoading(false);
-        }
+        } catch (err) { showFeedback('error', 'AI service unavailable'); }
+        finally { setActionLoading(false); }
       }}
       disabled={actionLoading || !jobForm.title}
       className="text-[9px] font-mono font-bold text-violet-500 hover:text-violet-400 disabled:text-gray-600 uppercase flex items-center gap-1 transition-colors"
     >
-      <Sparkles size={12} />
-      Auto-Extract Schema
+      <Sparkles size={12} /> Auto-Extract Schema
     </button>
   </div>
 
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                    <select value={schemaData.job_category} onChange={(e) => setSchemaData(prev => ({...prev, job_category: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
-                      <option value="">Category</option>
-                      {['Accounting','Engineering','Healthcare','Hospitality','Marketing','IT','Education','Finance','Legal','Other'].map(c => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
-                    <select value={schemaData.employment_type} onChange={(e) => setSchemaData(prev => ({...prev, employment_type: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
-                      <option value="FULL_TIME">Full Time</option><option value="PART_TIME">Part Time</option><option value="CONTRACT">Contract</option><option value="TEMPORARY">Temporary</option><option value="INTERNSHIP">Internship</option>
-                    </select>
-                    <select value={schemaData.workplace_type} onChange={(e) => setSchemaData(prev => ({...prev, workplace_type: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
-                      <option value="Onsite">Onsite</option><option value="Remote">Remote</option><option value="Hybrid">Hybrid</option>
-                    </select>
-                    <select value={schemaData.education_level} onChange={(e) => setSchemaData(prev => ({...prev, education_level: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
-                      <option value="Any">Any Education</option><option value="High School">High School</option><option value="Diploma">Diploma</option><option value="Bachelor">Bachelor</option><option value="Master">Master</option><option value="PhD">PhD</option>
-                    </select>
-                    <input type="number" placeholder="Experience (months)" value={schemaData.experience_months || ''} onChange={(e) => setSchemaData(prev => ({...prev, experience_months: parseInt(e.target.value) || 0}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" />
-                    <input type="text" placeholder="Industry" value={schemaData.industry || ''} onChange={(e) => setSchemaData(prev => ({...prev, industry: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" />
-                  </div>
+  {/* Category, Employment, Workplace */}
+  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+    <select value={schemaData.job_category} onChange={(e) => setSchemaData(prev => ({...prev, job_category: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
+      <option value="">Category</option>
+      {['Accounting','Engineering','Healthcare','Hospitality','Marketing','IT','Education','Finance','Legal','Other'].map(c => (<option key={c} value={c}>{c}</option>))}
+    </select>
+    <select value={schemaData.employment_type} onChange={(e) => setSchemaData(prev => ({...prev, employment_type: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
+      <option value="FULL_TIME">Full Time</option><option value="PART_TIME">Part Time</option><option value="CONTRACT">Contract</option><option value="TEMPORARY">Temporary</option><option value="INTERNSHIP">Internship</option>
+    </select>
+    <select value={schemaData.workplace_type} onChange={(e) => setSchemaData(prev => ({...prev, workplace_type: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
+      <option value="Onsite">Onsite</option><option value="Remote">Remote</option><option value="Hybrid">Hybrid</option>
+    </select>
+  </div>
 
-                  {/* Salary & Currency */}
-                  <div className="grid grid-cols-3 gap-2">
-                    <select value={schemaData.salary_currency} onChange={(e) => setSchemaData(prev => ({...prev, salary_currency: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
-                      <option value="TZS">🇹🇿 TZS</option><option value="KES">🇰🇪 KES</option><option value="UGX">🇺🇬 UGX</option><option value="USD">🇺🇸 USD</option><option value="EUR">🇪🇺 EUR</option><option value="GBP">🇬🇧 GBP</option><option value="ZAR">🇿🇦 ZAR</option><option value="NGN">🇳🇬 NGN</option><option value="AED">🇦🇪 AED</option>
-                    </select>
-                    <input type="number" placeholder="Min Salary" value={schemaData.salary_min || ''} onChange={(e) => setSchemaData(prev => ({...prev, salary_min: parseFloat(e.target.value) || null}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" />
-                    <input type="number" placeholder="Max Salary" value={schemaData.salary_max || ''} onChange={(e) => setSchemaData(prev => ({...prev, salary_max: parseFloat(e.target.value) || null}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" />
-                  </div>
+  {/* Education, Experience, Industry */}
+  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+    <select value={schemaData.education_level} onChange={(e) => setSchemaData(prev => ({...prev, education_level: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
+      <option value="Any">Any Education</option><option value="High School">High School</option><option value="Diploma">Diploma</option><option value="Bachelor">Bachelor</option><option value="Master">Master</option><option value="PhD">PhD</option>
+    </select>
+    <input type="number" placeholder="Experience (months)" value={schemaData.experience_months || ''} onChange={(e) => setSchemaData(prev => ({...prev, experience_months: parseInt(e.target.value) || 0}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" />
+    <input type="text" placeholder="Industry" value={schemaData.industry || ''} onChange={(e) => setSchemaData(prev => ({...prev, industry: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" />
+  </div>
 
-                  {/* Skills & Benefits */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <input type="text" placeholder="Skills (comma separated)" value={Array.isArray(schemaData.skills) ? schemaData.skills.join(', ') : ''} onChange={(e) => setSchemaData(prev => ({...prev, skills: e.target.value.split(',').map(s => s.trim()).filter(Boolean)}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" />
-                    <input type="text" placeholder="Benefits (comma separated)" value={Array.isArray(schemaData.benefits) ? schemaData.benefits.join(', ') : ''} onChange={(e) => setSchemaData(prev => ({...prev, benefits: e.target.value.split(',').map(s => s.trim()).filter(Boolean)}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" />
-                  </div>
-                </div>
+  {/* Currency + Salary */}
+  <div className="grid grid-cols-3 gap-2">
+    <select value={schemaData.salary_currency} onChange={(e) => setSchemaData(prev => ({...prev, salary_currency: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
+      <option value="TZS">🇹🇿 TZS</option><option value="KES">🇰🇪 KES</option><option value="UGX">🇺🇬 UGX</option><option value="USD">🇺🇸 USD</option><option value="EUR">🇪🇺 EUR</option><option value="GBP">🇬🇧 GBP</option><option value="ZAR">🇿🇦 ZAR</option><option value="NGN">🇳🇬 NGN</option><option value="AED">🇦🇪 AED</option>
+    </select>
+    <input type="number" placeholder="Min Salary" value={schemaData.salary_min || ''} onChange={(e) => setSchemaData(prev => ({...prev, salary_min: parseFloat(e.target.value) || null}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" />
+    <input type="number" placeholder="Max Salary" value={schemaData.salary_max || ''} onChange={(e) => setSchemaData(prev => ({...prev, salary_max: parseFloat(e.target.value) || null}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" />
+  </div>
+
+  {/* ✅ Location Fields - Manual Entry */}
+  <div className="grid grid-cols-3 gap-2">
+    <input type="text" placeholder="City (e.g. Dar es Salaam)" value={schemaData.city || ''} onChange={(e) => setSchemaData(prev => ({...prev, city: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" />
+    <input type="text" placeholder="Region (e.g. Dar es Salaam)" value={schemaData.region || ''} onChange={(e) => setSchemaData(prev => ({...prev, region: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" />
+    <input type="text" placeholder="Country (e.g. Tanzania)" value={schemaData.country || ''} onChange={(e) => setSchemaData(prev => ({...prev, country: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" />
+  </div>
+
+  {/* ✅ Postcode - Manual Entry */}
+  <div className="flex items-center gap-2">
+    <input type="text" placeholder="Postcode (e.g. 11101)" value={schemaData.postcode || ''} onChange={(e) => setSchemaData(prev => ({...prev, postcode: e.target.value}))} className="flex-1 bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" />
+    <span className="text-[8px] text-gray-500 font-mono whitespace-nowrap">Manual entry</span>
+  </div>
+
+  {/* Skills & Benefits */}
+  <div className="grid grid-cols-2 gap-2">
+    <input type="text" placeholder="Skills (comma separated)" value={Array.isArray(schemaData.skills) ? schemaData.skills.join(', ') : ''} onChange={(e) => setSchemaData(prev => ({...prev, skills: e.target.value.split(',').map(s => s.trim()).filter(Boolean)}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" />
+    <input type="text" placeholder="Benefits (comma separated)" value={Array.isArray(schemaData.benefits) ? schemaData.benefits.join(', ') : ''} onChange={(e) => setSchemaData(prev => ({...prev, benefits: e.target.value.split(',').map(s => s.trim()).filter(Boolean)}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" />
+  </div>
+</div>
+
+
 
                 {/* Action Buttons - Save Draft + Publish */}
                 <div className="flex gap-2 pt-2">
