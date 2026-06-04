@@ -2384,6 +2384,7 @@ const handleCreateCompany = async (e: FormEvent) => {
                     )}
                   </div>
                 </div>
+
 {/* ✅ Schema & SEO Data Section */}
 <div className="space-y-2 border-t border-white/5 pt-4">
   <div className="flex items-center justify-between">
@@ -2488,15 +2489,15 @@ const handleCreateCompany = async (e: FormEvent) => {
   {/* Row 3: Currency + Salary Min + Salary Max */}
   <div className="grid grid-cols-3 gap-2">
     <select value={schemaData.salary_currency || 'TZS'} onChange={(e) => setSchemaData(prev => ({...prev, salary_currency: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
-      <option value="TZS">🇹🇿 TZS</option>
-      <option value="KES">🇰🇪 KES</option>
-      <option value="UGX">🇺🇬 UGX</option>
-      <option value="USD">🇺🇸 USD</option>
-      <option value="EUR">🇪🇺 EUR</option>
-      <option value="GBP">🇬🇧 GBP</option>
-      <option value="ZAR">🇿🇦 ZAR</option>
-      <option value="NGN">🇳🇬 NGN</option>
-      <option value="AED">🇦🇪 AED</option>
+      <option value="TZS">🇹🇿 TSh</option>
+      <option value="KES">🇰🇪 KSh</option>
+      <option value="UGX">🇺🇬 USh</option>
+      <option value="USD">🇺🇸 $</option>
+      <option value="EUR">🇪🇺 €</option>
+      <option value="GBP">🇬🇧 £</option>
+      <option value="ZAR">🇿🇦 R</option>
+      <option value="NGN">🇳🇬 ₦</option>
+      <option value="AED">🇦🇪 د.إ</option>
     </select>
     <input 
       type="number" 
@@ -2514,14 +2515,21 @@ const handleCreateCompany = async (e: FormEvent) => {
     />
   </div>
 
-  {/* Row 4: LOCATION FIELDS - These go to Google Schema */}
+  {/* Row 4: LOCATION FIELDS - Google Schema (Street, City, Region, Country) */}
   <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+    <input 
+      type="text" 
+      placeholder="Street (e.g. Kashai)" 
+      value={schemaData.street_address || ''} 
+      onChange={(e) => setSchemaData(prev => ({...prev, street_address: e.target.value}))} 
+      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+    />
     <input 
       type="text" 
       placeholder="City *" 
       value={schemaData.city || ''} 
       onChange={(e) => setSchemaData(prev => ({...prev, city: e.target.value}))} 
-      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+      className="bg-black/40 border border-emerald-500/20 px-2 py-2 rounded-lg text-[10px] text-white" 
     />
     <input 
       type="text" 
@@ -2537,17 +2545,17 @@ const handleCreateCompany = async (e: FormEvent) => {
       onChange={(e) => setSchemaData(prev => ({...prev, country: e.target.value}))} 
       className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
     />
+  </div>
+
+  {/* Row 5: Postcode + Skills + Benefits */}
+  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
     <input 
       type="text" 
-      placeholder="Postcode" 
+      placeholder="Postcode (e.g. 35101)" 
       value={schemaData.postcode || ''} 
       onChange={(e) => setSchemaData(prev => ({...prev, postcode: e.target.value}))} 
       className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
     />
-  </div>
-
-  {/* Row 5: Skills + Benefits */}
-  <div className="grid grid-cols-2 gap-2">
     <input 
       type="text" 
       placeholder="Skills (comma separated)" 
@@ -2563,10 +2571,16 @@ const handleCreateCompany = async (e: FormEvent) => {
       className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
     />
   </div>
+
+  {/* Google Schema indicator */}
+  <div className="flex items-center gap-2 text-[8px] text-gray-500 font-mono">
+    <Globe size={10} />
+    <span>These location fields are used by Google for job search results</span>
+  </div>
 </div>
 
 
-        
+
 
 
                 {/* Action Buttons - Save Draft + Publish */}
