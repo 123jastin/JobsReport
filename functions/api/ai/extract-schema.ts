@@ -2,42 +2,15 @@ import { PagesFunction } from '@cloudflare/workers-types';
 
 type Env = {
   GROQ_API_KEY: string;
-  DB: D1Database;
 };
 
-// ✅ Location database lookup
-async function lookupLocation(DB: D1Database, location: string) {
-  // Check if we have this location in our database
-  const existing = await DB.prepare(
-    'SELECT * FROM locations WHERE LOWER(name) = LOWER(?) OR LOWER(region) = LOWER(?)'
-  ).bind(location, location).first();
-
-  if (existing) {
-    return {
-      city: existing.name,
-      region: existing.region,
-      country: existing.country || 'Tanzania',
-      postcode: existing.postcode || ''
-    };
-  }
-
-  // Default for unknown locations
-  return {
-    city: location,
-    region: '',
-    country: 'Tanzania',
-    postcode: ''
-  };
-}
-
 export const onRequestPost: PagesFunction<Env> = async (context) => {
-  const { GROQ_API_KEY, DB } = context.env;
+  const { GROQ_API_KEY } = context.env;
 
   try {
     const body: any = await context.request.json();
     const { title, description, location, company } = body;
 
-    // ✅ Call Groq for schema extraction
     const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -60,7 +33,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   "benefits": ["benefit1", "benefit2"],
   "salary_min": number_or_null,
   "salary_max": number_or_null,
-  "salary_currency": "TZS|USD|EUR"
+  "salary_currency": "TZS|KES|UGX|USD|EUR|GBP"
 }`
         }, {
           role: 'user',
@@ -81,22 +54,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       schema = {};
     }
 
-    // ✅ Lookup location from database
-    const locationData = await lookupLocation(DB, location || '');
-
-    // ✅ Generate SEO slug
-    const slug = title
-      ?.toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '');
-
-    // ✅ Auto-generate canonical URL
+    const slug = title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     const canonicalUrl = `https://jobsreport.online/market/${slug}-${Date.now().toString(36)}`;
 
     return new Response(JSON.stringify({
       success: true,
       schema: {
-        // AI extracted
         job_category: schema.job_category || 'Other',
         industry: schema.industry || '',
         employment_type: schema.employment_type || 'FULL_TIME',
@@ -108,14 +71,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         salary_min: schema.salary_min || null,
         salary_max: schema.salary_max || null,
         salary_currency: schema.salary_currency || 'TZS',
-        
-        // Database lookup
-        city: locationData.city,
-        region: locationData.region,
-        country: locationData.country,
-        postcode: locationData.postcode,
-        
-        // System generated
         slug: slug,
         canonical_url: canonicalUrl,
         date_posted: new Date().toISOString().split('T')[0],
