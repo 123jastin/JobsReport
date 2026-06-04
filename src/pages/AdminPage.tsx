@@ -764,7 +764,6 @@ const handleIngestJob = async (e: FormEvent) => {
 
     setActionLoading(true);
     try {
-      // Skip duplicate check when updating
       if (!editingJobId && !isDraft && duplicateWarning) {
         showFeedback('error', 'Duplicate insertion blocked.');
         setActionLoading(false);
@@ -791,9 +790,7 @@ const handleIngestJob = async (e: FormEvent) => {
               const uploadData = await uploadRes.json();
               companyLogoUrl = uploadData.url;
             }
-          } catch (logoErr) {
-            console.error('Logo upload failed:', logoErr);
-          }
+          } catch (logoErr) { console.error('Logo upload failed:', logoErr); }
         }
       }
 
@@ -836,13 +833,8 @@ const handleIngestJob = async (e: FormEvent) => {
         if (jobForm.companyNewUrl) applyUrl += `?subject=${encodeURIComponent(jobForm.companyNewUrl)}`;
       }
 
-      // ✅ CORRECT URL for create vs update
-      const apiUrl = editingJobId 
-        ? `/api/admin/jobs/${editingJobId}` 
-        : '/api/admin/jobs';
+      const apiUrl = editingJobId ? `/api/admin/jobs/${editingJobId}` : '/api/admin/jobs';
       const method = editingJobId ? 'PUT' : 'POST';
-
-      console.log(`${method} request to: ${apiUrl}`, editingJobId ? '(updating)' : '(creating)');
 
       const res = await fetch(apiUrl, {
         method,
@@ -858,6 +850,7 @@ const handleIngestJob = async (e: FormEvent) => {
           description: jobDescription,
           is_active: isDraft ? 0 : 1,
           logoUrl: companyLogoUrl || undefined,
+          // Schema fields
           job_category: schemaData.job_category || 'Other',
           industry: schemaData.industry || '',
           employment_type: schemaData.employment_type || 'FULL_TIME',
@@ -869,6 +862,8 @@ const handleIngestJob = async (e: FormEvent) => {
           salary_min: schemaData.salary_min || null,
           salary_max: schemaData.salary_max || null,
           salary_currency: schemaData.salary_currency || 'TZS',
+          // ✅ Location fields for Google Schema
+          street_address: schemaData.street_address || '',
           city: schemaData.city || '',
           region: schemaData.region || '',
           country: schemaData.country || 'Tanzania',
@@ -891,7 +886,13 @@ const handleIngestJob = async (e: FormEvent) => {
           setJobForm({ title: '', roleSelected: 'Software Developer', companySelected: '', companyNewName: '', companyNewUrl: '', companyNewLogo: '', location: '', url: '', salary: '', expiresAt: '' });
           setJobDescription('');
           if (jobDescEditorRef.current) jobDescEditorRef.current.innerHTML = '';
-          setSchemaData({ job_category: 'Other', industry: '', employment_type: 'FULL_TIME', workplace_type: 'Onsite', education_level: 'Any', experience_months: 0, skills: [], benefits: [], salary_min: null, salary_max: null, salary_currency: 'TZS', city: '', region: '', country: 'Tanzania', postcode: '', slug: '', canonical_url: '' });
+          setSchemaData({ 
+            job_category: 'Other', industry: '', employment_type: 'FULL_TIME', workplace_type: 'Onsite',
+            education_level: 'Any', experience_months: 0, skills: [], benefits: [],
+            salary_min: null, salary_max: null, salary_currency: 'TZS',
+            street_address: '', city: '', region: '', country: 'Tanzania', postcode: '',
+            slug: '', canonical_url: ''
+          });
           setIsCreatingNewCompanyInline(false);
           setJobFiles([]);
           setEditingJobId(null);
