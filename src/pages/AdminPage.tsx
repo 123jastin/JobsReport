@@ -662,6 +662,7 @@ export default function AdminPage() {
       reader.readAsDataURL(file);
     });
   };
+
   
 const handleEditJob = (job: RawJob) => {
     setEditingJobId(job.id);
@@ -720,6 +721,7 @@ const handleEditJob = (job: RawJob) => {
   };
 
 
+  
 
   const handleCancelEditJob = () => {
     setEditingJobId(null);
@@ -742,6 +744,7 @@ const handleEditJob = (job: RawJob) => {
     setJobFiles([]);
     setIsCreatingNewCompanyInline(false);
   };
+
 const handleIngestJob = async (e: FormEvent) => {
     e.preventDefault();
     
@@ -787,7 +790,7 @@ const handleIngestJob = async (e: FormEvent) => {
               const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
               if (uploadRes.ok) {
                 const uploadData = await uploadRes.json();
-                companyLogoUrl = uploadData.url; // R2 URL
+                companyLogoUrl = uploadData.url;
               }
             } catch (logoErr) {
               console.error('Logo upload failed:', logoErr);
@@ -807,7 +810,6 @@ const handleIngestJob = async (e: FormEvent) => {
         };
 
         if (file.file) {
-          // Upload original with SEO-friendly filename
           const originalFormData = new FormData();
           originalFormData.append('file', file.file, (file as any).seoSlug || file.name);
           originalFormData.append('name', (file as any).seoSlug || file.name);
@@ -860,17 +862,27 @@ const handleIngestJob = async (e: FormEvent) => {
           location: jobForm.location || 'Remote',
           url: applyUrl,
           salary: jobForm.salary,
-          country: selectedCountry,
           expiresAt: jobForm.expiresAt,
           description: jobDescription,
           is_active: isDraft ? 0 : 1,
-          // ✅ Company logo URL (R2 URL or empty)
           logoUrl: companyLogoUrl || undefined,
           // ✅ Schema data
-          ...schemaData,
+          job_category: schemaData.job_category,
+          industry: schemaData.industry,
+          employment_type: schemaData.employment_type,
+          workplace_type: schemaData.workplace_type,
+          education_level: schemaData.education_level,
+          experience_months: schemaData.experience_months,
           skills: schemaData.skills,
           benefits: schemaData.benefits,
-          // ✅ Job files
+          salary_min: schemaData.salary_min,
+          salary_max: schemaData.salary_max,
+          salary_currency: schemaData.salary_currency,
+          city: schemaData.city,
+          region: schemaData.region,
+          country: schemaData.country || 'Tanzania',
+          postcode: schemaData.postcode,
+          canonical_url: schemaData.canonical_url,
           images: uploadedFiles
         })
       });
