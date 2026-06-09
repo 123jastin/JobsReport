@@ -41,7 +41,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       companyResult = { id: companyId };
     }
 
-    // Save location to locations table
+    // ✅ SAVE FULL LOCATION TO LOCATIONS TABLE (street, city, region, country, postcode)
     if (body.city && body.city.trim()) {
       const existingLocation = await DB.prepare(
         'SELECT id FROM locations WHERE LOWER(name) = LOWER(?)'
@@ -50,15 +50,38 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       if (!existingLocation) {
         const locId = 'loc-' + Date.now().toString(36);
         await DB.prepare(
-          'INSERT INTO locations (id, name, region, country, postcode) VALUES (?, ?, ?, ?, ?)'
-        ).bind(locId, body.city.trim(), body.region?.trim() || '', body.country?.trim() || 'Tanzania', body.postcode?.trim() || '').run();
+          'INSERT INTO locations (id, street_address, name, region, country, postcode) VALUES (?, ?, ?, ?, ?, ?)'
+        ).bind(
+          locId,
+          body.street_address?.trim() || '',
+          body.city.trim(),
+          body.region?.trim() || '',
+          body.country?.trim() || 'Tanzania',
+          body.postcode?.trim() || ''
+        ).run();
+        console.log('Added new location:', body.city, body.street_address);
+      } else {
+        await DB.prepare(
+          `UPDATE locations SET 
+            street_address = CASE WHEN ? != '' THEN ? ELSE street_address END,
+            region = CASE WHEN ? != '' THEN ? ELSE region END,
+            country = CASE WHEN ? != '' THEN ? ELSE country END,
+            postcode = CASE WHEN ? != '' THEN ? ELSE postcode END
+          WHERE LOWER(name) = LOWER(?)`
+        ).bind(
+          body.street_address?.trim() || '', body.street_address?.trim() || '',
+          body.region?.trim() || '', body.region?.trim() || '',
+          body.country?.trim() || '', body.country?.trim() || '',
+          body.postcode?.trim() || '', body.postcode?.trim() || '',
+          body.city.trim()
+        ).run();
       }
     }
 
     const canonicalUrl = body.canonical_url || 
       `https://jobsreport.online/market/${body.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${id}`;
 
-    // ✅ FIXED: 27 columns, 27 values (removed country)
+    // Insert job (27 columns)
     await DB.prepare(`
       INSERT INTO jobs (
         id, title, role_id, company_id, location, apply_url, salary,
@@ -124,7 +147,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
   } catch (err) {
     console.error('Job creation error:', err);
-    return new Response(JSON.stringify({ message: 'Failed to create job' }), {
+    return new Response(JSON.stringify({ message: 'Failed to create job', error: err instanceof Error ? err.message : 'Unknown' }), {
       status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
   }
@@ -154,15 +177,16 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       companyResult = { id: companyId };
     }
 
+    // Save location
     if (body.city && body.city.trim()) {
       const existingLocation = await DB.prepare('SELECT id FROM locations WHERE LOWER(name) = LOWER(?)').bind(body.city.trim()).first();
       if (!existingLocation) {
         const locId = 'loc-' + Date.now().toString(36);
-        await DB.prepare('INSERT INTO locations (id, name, region, country, postcode) VALUES (?, ?, ?, ?, ?)').bind(locId, body.city.trim(), body.region?.trim() || '', body.country?.trim() || 'Tanzania', body.postcode?.trim() || '').run();
+        await DB.prepare('INSERT INTO locations (id, street_address, name, region, country, postcode) VALUES (?, ?, ?, ?, ?, ?)')
+          .bind(locId, body.street_address?.trim() || '', body.city.trim(), body.region?.trim() || '', body.country?.trim() || 'Tanzania', body.postcode?.trim() || '').run();
       }
     }
 
-    // ✅ FIXED: 26 columns (removed country)
     await DB.prepare(`
       UPDATE jobs SET 
         title = ?, role_id = ?, company_id = ?, location = ?, apply_url = ?, salary = ?,
@@ -193,7 +217,8 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       for (let i = 0; i < body.images.length; i++) {
         const file = body.images[i];
         const imageId = 'img-' + Date.now().toString(36) + '-' + i;
-        await DB.prepare(`INSERT INTO job_images (id, job_id, url, thumbnail_url, name, sort_order, type, seo_title, seo_description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(imageId, id, file.url || '', file.thumbnail || file.url || '', file.name || 'file', i, file.type || 'image', file.seoTitle || file.name || '', file.seoDescription || '').run();
+        await DB.prepare(`INSERT INTO job_images (id, job_id, url, thumbnail_url, name, sort_order, type, seo_title, seo_description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+          .bind(imageId, id, file.url || '', file.thumbnail || file.url || '', file.name || 'file', i, file.type || 'image', file.seoTitle || file.name || '', file.seoDescription || '').run();
         savedFiles.push({ url: file.url, thumbnail: file.thumbnail || file.url, name: file.name, type: file.type || 'image' });
       }
     }
