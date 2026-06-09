@@ -4,34 +4,22 @@ type Env = {
   DB: D1Database;
 };
 
-// ✅ Currency symbols mapping
-const currencySymbols: Record<string, string> = {
-  'TZS': 'TSh', 'KES': 'KSh', 'UGX': 'USh', 'RWF': 'RF', 'BIF': 'FBu',
-  'USD': '$', 'EUR': '€', 'GBP': '£', 'ZAR': 'R', 'NGN': '₦',
-  'GHS': 'GH₵', 'ZMW': 'ZK', 'MWK': 'MK', 'AED': 'د.إ', 'SAR': '﷼'
-};
-
-// ✅ Currency names mapping
-const currencyNames: Record<string, string> = {
-  'TZS': 'Tanzanian Shilling', 'KES': 'Kenyan Shilling', 'UGX': 'Ugandan Shilling',
-  'RWF': 'Rwandan Franc', 'USD': 'US Dollar', 'EUR': 'Euro',
-  'GBP': 'British Pound', 'ZAR': 'South African Rand', 'NGN': 'Nigerian Naira',
-  'GHS': 'Ghanaian Cedi', 'ZMW': 'Zambian Kwacha', 'MWK': 'Malawian Kwacha',
-  'AED': 'UAE Dirham', 'SAR': 'Saudi Riyal'
-};
-
 // ✅ Format salary for display with proper currency symbol
-function formatSalary(job: any): string {
-  // If job has a display salary string, use it
-  if (job.salary && job.salary.trim()) return job.salary;
+function formatSalary(job: any, currencies: Record<string, {symbol: string, name: string}>): string {
+  const currency = job.salary_currency || 'TZS';
+  const currencyInfo = currencies[currency] || { symbol: currency, name: currency };
+  const symbol = currencyInfo.symbol;
   
-  const symbol = currencySymbols[job.salary_currency] || job.salary_currency || '';
   const min = job.salary_min ? Number(job.salary_min).toLocaleString() : '';
   const max = job.salary_max ? Number(job.salary_max).toLocaleString() : '';
   
   if (min && max) return `${symbol} ${min} - ${max}`;
   if (min) return `${symbol} ${min}+`;
   if (max) return `${symbol} Up to ${max}`;
+  
+  // Fallback to display salary
+  if (job.salary && job.salary.trim()) return `${symbol} ${job.salary}`;
+  
   return '';
 }
 
@@ -39,6 +27,16 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
 
   try {
+    // ✅ Fetch currencies from database
+    const currenciesResult = await DB.prepare('SELECT code, name, symbol, flag FROM currencies ORDER BY name').all();
+    const currenciesMap: Record<string, {symbol: string, name: string, flag: string}> = {};
+    const currenciesList: any[] = [];
+    
+    for (const c of currenciesResult.results) {
+      currenciesMap[c.code] = { symbol: c.symbol, name: c.name, flag: c.flag || '' };
+      currenciesList.push({ code: c.code, symbol: c.symbol, name: c.name, flag: c.flag || '' });
+    }
+
     // 1. Get all active jobs with full schema data
     const jobsResult = await DB.prepare(`
       SELECT 
@@ -46,7 +44,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         j.job_category, j.industry, j.employment_type, j.workplace_type,
         j.education_level, j.experience_months, j.skills, j.benefits,
         j.salary_min, j.salary_max, j.salary_currency,
-        j.street_address, j.city, j.region, j.country, j.postcode, j.canonical_url,
+        j.street_address, j.city, j.region, j.postcode, j.canonical_url,
         r.name as role,
         c.name as company, c.logo_url, c.website,
         j.location, j.apply_url, j.salary,
@@ -59,10 +57,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       LIMIT 100
     `).all();
 
-    // ✅ Map jobs with all fields
+    // Map jobs with all fields
     const jobs = await Promise.all(
       jobsResult.results.map(async (job: any) => {
-        // Fetch files with SEO metadata
         let images: any[] = [];
         try {
           const imagesResult = await DB.prepare(
@@ -78,12 +75,10 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           }));
         } catch (err) { images = []; }
 
-        // Format salary with proper currency
-        const formattedSalary = formatSalary(job);
-        const currencySymbol = currencySymbols[job.salary_currency] || '';
+        const currencyCode = job.salary_currency || 'TZS';
+        const currencyInfo = currenciesMap[currencyCode] || { symbol: currencyCode, name: currencyCode };
 
         return {
-          // Basic info
           id: job.id,
           title: job.title,
           description: job.description || '',
@@ -91,25 +86,20 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           company: job.company,
           logoUrl: job.logo_url || '',
           companyWebsite: job.website || '',
-          
-          // Location (Google Schema)
           street_address: job.street_address || '',
           city: job.city || '',
           region: job.region || '',
-          country: job.country || 'Tanzania',
+          country: 'Tanzania',
           postcode: job.postcode || '',
           location: job.location || 'Remote',
-          
-          // Application
           url: job.apply_url,
-          salary: formattedSalary,
+          salary: formatSalary(job, currenciesMap),
           salary_min: job.salary_min,
           salary_max: job.salary_max,
-          salary_currency: job.salary_currency || 'TZS',
-          salary_currency_symbol: currencySymbol,
-          salary_currency_name: currencyNames[job.salary_currency] || job.salary_currency || 'TZS',
-          
-          // Schema fields
+          salary_currency: currencyCode,
+          salary_currency_symbol: currencyInfo.symbol,
+          salary_currency_name: currencyInfo.name,
+          salary_currency_flag: currencyInfo.flag || '',
           job_category: job.job_category || 'Other',
           industry: job.industry || '',
           employment_type: job.employment_type || 'FULL_TIME',
@@ -118,33 +108,25 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           experience_months: job.experience_months || 0,
           skills: (() => { try { return JSON.parse(job.skills || '[]'); } catch { return []; } })(),
           benefits: (() => { try { return JSON.parse(job.benefits || '[]'); } catch { return []; } })(),
-          
-          // SEO
           canonical_url: job.canonical_url || `https://jobsreport.online/market/${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${job.id}`,
           slug: `${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${job.id}`,
-          
-          // Dates & Status
           postedAt: job.posted_at,
           expiresAt: job.expires_at,
           active: job.is_active === 1,
-          
-          // Attachments
           images: images
         };
       })
     );
 
-    // 2. Get all roles
+    // Get roles, companies, activity
     const rolesResult = await DB.prepare('SELECT name FROM roles ORDER BY name').all();
     const roles = rolesResult.results.map((r: any) => r.name);
 
-    // 3. Get all companies with website
     const companiesResult = await DB.prepare('SELECT id, name, logo_url, website FROM companies ORDER BY name').all();
     const companies = companiesResult.results.map((c: any) => ({
       id: c.id, name: c.name, logoUrl: c.logo_url || '', url: c.website || ''
     }));
 
-    // 4. Get recent activity
     const activityResult = await DB.prepare(`
       SELECT j.id, j.title, c.name as company, j.posted_at
       FROM jobs j JOIN companies c ON j.company_id = c.id
@@ -154,13 +136,11 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       id: a.id, action: 'Job Ingested', details: `${a.title} at ${a.company}`, timestamp: a.posted_at
     }));
 
-    // 5. Get job categories
     const categoriesResult = await DB.prepare(
       "SELECT DISTINCT job_category FROM jobs WHERE job_category != '' AND job_category != 'Other' AND is_active = 1"
     ).all();
     const jobCategories = categoriesResult.results.map((c: any) => c.job_category);
 
-    // 6. Get workplace types
     const workplaceResult = await DB.prepare(
       "SELECT DISTINCT workplace_type FROM jobs WHERE workplace_type != '' AND is_active = 1"
     ).all();
@@ -168,9 +148,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
     return new Response(JSON.stringify({
       jobs, roles, companies, recentActivity, jobCategories, workplaceTypes,
-      currencies: Object.keys(currencySymbols).map(code => ({
-        code, symbol: currencySymbols[code], name: currencyNames[code] || code
-      })),
+      currencies: currenciesList,
       stats: {
         totalJobs: jobs.length, totalCompanies: companies.length,
         totalRoles: roles.length, activeJobs: jobs.filter(j => j.active).length
