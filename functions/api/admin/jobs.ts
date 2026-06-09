@@ -41,7 +41,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       companyResult = { id: companyId };
     }
 
-    // ✅ SAVE LOCATION TO LOCATIONS TABLE
+    // Save location to locations table
     if (body.city && body.city.trim()) {
       const existingLocation = await DB.prepare(
         'SELECT id FROM locations WHERE LOWER(name) = LOWER(?)'
@@ -51,33 +51,14 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         const locId = 'loc-' + Date.now().toString(36);
         await DB.prepare(
           'INSERT INTO locations (id, name, region, country, postcode) VALUES (?, ?, ?, ?, ?)'
-        ).bind(
-          locId, body.city.trim(),
-          body.region?.trim() || '',
-          body.country?.trim() || 'Tanzania',
-          body.postcode?.trim() || ''
-        ).run();
-      } else {
-        await DB.prepare(
-          `UPDATE locations SET 
-            region = CASE WHEN ? != '' THEN ? ELSE region END,
-            country = CASE WHEN ? != '' THEN ? ELSE country END,
-            postcode = CASE WHEN ? != '' THEN ? ELSE postcode END
-          WHERE LOWER(name) = LOWER(?)`
-        ).bind(
-          body.region?.trim() || '', body.region?.trim() || '',
-          body.country?.trim() || '', body.country?.trim() || '',
-          body.postcode?.trim() || '', body.postcode?.trim() || '',
-          body.city.trim()
-        ).run();
+        ).bind(locId, body.city.trim(), body.region?.trim() || '', body.country?.trim() || 'Tanzania', body.postcode?.trim() || '').run();
       }
     }
 
-    // Generate canonical URL
     const canonicalUrl = body.canonical_url || 
       `https://jobsreport.online/market/${body.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${id}`;
 
-    // ✅ Insert job with ALL schema fields including street_address
+    // ✅ FIXED: 27 columns, 27 values (removed country)
     await DB.prepare(`
       INSERT INTO jobs (
         id, title, role_id, company_id, location, apply_url, salary,
@@ -85,9 +66,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         job_category, industry, employment_type, workplace_type,
         education_level, experience_months, skills, benefits,
         salary_min, salary_max, salary_currency,
-        street_address, city, region, country, postcode, canonical_url
+        street_address, city, region, postcode, canonical_url
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       id, body.title?.trim(), roleResult.id, companyResult.id,
       body.location || 'Remote', body.url || '', body.salary || '',
@@ -101,10 +82,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       JSON.stringify(body.skills || []), JSON.stringify(body.benefits || []),
       body.salary_min || null, body.salary_max || null,
       body.salary_currency || 'TZS',
-      body.street_address || '',  // ✅ street_address
-      body.city || '', body.region || '',
-      body.country || 'Tanzania', body.postcode || '',
-      canonicalUrl
+      body.street_address || '', body.city || '', body.region || '',
+      body.postcode || '', canonicalUrl
     ).run();
 
     // Save files
@@ -151,7 +130,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
 };
 
-// PUT - Update job with full schema
+// PUT - Update job
 export const onRequestPut: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
   const url = new URL(context.request.url);
@@ -175,7 +154,6 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       companyResult = { id: companyId };
     }
 
-    // Save location
     if (body.city && body.city.trim()) {
       const existingLocation = await DB.prepare('SELECT id FROM locations WHERE LOWER(name) = LOWER(?)').bind(body.city.trim()).first();
       if (!existingLocation) {
@@ -184,7 +162,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       }
     }
 
-    // ✅ Update with street_address
+    // ✅ FIXED: 26 columns (removed country)
     await DB.prepare(`
       UPDATE jobs SET 
         title = ?, role_id = ?, company_id = ?, location = ?, apply_url = ?, salary = ?,
@@ -192,7 +170,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         job_category = ?, industry = ?, employment_type = ?, workplace_type = ?,
         education_level = ?, experience_months = ?, skills = ?, benefits = ?,
         salary_min = ?, salary_max = ?, salary_currency = ?,
-        street_address = ?, city = ?, region = ?, country = ?, postcode = ?, canonical_url = ?
+        street_address = ?, city = ?, region = ?, postcode = ?, canonical_url = ?
       WHERE id = ?
     `).bind(
       body.title?.trim(), roleResult.id, companyResult.id,
@@ -205,13 +183,10 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       JSON.stringify(body.skills || []), JSON.stringify(body.benefits || []),
       body.salary_min || null, body.salary_max || null,
       body.salary_currency || 'TZS',
-      body.street_address || '',  // ✅ street_address
-      body.city || '', body.region || '',
-      body.country || 'Tanzania', body.postcode || '',
-      body.canonical_url || '', id
+      body.street_address || '', body.city || '', body.region || '',
+      body.postcode || '', body.canonical_url || '', id
     ).run();
 
-    // Delete old files, save new ones
     await DB.prepare('DELETE FROM job_images WHERE job_id = ?').bind(id).run();
     const savedFiles: any[] = [];
     if (body.images && Array.isArray(body.images) && body.images.length > 0) {
@@ -219,7 +194,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         const file = body.images[i];
         const imageId = 'img-' + Date.now().toString(36) + '-' + i;
         await DB.prepare(`INSERT INTO job_images (id, job_id, url, thumbnail_url, name, sort_order, type, seo_title, seo_description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(imageId, id, file.url || '', file.thumbnail || file.url || '', file.name || 'file', i, file.type || 'image', file.seoTitle || file.name || '', file.seoDescription || '').run();
-        savedFiles.push({ url: file.url, thumbnail: file.thumbnail || file.url, name: file.name, type: file.type || 'image', seoTitle: file.seoTitle, seoDescription: file.seoDescription });
+        savedFiles.push({ url: file.url, thumbnail: file.thumbnail || file.url, name: file.name, type: file.type || 'image' });
       }
     }
 
