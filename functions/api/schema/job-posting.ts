@@ -66,10 +66,11 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         "@type": "Place",
         "address": {
           "@type": "PostalAddress",
-          "addressLocality": job.city || job.location || '',
-          "addressRegion": job.region || '',
-          "addressCountry": "TZ",
-          "postalCode": job.postcode || ''
+          "streetAddress": job.street_address || '',       // ✅ Street address
+          "addressLocality": job.city || job.location || '', // City
+          "addressRegion": job.region || '',                 // Region
+          "addressCountry": "TZ",                            // Country code
+          "postalCode": job.postcode || ''                   // Postcode
         }
       },
       "baseSalary": job.salary_min ? {
