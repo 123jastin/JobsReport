@@ -746,7 +746,6 @@ const handleEditJob = (job: RawJob) => {
     setJobFiles([]);
     setIsCreatingNewCompanyInline(false);
   };
-
 const handleIngestJob = async (e: FormEvent) => {
     e.preventDefault();
     
@@ -864,7 +863,7 @@ const handleIngestJob = async (e: FormEvent) => {
           salary_min: schemaData.salary_min || null,
           salary_max: schemaData.salary_max || null,
           salary_currency: schemaData.salary_currency || 'TZS',
-          // ✅ Location fields for Google Schema
+          // Location fields for Google Schema
           street_address: schemaData.street_address || '',
           city: schemaData.city || '',
           region: schemaData.region || '',
@@ -913,6 +912,7 @@ const handleIngestJob = async (e: FormEvent) => {
     }
   };
 
+  
 
 
 
