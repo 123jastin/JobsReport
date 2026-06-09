@@ -1,3 +1,4 @@
+JobDetailPage 
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
@@ -120,7 +121,6 @@ export default function JobDetailPage() {
           "datePosted": job.postedAt,
           "validThrough": job.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
           "employmentType": job.employment_type || 'FULL_TIME',
-          "jobLocationType": job.workplace_type === 'Remote' ? 'TELECOMMUTE' : undefined,
           "hiringOrganization": {
             "@type": "Organization",
             "name": job.company,
@@ -140,24 +140,32 @@ export default function JobDetailPage() {
           },
           "baseSalary": (job.salary_min || job.salary_max) ? {
             "@type": "MonetaryAmount",
-            "currency": currencyCode,
+            "currency": (job.salary_currency || 'TZS').toUpperCase(),
             "value": {
               "@type": "QuantitativeValue",
-              "minValue": job.salary_min || job.salary_max,
-              "maxValue": job.salary_max || job.salary_min,
+              "minValue": Number(job.salary_min || job.salary_max),
+              "maxValue": Number(job.salary_max || job.salary_min),
               "unitText": "MONTH"
             }
           } : undefined,
-          "educationRequirements": job.education_level && job.education_level !== 'Any' ? {
+          "educationRequirements": (job.education_level && job.education_level !== 'Any' && job.education_level !== '') ? {
             "@type": "EducationalOccupationalCredential",
-            "credentialCategory": job.education_level
+            "credentialCategory": (() => {
+              const edu = (job.education_level || '').toLowerCase();
+              if (edu.includes('high school')) return 'high school';
+              if (edu.includes('diploma')) return 'associate degree';
+              if (edu.includes('bachelor')) return 'bachelor degree';
+              if (edu.includes('master')) return 'master degree';
+              if (edu.includes('phd') || edu.includes('doctorate')) return 'doctoral degree';
+              return job.education_level;
+            })()
           } : undefined,
           "experienceRequirements": job.experience_months > 0 ? {
             "@type": "OccupationalExperienceRequirements",
-            "monthsOfExperience": job.experience_months
+            "monthsOfExperience": Number(job.experience_months)
           } : undefined,
-          "skills": Array.isArray(job.skills) ? job.skills.join(', ') : undefined,
-          "jobBenefits": Array.isArray(job.benefits) ? job.benefits.join(', ') : undefined,
+          "skills": Array.isArray(job.skills) && job.skills.length > 0 ? job.skills.join(', ') : undefined,
+          "jobBenefits": Array.isArray(job.benefits) && job.benefits.length > 0 ? job.benefits.join(', ') : undefined,
           "industry": job.industry || undefined,
           "occupationalCategory": job.job_category || job.role || undefined,
           "image": job.images?.find((i: any) => i.type === 'image')?.url || job.logoUrl || undefined,
