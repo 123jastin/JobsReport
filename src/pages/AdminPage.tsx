@@ -174,7 +174,7 @@ const [schemaData, setSchemaData] = useState({
     salary_min: null as number | null,
     salary_max: null as number | null,
     salary_currency: 'TZS',
-    street_address: '',  // ✅ MUST HAVE THIS
+    street_address: '',  // ✅ Add this
     city: '',
     region: '',
     country: 'Tanzania',
@@ -182,9 +182,8 @@ const [schemaData, setSchemaData] = useState({
     slug: '',
     canonical_url: ''
   });
-  
-  
-                              
+
+
   // --- COMPANY FORM STATES ---
   const [companyForm, setCompanyForm] = useState({
     name: '',
@@ -665,6 +664,7 @@ const [schemaData, setSchemaData] = useState({
       reader.readAsDataURL(file);
     });
   };
+
   
 const handleEditJob = (job: RawJob) => {
     setEditingJobId(job.id);
@@ -683,7 +683,7 @@ const handleEditJob = (job: RawJob) => {
     setJobDescription((job as any).description || '');
     setDescEditMode('visual');
     
-    // ✅ Load schema data when editing
+    // ✅ Load all schema data when editing
     const j = job as any;
     setSchemaData({
       job_category: j.job_category || 'Other',
@@ -697,6 +697,8 @@ const handleEditJob = (job: RawJob) => {
       salary_min: j.salary_min || null,
       salary_max: j.salary_max || null,
       salary_currency: j.salary_currency || 'TZS',
+      // ✅ Location fields for Google Schema
+      street_address: j.street_address || '',
       city: j.city || '',
       region: j.region || '',
       country: j.country || 'Tanzania',
@@ -721,8 +723,9 @@ const handleEditJob = (job: RawJob) => {
     setJobFiles([]);
     window.scrollTo({ top: 300, behavior: 'smooth' });
   };
+    
 
-
+  
 
   const handleCancelEditJob = () => {
     setEditingJobId(null);
@@ -764,72 +767,58 @@ const handleIngestJob = async (e: FormEvent) => {
 
     setActionLoading(true);
     try {
-      if (!isDraft && duplicateWarning) {
+      if (!editingJobId && !isDraft && duplicateWarning) {
         showFeedback('error', 'Duplicate insertion blocked.');
         setActionLoading(false);
         return;
       }
 
-      // ✅ Upload company logo to R2 if creating new company inline
+      // Upload company logo to R2 if creating new company inline
       let companyLogoUrl = '';
-      if (isCreatingNewCompanyInline && jobForm.companyNewLogo) {
-        if (jobForm.companyNewLogo.startsWith('data:image')) {
-          const fileInput = document.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement;
-          const file = fileInput?.files?.[0];
-          if (file) {
-            try {
-              const compressedLogo = await compressToWebP(file, 200);
-              const response = await fetch(compressedLogo);
-              const blob = await response.blob();
-              const formData = new FormData();
-              const logoFileName = `logo-${jobForm.companyNewName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}.webp`;
-              formData.append('file', blob, logoFileName);
-              formData.append('name', logoFileName);
-              formData.append('altText', `${jobForm.companyNewName} logo`);
-              
-              const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
-              if (uploadRes.ok) {
-                const uploadData = await uploadRes.json();
-                companyLogoUrl = uploadData.url; // R2 URL
-              }
-            } catch (logoErr) {
-              console.error('Logo upload failed:', logoErr);
+      if (isCreatingNewCompanyInline && jobForm.companyNewLogo && jobForm.companyNewLogo.startsWith('data:image')) {
+        const fileInput = document.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement;
+        const file = fileInput?.files?.[0];
+        if (file) {
+          try {
+            const compressedLogo = await compressToWebP(file, 200);
+            const response = await fetch(compressedLogo);
+            const blob = await response.blob();
+            const formData = new FormData();
+            const logoFileName = `logo-${jobForm.companyNewName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}.webp`;
+            formData.append('file', blob, logoFileName);
+            formData.append('name', logoFileName);
+            formData.append('altText', `${jobForm.companyNewName} logo`);
+            const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+            if (uploadRes.ok) {
+              const uploadData = await uploadRes.json();
+              companyLogoUrl = uploadData.url;
             }
-          }
+          } catch (logoErr) { console.error('Logo upload failed:', logoErr); }
         }
       }
 
-      // ✅ Upload job files to R2 with SEO metadata
-      const uploadedFiles: {url: string; thumbnail: string; name: string; type: string; seoTitle: string; seoDescription: string}[] = [];
-      
+      // Upload job files to R2
+      const uploadedFiles: any[] = [];
       for (const file of jobFiles) {
         const fileData: any = {
           url: file.url, thumbnail: file.thumbnail, name: file.name, type: file.type,
           seoTitle: (file as any).seoTitle || file.name,
           seoDescription: (file as any).seoDescription || ''
         };
-
         if (file.file) {
-          // Upload original with SEO-friendly filename
           const originalFormData = new FormData();
           originalFormData.append('file', file.file, (file as any).seoSlug || file.name);
           originalFormData.append('name', (file as any).seoSlug || file.name);
           originalFormData.append('altText', (file as any).seoTitle || file.name);
-          
           const originalRes = await fetch('/api/upload', { method: 'POST', body: originalFormData });
           if (originalRes.ok) {
             const originalData = await originalRes.json();
             fileData.url = originalData.url;
           }
-          
           if (file.type === 'image') {
             const thumbBlob = await fetch(file.thumbnail).then(r => r.blob());
             const thumbFormData = new FormData();
-            const thumbSlug = `thumb-${(file as any).seoSlug || file.name}`;
-            thumbFormData.append('file', thumbBlob, thumbSlug);
-            thumbFormData.append('name', thumbSlug);
-            thumbFormData.append('altText', `Thumbnail: ${(file as any).seoTitle || file.name}`);
-            
+            thumbFormData.append('file', thumbBlob, `thumb-${(file as any).seoSlug || file.name}`);
             const thumbRes = await fetch('/api/upload', { method: 'POST', body: thumbFormData });
             if (thumbRes.ok) {
               const thumbData = await thumbRes.json();
@@ -837,23 +826,20 @@ const handleIngestJob = async (e: FormEvent) => {
             }
           }
         }
-        
         uploadedFiles.push(fileData);
       }
 
-      // ✅ Build application URL with email support
+      // Build application URL
       let applyUrl = jobForm.url;
       if (applicationType === 'email' && applyUrl && !applyUrl.startsWith('mailto:')) {
         applyUrl = `mailto:${applyUrl}`;
-        if (jobForm.companyNewUrl) {
-          applyUrl += `?subject=${encodeURIComponent(jobForm.companyNewUrl)}`;
-        }
+        if (jobForm.companyNewUrl) applyUrl += `?subject=${encodeURIComponent(jobForm.companyNewUrl)}`;
       }
 
-      const url = editingJobId ? `/api/admin/jobs/${editingJobId}` : '/api/admin/jobs';
+      const apiUrl = editingJobId ? `/api/admin/jobs/${editingJobId}` : '/api/admin/jobs';
       const method = editingJobId ? 'PUT' : 'POST';
 
-      const res = await fetch(url, {
+      const res = await fetch(apiUrl, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -863,61 +849,72 @@ const handleIngestJob = async (e: FormEvent) => {
           location: jobForm.location || 'Remote',
           url: applyUrl,
           salary: jobForm.salary,
-          country: selectedCountry,
           expiresAt: jobForm.expiresAt,
           description: jobDescription,
           is_active: isDraft ? 0 : 1,
-          // ✅ Company logo URL (R2 URL or empty)
           logoUrl: companyLogoUrl || undefined,
-          // ✅ Schema data
-          ...schemaData,
-          skills: schemaData.skills,
-          benefits: schemaData.benefits,
-          // ✅ Job files
+          // Schema fields
+          job_category: schemaData.job_category || 'Other',
+          industry: schemaData.industry || '',
+          employment_type: schemaData.employment_type || 'FULL_TIME',
+          workplace_type: schemaData.workplace_type || 'Onsite',
+          education_level: schemaData.education_level || 'Any',
+          experience_months: schemaData.experience_months || 0,
+          skills: schemaData.skills || [],
+          benefits: schemaData.benefits || [],
+          salary_min: schemaData.salary_min || null,
+          salary_max: schemaData.salary_max || null,
+          salary_currency: schemaData.salary_currency || 'TZS',
+          // Location fields for Google Schema
+          street_address: schemaData.street_address || '',
+          city: schemaData.city || '',
+          region: schemaData.region || '',
+          country: schemaData.country || 'Tanzania',
+          postcode: schemaData.postcode || '',
+          canonical_url: schemaData.canonical_url || '',
           images: uploadedFiles
         })
       });
 
       if (res.ok) {
         const addedJob = await res.json();
-        
         if (editingJobId) {
           setJobs(prev => prev.map(j => j.id === editingJobId ? { ...j, ...addedJob } : j));
           showFeedback('success', `Updated "${jobForm.title}" successfully.`);
         } else {
           setJobs(prev => [addedJob, ...prev]);
-          showFeedback('success', isDraft 
-            ? `Draft saved! You can edit and publish later.` 
-            : `Published "${jobForm.title}" for ${targetCompany} successfully.`
-          );
+          showFeedback('success', isDraft ? `Draft saved!` : `Published successfully.`);
         }
-        
         if (!isDraft || editingJobId) {
-          setJobForm({
-            title: '', roleSelected: 'Software Developer', companySelected: '',
-            companyNewName: '', companyNewUrl: '', companyNewLogo: '',
-            location: '', url: '', salary: '', expiresAt: ''
-          });
+          setJobForm({ title: '', roleSelected: 'Software Developer', companySelected: '', companyNewName: '', companyNewUrl: '', companyNewLogo: '', location: '', url: '', salary: '', expiresAt: '' });
           setJobDescription('');
           if (jobDescEditorRef.current) jobDescEditorRef.current.innerHTML = '';
+          setSchemaData({ 
+            job_category: 'Other', industry: '', employment_type: 'FULL_TIME', workplace_type: 'Onsite',
+            education_level: 'Any', experience_months: 0, skills: [], benefits: [],
+            salary_min: null, salary_max: null, salary_currency: 'TZS',
+            street_address: '', city: '', region: '', country: 'Tanzania', postcode: '',
+            slug: '', canonical_url: ''
+          });
           setIsCreatingNewCompanyInline(false);
           setJobFiles([]);
           setEditingJobId(null);
         }
-        
         await fetchSystemData();
       } else {
         const errObj = await res.json();
-        showFeedback('error', errObj.message || 'Validation error');
+        showFeedback('error', errObj.message || errObj.error || 'Validation error');
       }
     } catch (err) {
-      showFeedback('error', 'Failed to communicate with job stream.');
+      showFeedback('error', 'Failed to save job.');
       console.error('Job error:', err);
     } finally {
       setActionLoading(false);
       setIsDraft(false);
     }
   };
+
+  
 
 
 
@@ -2392,7 +2389,8 @@ const handleCreateCompany = async (e: FormEvent) => {
                     )}
                   </div>
                 </div>
-     {/* ✅ Schema Data Section */}
+
+{/* ✅ Schema & SEO Data Section */}
 <div className="space-y-2 border-t border-white/5 pt-4">
   <div className="flex items-center justify-between">
     <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">
@@ -2400,11 +2398,8 @@ const handleCreateCompany = async (e: FormEvent) => {
     </label>
     <button
       type="button"
-      onClick={async () => {  // <-- THIS IS THE HANDLER YOU'RE ASKING ABOUT
-        if (!jobForm.title) {
-          showFeedback('error', 'Please enter a job title first');
-          return;
-        }
+      onClick={async () => {
+        if (!jobForm.title) { showFeedback('error', 'Please enter a job title first'); return; }
         setActionLoading(true);
         try {
           const res = await fetch('/api/ai/extract-schema', {
@@ -2418,73 +2413,180 @@ const handleCreateCompany = async (e: FormEvent) => {
             })
           });
           const result = await res.json();
-          console.log('Schema API response:', result);
-          
           if (result.success && result.schema) {
             setSchemaData(prev => ({
               ...prev,
-              ...result.schema,
-              skills: Array.isArray(result.schema.skills) ? result.schema.skills : 
-                     (typeof result.schema.skills === 'string' ? result.schema.skills.split(',').map((s: string) => s.trim()) : prev.skills),
-              benefits: Array.isArray(result.schema.benefits) ? result.schema.benefits : 
-                       (typeof result.schema.benefits === 'string' ? result.schema.benefits.split(',').map((s: string) => s.trim()) : prev.benefits),
+              job_category: result.schema.job_category || prev.job_category,
+              industry: result.schema.industry || prev.industry,
+              employment_type: result.schema.employment_type || prev.employment_type,
+              workplace_type: result.schema.workplace_type || prev.workplace_type,
+              education_level: result.schema.education_level || prev.education_level,
+              experience_months: result.schema.experience_months || prev.experience_months,
+              skills: Array.isArray(result.schema.skills) ? result.schema.skills : prev.skills,
+              benefits: Array.isArray(result.schema.benefits) ? result.schema.benefits : prev.benefits,
               salary_min: result.schema.salary_min ? Number(result.schema.salary_min) : prev.salary_min,
               salary_max: result.schema.salary_max ? Number(result.schema.salary_max) : prev.salary_max,
+              salary_currency: result.schema.salary_currency || prev.salary_currency,
             }));
-            showFeedback('success', 'Schema data auto-extracted!');
+            showFeedback('success', 'Schema extracted! Fill location manually below.');
           } else {
-            showFeedback('error', result.error || 'Schema extraction failed. Fill manually.');
+            showFeedback('error', result.error || 'Schema extraction failed');
           }
-        } catch (err) {
-          console.error('Schema extraction error:', err);
-          showFeedback('error', 'AI service unavailable. Fill manually.');
-        } finally {
-          setActionLoading(false);
-        }
+        } catch (err) { showFeedback('error', 'AI service unavailable'); }
+        finally { setActionLoading(false); }
       }}
       disabled={actionLoading || !jobForm.title}
       className="text-[9px] font-mono font-bold text-violet-500 hover:text-violet-400 disabled:text-gray-600 uppercase flex items-center gap-1 transition-colors"
     >
-      <Sparkles size={12} />
-      Auto-Extract Schema
+      <Sparkles size={12} /> Auto-Extract Schema
     </button>
   </div>
 
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                    <select value={schemaData.job_category} onChange={(e) => setSchemaData(prev => ({...prev, job_category: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
-                      <option value="">Category</option>
-                      {['Accounting','Engineering','Healthcare','Hospitality','Marketing','IT','Education','Finance','Legal','Other'].map(c => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
-                    <select value={schemaData.employment_type} onChange={(e) => setSchemaData(prev => ({...prev, employment_type: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
-                      <option value="FULL_TIME">Full Time</option><option value="PART_TIME">Part Time</option><option value="CONTRACT">Contract</option><option value="TEMPORARY">Temporary</option><option value="INTERNSHIP">Internship</option>
-                    </select>
-                    <select value={schemaData.workplace_type} onChange={(e) => setSchemaData(prev => ({...prev, workplace_type: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
-                      <option value="Onsite">Onsite</option><option value="Remote">Remote</option><option value="Hybrid">Hybrid</option>
-                    </select>
-                    <select value={schemaData.education_level} onChange={(e) => setSchemaData(prev => ({...prev, education_level: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
-                      <option value="Any">Any Education</option><option value="High School">High School</option><option value="Diploma">Diploma</option><option value="Bachelor">Bachelor</option><option value="Master">Master</option><option value="PhD">PhD</option>
-                    </select>
-                    <input type="number" placeholder="Experience (months)" value={schemaData.experience_months || ''} onChange={(e) => setSchemaData(prev => ({...prev, experience_months: parseInt(e.target.value) || 0}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" />
-                    <input type="text" placeholder="Industry" value={schemaData.industry || ''} onChange={(e) => setSchemaData(prev => ({...prev, industry: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" />
-                  </div>
+  {/* Row 1: Category (FREE TEXT) + Employment + Workplace */}
+  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+    <input 
+      type="text" 
+      placeholder="Category (e.g. IT, Accounting)" 
+      value={schemaData.job_category || ''} 
+      onChange={(e) => setSchemaData(prev => ({...prev, job_category: e.target.value}))} 
+      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+    />
+    <select value={schemaData.employment_type || 'FULL_TIME'} onChange={(e) => setSchemaData(prev => ({...prev, employment_type: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
+      <option value="FULL_TIME">Full Time</option>
+      <option value="PART_TIME">Part Time</option>
+      <option value="CONTRACT">Contract</option>
+      <option value="TEMPORARY">Temporary</option>
+      <option value="INTERNSHIP">Internship</option>
+    </select>
+    <select value={schemaData.workplace_type || 'Onsite'} onChange={(e) => setSchemaData(prev => ({...prev, workplace_type: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
+      <option value="Onsite">Onsite</option>
+      <option value="Remote">Remote</option>
+      <option value="Hybrid">Hybrid</option>
+    </select>
+  </div>
 
-                  {/* Salary & Currency */}
-                  <div className="grid grid-cols-3 gap-2">
-                    <select value={schemaData.salary_currency} onChange={(e) => setSchemaData(prev => ({...prev, salary_currency: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
-                      <option value="TZS">🇹🇿 TZS</option><option value="KES">🇰🇪 KES</option><option value="UGX">🇺🇬 UGX</option><option value="USD">🇺🇸 USD</option><option value="EUR">🇪🇺 EUR</option><option value="GBP">🇬🇧 GBP</option><option value="ZAR">🇿🇦 ZAR</option><option value="NGN">🇳🇬 NGN</option><option value="AED">🇦🇪 AED</option>
-                    </select>
-                    <input type="number" placeholder="Min Salary" value={schemaData.salary_min || ''} onChange={(e) => setSchemaData(prev => ({...prev, salary_min: parseFloat(e.target.value) || null}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" />
-                    <input type="number" placeholder="Max Salary" value={schemaData.salary_max || ''} onChange={(e) => setSchemaData(prev => ({...prev, salary_max: parseFloat(e.target.value) || null}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" />
-                  </div>
+  {/* Row 2: Education + Experience + Industry (FREE TEXT) */}
+  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+    <select value={schemaData.education_level || 'Any'} onChange={(e) => setSchemaData(prev => ({...prev, education_level: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
+      <option value="Any">Any Education</option>
+      <option value="High School">High School</option>
+      <option value="Diploma">Diploma</option>
+      <option value="Bachelor">Bachelor</option>
+      <option value="Master">Master</option>
+      <option value="PhD">PhD</option>
+    </select>
+    <input 
+      type="number" 
+      placeholder="Experience (months)" 
+      value={schemaData.experience_months || ''} 
+      onChange={(e) => setSchemaData(prev => ({...prev, experience_months: parseInt(e.target.value) || 0}))} 
+      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+    />
+    <input 
+      type="text" 
+      placeholder="Industry (e.g. Finance)" 
+      value={schemaData.industry || ''} 
+      onChange={(e) => setSchemaData(prev => ({...prev, industry: e.target.value}))} 
+      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+    />
+  </div>
 
-                  {/* Skills & Benefits */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <input type="text" placeholder="Skills (comma separated)" value={Array.isArray(schemaData.skills) ? schemaData.skills.join(', ') : ''} onChange={(e) => setSchemaData(prev => ({...prev, skills: e.target.value.split(',').map(s => s.trim()).filter(Boolean)}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" />
-                    <input type="text" placeholder="Benefits (comma separated)" value={Array.isArray(schemaData.benefits) ? schemaData.benefits.join(', ') : ''} onChange={(e) => setSchemaData(prev => ({...prev, benefits: e.target.value.split(',').map(s => s.trim()).filter(Boolean)}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" />
-                  </div>
-                </div>
+  {/* Row 3: Currency + Salary Min + Salary Max */}
+  <div className="grid grid-cols-3 gap-2">
+    <select value={schemaData.salary_currency || 'TZS'} onChange={(e) => setSchemaData(prev => ({...prev, salary_currency: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
+      <option value="TZS">🇹🇿 TSh</option>
+      <option value="KES">🇰🇪 KSh</option>
+      <option value="UGX">🇺🇬 USh</option>
+      <option value="USD">🇺🇸 $</option>
+      <option value="EUR">🇪🇺 €</option>
+      <option value="GBP">🇬🇧 £</option>
+      <option value="ZAR">🇿🇦 R</option>
+      <option value="NGN">🇳🇬 ₦</option>
+      <option value="AED">🇦🇪 د.إ</option>
+    </select>
+    <input 
+      type="number" 
+      placeholder="Min Salary" 
+      value={schemaData.salary_min || ''} 
+      onChange={(e) => setSchemaData(prev => ({...prev, salary_min: parseFloat(e.target.value) || null}))} 
+      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+    />
+    <input 
+      type="number" 
+      placeholder="Max Salary" 
+      value={schemaData.salary_max || ''} 
+      onChange={(e) => setSchemaData(prev => ({...prev, salary_max: parseFloat(e.target.value) || null}))} 
+      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+    />
+  </div>
+
+  {/* Row 4: LOCATION FIELDS - Google Schema (Street, City, Region, Country) */}
+  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+    <input 
+      type="text" 
+      placeholder="Street (e.g. Kashai)" 
+      value={schemaData.street_address || ''} 
+      onChange={(e) => setSchemaData(prev => ({...prev, street_address: e.target.value}))} 
+      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+    />
+    <input 
+      type="text" 
+      placeholder="City *" 
+      value={schemaData.city || ''} 
+      onChange={(e) => setSchemaData(prev => ({...prev, city: e.target.value}))} 
+      className="bg-black/40 border border-emerald-500/20 px-2 py-2 rounded-lg text-[10px] text-white" 
+    />
+    <input 
+      type="text" 
+      placeholder="Region" 
+      value={schemaData.region || ''} 
+      onChange={(e) => setSchemaData(prev => ({...prev, region: e.target.value}))} 
+      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+    />
+    <input 
+      type="text" 
+      placeholder="Country" 
+      value={schemaData.country || ''} 
+      onChange={(e) => setSchemaData(prev => ({...prev, country: e.target.value}))} 
+      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+    />
+  </div>
+
+  {/* Row 5: Postcode + Skills + Benefits */}
+  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+    <input 
+      type="text" 
+      placeholder="Postcode (e.g. 35101)" 
+      value={schemaData.postcode || ''} 
+      onChange={(e) => setSchemaData(prev => ({...prev, postcode: e.target.value}))} 
+      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+    />
+    <input 
+      type="text" 
+      placeholder="Skills (comma separated)" 
+      value={Array.isArray(schemaData.skills) ? schemaData.skills.join(', ') : ''} 
+      onChange={(e) => setSchemaData(prev => ({...prev, skills: e.target.value.split(',').map(s => s.trim()).filter(Boolean)}))} 
+      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+    />
+    <input 
+      type="text" 
+      placeholder="Benefits (comma separated)" 
+      value={Array.isArray(schemaData.benefits) ? schemaData.benefits.join(', ') : ''} 
+      onChange={(e) => setSchemaData(prev => ({...prev, benefits: e.target.value.split(',').map(s => s.trim()).filter(Boolean)}))} 
+      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+    />
+  </div>
+
+  {/* Google Schema indicator */}
+  <div className="flex items-center gap-2 text-[8px] text-gray-500 font-mono">
+    <Globe size={10} />
+    <span>These location fields are used by Google for job search results</span>
+  </div>
+</div>
+
+
+
+
 
                 {/* Action Buttons - Save Draft + Publish */}
                 <div className="flex gap-2 pt-2">
