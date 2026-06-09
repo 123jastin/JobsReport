@@ -7,6 +7,13 @@ import {
 } from 'lucide-react';
 import { useCareerRedirect } from '../context/CareerRedirectContext';
 
+// ✅ Currency symbols for display
+const currencySymbols: Record<string, string> = {
+  'TZS': 'TSh', 'KES': 'KSh', 'UGX': 'USh', 'RWF': 'RF',
+  'USD': '$', 'EUR': '€', 'GBP': '£', 'ZAR': 'R', 'NGN': '₦',
+  'GHS': 'GH₵', 'ZMW': 'ZK', 'MWK': 'MK', 'AED': 'د.إ', 'SAR': '﷼'
+};
+
 export default function JobDetailPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const [job, setJob] = useState<any>(null);
@@ -42,7 +49,6 @@ export default function JobDetailPage() {
           
           setJob(found || null);
           
-          // ✅ Update page title for SEO
           if (found) {
             document.title = `${found.title} - ${found.company} | JobsReport`;
           }
@@ -81,6 +87,21 @@ export default function JobDetailPage() {
   const hasDescription = job.description && job.description.trim() !== '';
   const isEmailLink = job.url && job.url.startsWith('mailto:');
 
+  // ✅ Get currency info
+  const currencyCode = job.salary_currency || 'TZS';
+  const currencySymbol = currencySymbols[currencyCode] || currencyCode;
+
+  // ✅ Format salary display
+  const getSalaryDisplay = () => {
+    if (job.salary && job.salary.trim()) return job.salary;
+    if (job.salary_min && job.salary_max) return `${currencySymbol} ${Number(job.salary_min).toLocaleString()} - ${Number(job.salary_max).toLocaleString()}`;
+    if (job.salary_min) return `${currencySymbol} ${Number(job.salary_min).toLocaleString()}+`;
+    if (job.salary_max) return `${currencySymbol} Up to ${Number(job.salary_max).toLocaleString()}`;
+    return null;
+  };
+
+  const salaryDisplay = getSalaryDisplay();
+
   return (
     <div className="min-h-screen bg-black text-white">
       
@@ -110,19 +131,20 @@ export default function JobDetailPage() {
             "@type": "Place",
             "address": {
               "@type": "PostalAddress",
+              "streetAddress": job.street_address || '',
               "addressLocality": job.city || job.location || '',
               "addressRegion": job.region || '',
               "addressCountry": "TZ",
               "postalCode": job.postcode || ''
             }
           },
-          "baseSalary": job.salary_min ? {
+          "baseSalary": (job.salary_min || job.salary_max) ? {
             "@type": "MonetaryAmount",
-            "currency": job.salary_currency || 'TZS',
+            "currency": currencyCode,
             "value": {
               "@type": "QuantitativeValue",
-              "minValue": Number(job.salary_min),
-              "maxValue": Number(job.salary_max || job.salary_min),
+              "minValue": job.salary_min || job.salary_max,
+              "maxValue": job.salary_max || job.salary_min,
               "unitText": "MONTH"
             }
           } : undefined,
@@ -212,7 +234,11 @@ export default function JobDetailPage() {
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-gray-400">
           <span className="flex items-center gap-1.5"><MapPin size={13} /> {job.location || 'Remote'}</span>
-          {job.salary && <span className="flex items-center gap-1.5 text-emerald-400 font-bold"><DollarSign size={13} /> {job.salary}</span>}
+          {salaryDisplay && (
+            <span className="flex items-center gap-1.5 text-emerald-400 font-bold">
+              <DollarSign size={13} /> {salaryDisplay}
+            </span>
+          )}
           <span className="flex items-center gap-1.5"><Briefcase size={13} /> {job.role}</span>
           <span className="flex items-center gap-1.5"><Calendar size={13} /> {job.postedAt || 'Recent'}</span>
           {job.expiresAt && <span className="flex items-center gap-1.5 text-amber-400"><Clock size={13} /> Expires: {job.expiresAt}</span>}
@@ -275,8 +301,21 @@ export default function JobDetailPage() {
       <div className="px-4 py-6 border-b border-white/5">
         <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4">Job Details</h3>
         <div className="space-y-3">
-          {[['Company', job.company], ['Location', job.location || 'Remote'], ['Role', job.role], ['Salary', job.salary || 'Not specified'], ['Category', job.job_category || 'General'], ['Employment Type', job.employment_type || 'Full Time'], ['Workplace', job.workplace_type || 'Onsite'], ['Education', job.education_level || 'Any'], ['Experience', job.experience_months ? `${job.experience_months} months` : 'Not specified'], ['Posted', job.postedAt || 'Recent'], ['Signal ID', `JR-${job.id?.slice(0, 8).toUpperCase()}`]].map(([label, value]) => (
-            <div key={label} className="flex justify-between items-center py-2 border-b border-white/[0.03]">
+          {[
+            ['Company', job.company],
+            ['Location', job.location || 'Remote'],
+            ['Role', job.role],
+            ['Salary', salaryDisplay || 'Not specified'],
+            ['Currency', `${currencyCode} (${currencySymbol})`],
+            ['Category', job.job_category || 'General'],
+            ['Employment Type', job.employment_type === 'FULL_TIME' ? 'Full Time' : job.employment_type || 'Full Time'],
+            ['Workplace', job.workplace_type || 'Onsite'],
+            ['Education', job.education_level || 'Any'],
+            ['Experience', job.experience_months ? `${job.experience_months} months` : 'Not specified'],
+            ['Posted', job.postedAt || 'Recent'],
+            ['Signal ID', `JR-${job.id?.slice(0, 8).toUpperCase()}`]
+          ].map(([label, value]) => (
+            <div key={label as string} className="flex justify-between items-center py-2 border-b border-white/[0.03]">
               <span className="text-xs text-gray-500">{label}</span>
               <span className="text-xs font-bold text-white">{value}</span>
             </div>
