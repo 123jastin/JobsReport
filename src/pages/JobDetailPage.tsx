@@ -1,4 +1,3 @@
-JobDetailPage 
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
@@ -88,16 +87,23 @@ export default function JobDetailPage() {
   const hasDescription = job.description && job.description.trim() !== '';
   const isEmailLink = job.url && job.url.startsWith('mailto:');
 
-  // ✅ Get currency info
+  // ✅ Get currency info from API response (not hardcoded)
   const currencyCode = job.salary_currency || 'TZS';
-  const currencySymbol = currencySymbols[currencyCode] || currencyCode;
+  const currencySymbol = job.salary_currency_symbol || currencySymbols[currencyCode] || 'TSh';
+  const currencyName = job.salary_currency_name || 'Tanzanian Shilling';
+  const currencyFlag = job.salary_currency_flag || '🇹🇿';
 
-  // ✅ Format salary display
+  // ✅ Format salary display - use API formatted salary directly to avoid double symbols
   const getSalaryDisplay = () => {
+    // The API (market.ts) already formats salary with proper currency symbol
+    // So just use it directly if it exists
     if (job.salary && job.salary.trim()) return job.salary;
-    if (job.salary_min && job.salary_max) return `${currencySymbol} ${Number(job.salary_min).toLocaleString()} - ${Number(job.salary_max).toLocaleString()}`;
-    if (job.salary_min) return `${currencySymbol} ${Number(job.salary_min).toLocaleString()}+`;
-    if (job.salary_max) return `${currencySymbol} Up to ${Number(job.salary_max).toLocaleString()}`;
+    
+    // Fallback: build from schema fields if no display salary
+    const symbol = job.salary_currency_symbol || currencySymbols[currencyCode] || currencyCode;
+    if (job.salary_min && job.salary_max) return `${symbol} ${Number(job.salary_min).toLocaleString()} - ${Number(job.salary_max).toLocaleString()}`;
+    if (job.salary_min) return `${symbol} ${Number(job.salary_min).toLocaleString()}+`;
+    if (job.salary_max) return `${symbol} Up to ${Number(job.salary_max).toLocaleString()}`;
     return null;
   };
 
@@ -314,7 +320,6 @@ export default function JobDetailPage() {
             ['Location', job.location || 'Remote'],
             ['Role', job.role],
             ['Salary', salaryDisplay || 'Not specified'],
-            ['Currency', `${currencyCode} (${currencySymbol})`],
             ['Category', job.job_category || 'General'],
             ['Employment Type', job.employment_type === 'FULL_TIME' ? 'Full Time' : job.employment_type || 'Full Time'],
             ['Workplace', job.workplace_type || 'Onsite'],
