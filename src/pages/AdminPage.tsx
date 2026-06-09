@@ -162,7 +162,7 @@ export default function AdminPage() {
   const [applicationType, setApplicationType] = useState<'url' | 'email'>('url');
 
   // ✅ Schema data state
-  const [schemaData, setSchemaData] = useState({
+const [schemaData, setSchemaData] = useState({
     job_category: 'Other',
     industry: '',
     employment_type: 'FULL_TIME',
@@ -174,6 +174,7 @@ export default function AdminPage() {
     salary_min: null as number | null,
     salary_max: null as number | null,
     salary_currency: 'TZS',
+    street_address: '',  // ✅ Add this
     city: '',
     region: '',
     country: 'Tanzania',
@@ -181,6 +182,7 @@ export default function AdminPage() {
     slug: '',
     canonical_url: ''
   });
+
 
   // --- COMPANY FORM STATES ---
   const [companyForm, setCompanyForm] = useState({
