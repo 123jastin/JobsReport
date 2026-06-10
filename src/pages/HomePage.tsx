@@ -375,7 +375,7 @@ export default function HomePage() {
                 Explore Jobs by Country
               </h2>
               <p className="text-xs text-gray-500 mt-1 font-mono">
-                Find job opportunities in your region
+                Find job opportunities in your country
               </p>
             </div>
           </div>
@@ -410,6 +410,18 @@ export default function HomePage() {
                 </Link>
               );
             })}
+          </div>
+
+          {/* 🔗 Link to full regions page */}
+          <div className="mt-4">
+            <Link 
+              to="/regions" 
+              className="inline-flex items-center gap-2 text-[10px] text-emerald-500 hover:text-emerald-400 font-bold uppercase tracking-wider transition-colors group"
+            >
+              <MapPin size={12} />
+              <span>Browse Jobs by City & Region</span>
+              <ArrowRight size={12} className="group-hover:translate-x-1 transition-transform" />
+            </Link>
           </div>
         </section>
 
