@@ -8,6 +8,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Layout from './components/Layout';
 import HomePage from './pages/HomePage';
 import CountryPage from './pages/CountryPage';
+import CompaniesPage from './pages/CompaniesPage';
 import ReportDetailPage from './pages/ReportDetailPage';
 import ReportsPage from './pages/ReportsPage';
 import MarketPage from './pages/MarketPage';
@@ -33,6 +34,9 @@ export default function App() {
                 <Route path="/country/:slug" element={<CountryPage />} />
                 <Route path="/jobs-in/:slug" element={<CountryPage />} />
 
+                {/* 🏢 Companies Page */}
+                <Route path="/companies" element={<CompaniesPage />} />
+
                 {/* 📊 Market Routes */}
                 <Route path="/market/search/:query" element={<MarketPage />} />
                 <Route path="/market/:jobId" element={<JobDetailPage />} />
@@ -47,7 +51,6 @@ export default function App() {
 
                 {/* Fallbacks */}
                 <Route path="/jobs" element={<Navigate to="/market" replace />} />
-                <Route path="/companies" element={<Navigate to="/" replace />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Layout>
