@@ -48,7 +48,8 @@ export default function App() {
                 <Route path="/market/:jobId" element={<JobDetailPage />} />
                 <Route path="/market" element={<MarketPage />} />
 
-                {/* 📰 Reports */}
+                {/* 📰 Reports - Country-specific indexable pages */}
+                <Route path="/reports/:country" element={<ReportsPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
                 <Route path="/report/:slug" element={<ReportDetailPage />} />
 
