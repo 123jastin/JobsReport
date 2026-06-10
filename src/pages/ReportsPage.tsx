@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { BookOpen, Calendar, TrendingUp, Search, RefreshCw, Star, ArrowUpRight, Globe, Filter } from 'lucide-react';
+import { BookOpen, Calendar, TrendingUp, Search, RefreshCw, Star, ArrowUpRight, Globe, Filter, ChevronRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Report } from '../types';
 import ReportCard from '../components/ReportCard';
 import SEO from '../components/SEO';
@@ -70,12 +71,35 @@ export default function ReportsPage() {
     }
   });
 
-  // SEO metadata
-  const pageTitle = 'Market Intelligence Reports | Job Market Analysis & Trends | JobsReport';
-  const pageDescription = `Browse ${reports.length} market intelligence reports and job market analysis. Get insights on hiring trends, salary data, and industry demand across sectors.`;
-  const canonicalUrl = 'https://jobsreport.online/reports';
+  // 🔥 FIX 1: Better SEO title matching search intent
+  const countryText = selectedCountry === 'Worldwide' ? '' : selectedCountry;
+  
+  const pageTitle = selectedCountry === 'Worldwide'
+    ? 'Job Market Reports, Hiring Trends & Career Insights | JobsReport'
+    : `Job Market Reports in ${countryText} | Hiring Trends & Employment Analysis | JobsReport`;
 
-  // Structured data for reports directory page
+  const pageDescription = selectedCountry === 'Worldwide'
+    ? `Browse ${reports.length} job market reports with hiring trends, salary intelligence, and employment analysis. Explore industry demand, remote work trends, and career insights worldwide.`
+    : `Browse job market reports and hiring trends in ${countryText}. Employment analysis, salary intelligence, and career insights for ${countryText}. ${filteredReports.length} reports available.`;
+
+  const canonicalUrl = selectedCountry === 'Worldwide'
+    ? 'https://jobsreport.online/reports'
+    : `https://jobsreport.online/reports/${countryText.toLowerCase().replace(/\s+/g, '-')}`;
+
+  // 🔥 FIX 5: More crawlable intro content keywords
+  const seoKeywords = selectedCountry === 'Worldwide'
+    ? 'job market reports, hiring trends, employment reports, career insights, salary analysis, industry demand, labor market, workforce trends'
+    : `job market reports ${countryText}, ${countryText} hiring trends, ${countryText} employment analysis, ${countryText} career insights, ${countryText} salary report`;
+
+  // Countries with reports for internal linking
+  const countriesWithReports = [...new Set(
+    reports.map(r => r.country).filter(Boolean)
+  )].sort();
+
+  // Recent reports for sidebar
+  const recentReports = filteredReports.slice(0, 5);
+
+  // Structured data
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
@@ -116,6 +140,26 @@ export default function ReportsPage() {
     }
   };
 
+  // 🔥 FIX 4: Breadcrumb structured data
+  const breadcrumbData = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": "https://jobsreport.online"
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "Reports",
+        "item": canonicalUrl
+      }
+    ]
+  };
+
   if (loading) {
     return (
       <>
@@ -154,7 +198,7 @@ export default function ReportsPage() {
       <SEO
         title={pageTitle}
         description={pageDescription}
-        keywords="market intelligence reports, job market analysis, hiring trends, salary reports, industry analysis, employment reports"
+        keywords={seoKeywords}
         canonicalUrl={canonicalUrl}
         ogTitle={pageTitle}
         ogDescription={pageDescription}
@@ -162,22 +206,51 @@ export default function ReportsPage() {
         structuredData={structuredData}
       />
 
+      {/* 🔥 FIX 4: Breadcrumb structured data injected */}
+      <script type="application/ld+json">
+        {JSON.stringify(breadcrumbData)}
+      </script>
+
       <div className="space-y-10">
+        {/* Breadcrumb Navigation */}
+        <div className="flex items-center gap-2 text-[10px] text-gray-500 font-mono uppercase tracking-wider">
+          <Link to="/" className="hover:text-white transition-colors">Home</Link>
+          <ChevronRight size={10} />
+          <span className="text-blue-400">Reports</span>
+        </div>
+
         {/* Page Header */}
         <section className="py-4 border-b border-white/5">
           <div className="flex items-center gap-2 text-blue-500 font-bold text-xs uppercase tracking-widest mb-3">
             <BookOpen size={14} />
             Market Intelligence Archives
           </div>
-          <h1 className="text-3xl md:text-5xl font-black text-white leading-none tracking-tight mb-4 uppercase">
-            Job Target Reports
+          
+          {/* 🔥 FIX 2: Better H1 matching search intent */}
+          <h1 className="text-3xl md:text-5xl font-black text-white leading-none tracking-tight mb-4">
+            {selectedCountry === 'Worldwide' 
+              ? 'Job Market Reports & Hiring Trend Analysis'
+              : `Job Market Reports in ${countryText}`}
           </h1>
-          <p className="text-stone-400 text-sm md:text-base max-w-2xl leading-relaxed">
-            Aggregated regional analysis reports mapping market growth telemetry, demand spikes, and active employer placements. Sorted chronologically.
+          
+          <p className="text-stone-400 text-sm md:text-base max-w-3xl leading-relaxed">
+            {selectedCountry === 'Worldwide'
+              ? 'Aggregated regional analysis reports mapping market growth telemetry, demand spikes, and active employer placements. Sorted chronologically.'
+              : `Employment reports, hiring trends, and labor market insights for ${countryText}. Analysis of industry demand, salary benchmarks, and career opportunities across ${countryText}.`}
           </p>
           
+          {/* 🔥 FIX 5: Crawlable intro content for SEO */}
+          <div className="mt-4 text-stone-400/80 text-sm leading-relaxed max-w-3xl space-y-2">
+            <p>
+              JobsReport publishes employment reports, hiring trend analysis, salary intelligence and labor market insights from different employers around the world with the aim of exploring industry demand, emerging careers, remote work trends and country-specific employment patterns.
+            </p>
+            <p>
+              Our market intelligence reports cover software engineering, finance, healthcare, logistics, marketing, and more, by ensuring each report analyzes active job listings, salary ranges, employer demand, and geographic hiring patterns to help you understand where opportunities are growing.
+            </p>
+          </div>
+          
           {/* Quick Stats */}
-          <div className="flex gap-6 mt-4">
+          <div className="flex flex-wrap gap-6 mt-4">
             <div className="flex items-center gap-2 text-sm">
               <BookOpen size={14} className="text-blue-500" />
               <span className="text-gray-400">
@@ -188,8 +261,16 @@ export default function ReportsPage() {
               <Globe size={14} className="text-emerald-500" />
               <span className="text-gray-400">
                 <span className="text-white font-bold">
-                  {new Set(reports.map(r => r.country).filter(Boolean)).size}
-                </span> Countries
+                  {countriesWithReports.length}
+                </span> Countries Covered
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <TrendingUp size={14} className="text-violet-500" />
+              <span className="text-gray-400">
+                <span className="text-white font-bold">
+                  {[...new Set(reports.map(r => r.role).filter(Boolean))].length}
+                </span> Industries Analyzed
               </span>
             </div>
           </div>
@@ -203,7 +284,7 @@ export default function ReportsPage() {
             </span>
             <input
               type="text"
-              placeholder="Search report titles, tags, roles..."
+              placeholder="Search report titles, roles, industries..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-black/40 border border-white/10 rounded-2xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all font-mono"
@@ -213,7 +294,7 @@ export default function ReportsPage() {
           <div className="flex items-center gap-3 w-full md:w-auto justify-end">
             <div className="flex items-center gap-2 text-[10px] uppercase font-bold text-gray-400 pl-2">
               <Filter size={11} className="text-blue-500" />
-              <span>Feed Target:</span>
+              <span>Country Filter:</span>
               <span className="font-mono text-white bg-white/5 border border-white/5 px-2 py-1 rounded-lg flex items-center gap-1">
                 <span>{currentFlag}</span>
                 <span>{selectedCountry}</span>
@@ -225,7 +306,7 @@ export default function ReportsPage() {
                 onClick={handleClearFilters}
                 className="px-3.5 py-2 hover:bg-white/5 border border-white/10 rounded-2xl text-[10px] font-bold text-gray-400 hover:text-white uppercase tracking-wider transition-all flex items-center gap-1.5"
               >
-                Reset Target
+                Reset Filters
               </button>
             )}
           </div>
@@ -233,10 +314,78 @@ export default function ReportsPage() {
 
         {/* Main Grid Content */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-10">
+          {/* Sidebar */}
           <div className="lg:col-span-1 space-y-6">
+            {/* 🔥 FIX 6: Country report links for internal SEO */}
+            {countriesWithReports.length > 0 && (
+              <div className="p-5 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
+                <h3 className="text-xs font-bold text-white uppercase tracking-widest border-b border-white/5 pb-2">
+                  Reports by Country
+                </h3>
+                <div className="space-y-1.5">
+                  {countriesWithReports.slice(0, 10).map(country => {
+                    const countrySlug = country.toLowerCase().replace(/\s+/g, '-');
+                    const countryReportCount = reports.filter(r => r.country === country).length;
+                    const isActive = selectedCountry.toLowerCase() === country.toLowerCase();
+                    
+                    return (
+                      <button
+                        key={country}
+                        onClick={() => setSelectedCountry(country)}
+                        className={`w-full text-left px-3 py-2 rounded-xl text-xs transition-all flex items-center justify-between ${
+                          isActive
+                            ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                            : 'text-gray-400 hover:text-white hover:bg-white/[0.02]'
+                        }`}
+                      >
+                        <span>{country}</span>
+                        <span className="text-[10px] font-mono text-gray-500">
+                          {countryReportCount}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {countriesWithReports.length > 10 && (
+                  <p className="text-[9px] text-gray-600 font-mono text-center">
+                    +{countriesWithReports.length - 10} more countries
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Recent Reports */}
+            {recentReports.length > 0 && (
+              <div className="p-5 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
+                <h3 className="text-xs font-bold text-white uppercase tracking-widest border-b border-white/5 pb-2">
+                  Recent Reports
+                </h3>
+                <div className="space-y-2">
+                  {recentReports.map(report => (
+                    <Link
+                      key={report.id}
+                      to={`/report/${report.slug || report.id}`}
+                      className="block p-2 rounded-xl hover:bg-white/[0.02] transition-all group"
+                    >
+                      <p className="text-[11px] text-gray-300 group-hover:text-white truncate font-medium">
+                        {report.title}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[9px] text-gray-500 font-mono">{report.monthYear}</span>
+                        {report.country && (
+                          <span className="text-[9px] text-gray-600 font-mono">• {report.country}</span>
+                        )}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Report Highlights */}
             <div className="p-5 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
               <h3 className="text-xs font-bold text-white uppercase tracking-widest border-b border-white/5 pb-2">
-                Report Highlights
+                Market Highlights
               </h3>
               
               <div className="space-y-3.5">
@@ -276,22 +425,27 @@ export default function ReportsPage() {
               <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-full blur-2xl" />
               <h3 className="text-xs font-black text-blue-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                 <Star size={11} />
-                Ingestion Stream
+                Data Sources
               </h3>
               <p className="text-[10px] text-gray-400 leading-relaxed mb-4">
-                Our automated system continually cross-references external company postings quarterly. Secure full system access via the Admin Portal to ingest custom telemetry schemas.
+                 Reports are updated regularly to reflect current market conditions.
               </p>
             </div>
           </div>
 
+          {/* Main Content */}
           <div className="lg:col-span-3">
             {filteredReports.length === 0 ? (
               <div className="p-12 text-center bg-white/[0.01] rounded-3xl border border-white/5 flex flex-col items-center justify-center space-y-4">
                 <Globe size={32} className="text-gray-600 animate-pulse" />
                 <div>
-                  <p className="text-white font-bold text-sm">No Matching Intelligence Reports Found</p>
+                  <p className="text-white font-bold text-sm">No Matching Reports Found</p>
                   <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
-                    Try clearing your search query or switching your active country context filter.
+                    {searchQuery 
+                      ? 'Try adjusting your search terms or clearing filters.'
+                      : selectedCountry !== 'Worldwide'
+                        ? `No reports available for ${selectedCountry} yet. Check back soon or browse worldwide reports.`
+                        : 'No reports published yet. Check back for market intelligence reports.'}
                   </p>
                 </div>
                 <button
