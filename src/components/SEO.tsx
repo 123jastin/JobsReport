@@ -22,10 +22,8 @@ export default function SEO({
   structuredData,
 }: SEOProps) {
   useEffect(() => {
-    // Update title
     document.title = title;
 
-    // Helper to set meta tags
     const setMeta = (name: string, content: string, isProperty = false) => {
       const attr = isProperty ? 'property' : 'name';
       let el = document.querySelector(`meta[${attr}="${name}"]`);
@@ -37,7 +35,6 @@ export default function SEO({
       el.setAttribute('content', content);
     };
 
-    // Set all meta tags
     setMeta('description', description);
     if (keywords) setMeta('keywords', keywords);
     if (ogTitle) setMeta('og:title', ogTitle, true);
@@ -50,7 +47,6 @@ export default function SEO({
     setMeta('robots', 'index, follow');
     setMeta('googlebot', 'index, follow');
 
-    // Set canonical
     if (canonicalUrl) {
       let link = document.querySelector('link[rel="canonical"]');
       if (!link) {
@@ -61,7 +57,6 @@ export default function SEO({
       link.setAttribute('href', canonicalUrl);
     }
 
-    // Set structured data
     if (structuredData) {
       let script = document.querySelector('script[type="application/ld+json"]');
       if (!script) {
