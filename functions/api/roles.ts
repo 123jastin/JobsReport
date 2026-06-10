@@ -1,0 +1,27 @@
+import { PagesFunction } from '@cloudflare/workers-types';
+
+type Env = {
+  DB: D1Database;
+};
+
+// GET /api/roles - List all roles/categories
+export const onRequestGet: PagesFunction<Env> = async (context) => {
+  const { DB } = context.env;
+
+  try {
+    const result = await DB.prepare(
+      'SELECT * FROM roles ORDER BY name'
+    ).all();
+    
+    return new Response(JSON.stringify(result.results), {
+      headers: { 
+        'Content-Type': 'application/json', 
+        'Access-Control-Allow-Origin': '*' 
+      }
+    });
+  } catch (err) {
+    return new Response(JSON.stringify([]), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+};
