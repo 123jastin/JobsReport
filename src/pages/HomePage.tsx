@@ -1,33 +1,48 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Sparkles, TrendingUp, RefreshCw, ArrowRight, Zap, BarChart3, Building2, Globe, Clock, MapPin, Briefcase, ChevronRight, Search, Code, Calculator, Palette, Headphones, Users, Shield, Truck, Stethoscope } from 'lucide-react';
+import { Sparkles, TrendingUp, RefreshCw, ArrowRight, Zap, BarChart3, Building2, Globe, Clock, MapPin, Briefcase, ChevronRight, Search, Code, Calculator, Palette, Headphones, Users, Shield, Truck, Stethoscope, BookOpen, Scale, Leaf, Settings, Utensils } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import SEO from '../components/SEO';
 import TrendingCard from '../components/TrendingCard';
 import ReportCard from '../components/ReportCard';
 import { useCountry } from '../context/CountryContext';
+import { getIconForRole } from '../lib/roleIcons';
 
-// Role categories with icons and SEO-friendly slugs
-const ROLE_CATEGORIES = [
-  { name: 'Software Engineer', icon: Code, slug: 'software-engineer' },
-  { name: 'Data Analyst', icon: BarChart3, slug: 'data-analyst' },
-  { name: 'Accountant', icon: Calculator, slug: 'accountant' },
-  { name: 'UI/UX Designer', icon: Palette, slug: 'ui-ux-designer' },
-  { name: 'Customer Support', icon: Headphones, slug: 'customer-support' },
-  { name: 'Project Manager', icon: Users, slug: 'project-manager' },
-  { name: 'Cybersecurity', icon: Shield, slug: 'cybersecurity' },
-  { name: 'Logistics', icon: Truck, slug: 'logistics' },
-  { name: 'Healthcare', icon: Stethoscope, slug: 'healthcare' },
-  { name: 'Marketing', icon: TrendingUp, slug: 'marketing' },
-  { name: 'Sales', icon: Briefcase, slug: 'sales' },
-  { name: 'HR & Recruiting', icon: Users, slug: 'hr-recruiting' },
-];
+// Icon mapping
+const ICON_COMPONENTS: Record<string, any> = {
+  'code': Code,
+  'bar-chart': BarChart3,
+  'calculator': Calculator,
+  'palette': Palette,
+  'headphones': Headphones,
+  'users': Users,
+  'shield': Shield,
+  'truck': Truck,
+  'stethoscope': Stethoscope,
+  'trending-up': TrendingUp,
+  'briefcase': Briefcase,
+  'book-open': BookOpen,
+  'building': Building2,
+  'zap': Zap,
+  'settings': Settings,
+  'scale': Scale,
+  'leaf': Leaf,
+  'utensils': Utensils,
+};
+
+interface Role {
+  id: string;
+  name: string;
+  slug: string;
+  created_at: string;
+}
 
 export default function HomePage() {
   const [trends, setTrends] = useState<any[]>([]);
   const [reports, setReports] = useState<any[]>([]);
   const [jobs, setJobs] = useState<any[]>([]);
   const [spotlightCompanies, setSpotlightCompanies] = useState<string[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const { selectedCountry, setSelectedCountry, currentFlag, countriesList } = useCountry();
 
@@ -56,9 +71,10 @@ export default function HomePage() {
     const fetchDashboardData = async () => {
       try {
         const countryParam = selectedCountry === 'Worldwide' ? '' : selectedCountry;
-        const [homeRes, marketRes] = await Promise.all([
+        const [homeRes, marketRes, rolesRes] = await Promise.all([
           fetch(`/api/home?country=${encodeURIComponent(countryParam)}`),
-          fetch(`/api/market?country=${encodeURIComponent(countryParam)}`)
+          fetch(`/api/market?country=${encodeURIComponent(countryParam)}`),
+          fetch('/api/roles')
         ]);
         
         if (homeRes.ok) {
@@ -74,6 +90,12 @@ export default function HomePage() {
           const activeJobs = (marketData.jobs || []).filter((j: any) => j.active !== false);
           setJobs(activeJobs.slice(0, 5));
         }
+
+        // Fetch roles/categories from API
+        if (rolesRes.ok) {
+          const rolesData = await rolesRes.json();
+          setRoles(Array.isArray(rolesData) ? rolesData : []);
+        }
       } catch (err) {
         console.error("Failed to load dashboard:", err);
       } finally {
@@ -84,7 +106,15 @@ export default function HomePage() {
     fetchDashboardData();
   }, [selectedCountry]);
 
-  // Structured data for SEO - WebPage only (no JobPosting)
+  // Get role/category with job count
+  const rolesWithCounts = roles.map(role => {
+    const jobCount = jobs.filter((j: any) => 
+      j.role?.toLowerCase() === role.name.toLowerCase()
+    ).length;
+    return { ...role, jobCount };
+  }).sort((a, b) => b.jobCount - a.jobCount);
+
+  // Structured data for SEO
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "WebPage",
@@ -174,7 +204,7 @@ export default function HomePage() {
               <div className="flex items-center gap-2 text-sm">
                 <Zap size={16} className="text-blue-500" />
                 <span className="text-gray-400">
-                  <span className="text-white font-bold">{trends.length}</span> Trending Roles
+                  <span className="text-white font-bold">{roles.length}</span> Job Categories
                 </span>
               </div>
               <div className="flex items-center gap-2 text-sm">
@@ -193,43 +223,51 @@ export default function HomePage() {
           </motion.div>
         </section>
 
-        {/* 🔥 Job Categories Section */}
+        {/* 🔥 Job Categories Section - Dynamic from roles table */}
         <section>
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-lg font-bold text-white uppercase tracking-widest flex items-center gap-3">
                 <div className="w-1.5 h-6 bg-gradient-to-b from-blue-500 to-violet-500"></div>
-                Popular Job Categories
+                Job Categories
               </h2>
               <p className="text-xs text-gray-500 mt-1 font-mono">
-                Browse jobs by role — find opportunities in your field
+                Browse jobs by category — {roles.length} categories available
               </p>
             </div>
           </div>
           
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {ROLE_CATEGORIES.map((category) => {
-              const Icon = category.icon;
-              
-              return (
-                <Link
-                  key={category.slug}
-                  to={`/market?role=${category.slug}`}
-                  className="group p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-blue-500/30 transition-all"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                    <Icon size={20} className="text-blue-400" />
-                  </div>
-                  <h3 className="text-sm font-bold text-white mb-1 group-hover:text-blue-400 transition-colors">
-                    {category.name}
-                  </h3>
-                  <p className="text-[10px] text-gray-500 font-mono uppercase tracking-wider">
-                    {category.name} Jobs
-                  </p>
-                </Link>
-              );
-            })}
-          </div>
+          {rolesWithCounts.length === 0 ? (
+            <div className="text-center py-12 text-gray-500 text-sm font-mono">
+              No job categories available yet.
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              {rolesWithCounts.map((role) => {
+                const iconName = getIconForRole(role.name, role.slug);
+                const IconComponent = ICON_COMPONENTS[iconName] || Briefcase;
+                const roleSlug = role.slug || role.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+                
+                return (
+                  <Link
+                    key={role.id}
+                    to={`/market?role=${roleSlug}`}
+                    className="group p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-blue-500/30 transition-all"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                      <IconComponent size={20} className="text-blue-400" />
+                    </div>
+                    <h3 className="text-sm font-bold text-white mb-1 group-hover:text-blue-400 transition-colors truncate">
+                      {role.name}
+                    </h3>
+                    <p className="text-[10px] text-gray-500 font-mono uppercase tracking-wider">
+                      {role.jobCount > 0 ? `${role.jobCount} job${role.jobCount !== 1 ? 's' : ''}` : 'View jobs'}
+                    </p>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </section>
 
         {/* 🔥 Top 5 Jobs Section */}
@@ -268,7 +306,6 @@ export default function HomePage() {
                   className="block p-4 bg-white/[0.01] border border-white/5 rounded-2xl hover:bg-white/[0.03] transition-all group"
                 >
                   <div className="flex items-start gap-3">
-                    {/* Company Logo */}
                     <div className="w-10 h-10 rounded-xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
                       {job.logoUrl ? (
                         <img src={job.logoUrl} alt={`${job.company} logo`} className="w-full h-full object-cover rounded-xl" />
@@ -301,39 +338,6 @@ export default function HomePage() {
               ))}
             </div>
           )}
-        </section>
-
-        {/* 🔥 Trending Section */}
-        <section id="trending-section">
-          <div className="flex items-center justify-between mb-8 px-1">
-            <div>
-              <h2 className="text-lg font-bold text-white uppercase tracking-widest flex items-center gap-3">
-                <div className="w-1.5 h-6 bg-blue-500"></div>
-                Trending Roles
-              </h2>
-              <p className="text-xs text-gray-500 mt-1 font-mono">
-                {selectedCountry === 'Worldwide'
-                  ? 'Real-time demand signals from active job market telemetry'
-                  : `Most in-demand job roles in ${selectedCountry} right now`}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-              <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wider">LIVE FEED</span>
-            </div>
-          </div>
-          
-          <div className="flex overflow-x-auto pb-6 gap-4 no-scrollbar -mx-1 px-1">
-            {trends.length === 0 ? (
-              <div className="flex items-center justify-center w-full py-12 text-gray-500 text-sm font-mono">
-                No trending data available yet. Market signals incoming...
-              </div>
-            ) : (
-              trends.map((trend: any, index: number) => (
-                <TrendingCard key={trend.id} trend={trend} index={index} />
-              ))
-            )}
-          </div>
         </section>
 
         {/* 📰 Top 3 Reports Section */}
@@ -412,7 +416,6 @@ export default function HomePage() {
             })}
           </div>
 
-          {/* 🔗 Link to full regions page */}
           <div className="mt-4">
             <Link 
               to="/regions" 
