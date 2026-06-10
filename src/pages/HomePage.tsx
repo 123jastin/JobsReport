@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Sparkles, TrendingUp, RefreshCw, ArrowRight, Zap, BarChart3, Building2, Globe, Clock, MapPin, Briefcase, ChevronRight, Search, Code, Calculator, Palette, Headphones, Users, Shield, Truck, Stethoscope } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { Helmet } from 'react-helmet-async';
+import SEO from '../components/SEO';
 import TrendingCard from '../components/TrendingCard';
 import ReportCard from '../components/ReportCard';
 import { useCountry } from '../context/CountryContext';
@@ -127,10 +127,7 @@ export default function HomePage() {
   if (loading) {
     return (
       <>
-        <Helmet>
-          <title>{seoTitle}</title>
-          <meta name="description" content={seoDescription} />
-        </Helmet>
+        <SEO title={seoTitle} description={seoDescription} />
         <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
           <RefreshCw size={24} className="text-blue-500 animate-spin" />
           <span className="text-[10px] font-mono text-gray-500 tracking-widest uppercase">
@@ -143,33 +140,16 @@ export default function HomePage() {
 
   return (
     <>
-      <Helmet>
-        <title>{seoTitle}</title>
-        <meta name="description" content={seoDescription} />
-        <meta name="keywords" content={seoKeywords} />
-        <link rel="canonical" href={canonicalUrl} />
-        
-        {/* Open Graph */}
-        <meta property="og:title" content={seoTitle} />
-        <meta property="og:description" content={seoDescription} />
-        <meta property="og:url" content={canonicalUrl} />
-        <meta property="og:type" content="website" />
-        <meta property="og:site_name" content="JobsReport" />
-        
-        {/* Twitter Card */}
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={seoTitle} />
-        <meta name="twitter:description" content={seoDescription} />
-        
-        {/* Robots */}
-        <meta name="robots" content="index, follow" />
-        <meta name="googlebot" content="index, follow" />
-        
-        {/* Structured Data */}
-        <script type="application/ld+json">
-          {JSON.stringify(structuredData)}
-        </script>
-      </Helmet>
+      <SEO
+        title={seoTitle}
+        description={seoDescription}
+        keywords={seoKeywords}
+        canonicalUrl={canonicalUrl}
+        ogTitle={seoTitle}
+        ogDescription={seoDescription}
+        ogUrl={canonicalUrl}
+        structuredData={structuredData}
+      />
 
       <div className="space-y-12">
         {/* Hero Section */}
