@@ -8,7 +8,6 @@ import SEO from '../components/SEO';
 import { useCountry } from '../context/CountryContext';
 
 export default function ReportsPage() {
-  // 🔥 FIX 1: Read country from URL params for real indexable pages
   const { country: urlCountry } = useParams();
   const { selectedCountry, setSelectedCountry, currentFlag } = useCountry();
   
@@ -17,10 +16,8 @@ export default function ReportsPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // 🔥 FIX 1: Set country from URL on mount (creates real indexable pages)
   useEffect(() => {
     if (urlCountry) {
-      // Convert slug back to country name
       const countryName = urlCountry
         .split('-')
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
@@ -110,7 +107,7 @@ export default function ReportsPage() {
 
   const recentReports = filteredReports.slice(0, 5);
 
-  // CollectionPage structured data
+  // 🔥 CollectionPage schema ONLY (no Article schemas - those belong on ReportDetailPage)
   const collectionPageSchema = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
@@ -128,30 +125,13 @@ export default function ReportsPage() {
       "itemListElement": filteredReports.slice(0, 20).map((report, index) => ({
         "@type": "ListItem",
         "position": index + 1,
-        "item": {
-          "@type": "Article",
-          "headline": report.title,
-          "description": (report.excerpt || '').substring(0, 200),
-          "datePublished": report.createdAt || report.updatedAt,
-          "dateModified": report.updatedAt,
-          "url": `https://jobsreport.online/report/${report.slug || report.id}`,
-          "about": report.role || 'Job Market',
-          "author": {
-            "@type": "Organization",
-            "name": "JobsReport",
-            "url": "https://jobsreport.online"
-          },
-          "publisher": {
-            "@type": "Organization",
-            "name": "JobsReport",
-            "url": "https://jobsreport.online"
-          }
-        }
+        "url": `https://jobsreport.online/report/${report.slug || report.id}`,
+        "name": report.title
       }))
     }
   };
 
-  // 🔥 FIX 3: Breadcrumb as separate schema object (passed to SEO component)
+  // 🔥 Breadcrumb schema
   const breadcrumbSchema = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
@@ -214,7 +194,6 @@ export default function ReportsPage() {
         ogTitle={pageTitle}
         ogDescription={pageDescription}
         ogUrl={canonicalUrl}
-        // 🔥 FIX 3: Pass both schemas through SEO component (no raw script tags)
         structuredData={[collectionPageSchema, breadcrumbSchema]}
       />
 
@@ -253,7 +232,6 @@ export default function ReportsPage() {
               : `Employment reports, hiring trends, and labor market insights for ${countryText}. Analysis of industry demand, salary benchmarks, and career opportunities across ${countryText}.`}
           </p>
           
-          {/* Crawlable intro content for SEO */}
           <div className="mt-4 text-stone-400/80 text-sm leading-relaxed max-w-3xl space-y-2">
             <p>
               JobsReport publishes employment reports, hiring trend analysis, salary intelligence and labor market insights from different employers around the world with the aim of exploring industry demand, emerging careers, remote work trends and country-specific employment patterns.
@@ -263,7 +241,6 @@ export default function ReportsPage() {
             </p>
           </div>
           
-          {/* Quick Stats */}
           <div className="flex flex-wrap gap-6 mt-4">
             <div className="flex items-center gap-2 text-sm">
               <BookOpen size={14} className="text-blue-500" />
@@ -290,7 +267,7 @@ export default function ReportsPage() {
           </div>
         </section>
 
-        {/* Modern Filter & Search Bar */}
+        {/* Filter & Search Bar */}
         <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-white/[0.01] border border-white/5 p-4 rounded-3xl">
           <div className="relative w-full md:max-w-md">
             <span className="absolute inset-y-0 left-3.5 flex items-center text-gray-500">
@@ -332,9 +309,7 @@ export default function ReportsPage() {
 
         {/* Main Grid Content */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-10">
-          {/* Sidebar */}
           <div className="lg:col-span-1 space-y-6">
-            {/* 🔥 FIX 2: Country links use <Link> instead of <button> for crawlability */}
             {countriesWithReports.length > 0 && (
               <nav className="p-5 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4" aria-label="Reports by country">
                 <h3 className="text-xs font-bold text-white uppercase tracking-widest border-b border-white/5 pb-2">
@@ -372,7 +347,6 @@ export default function ReportsPage() {
               </nav>
             )}
 
-            {/* Recent Reports */}
             {recentReports.length > 0 && (
               <div className="p-5 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
                 <h3 className="text-xs font-bold text-white uppercase tracking-widest border-b border-white/5 pb-2">
@@ -400,7 +374,6 @@ export default function ReportsPage() {
               </div>
             )}
 
-            {/* Report Highlights */}
             <div className="p-5 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
               <h3 className="text-xs font-bold text-white uppercase tracking-widest border-b border-white/5 pb-2">
                 Market Highlights
@@ -451,7 +424,6 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          {/* Main Content */}
           <div className="lg:col-span-3">
             {filteredReports.length === 0 ? (
               <div className="p-12 text-center bg-white/[0.01] rounded-3xl border border-white/5 flex flex-col items-center justify-center space-y-4">
