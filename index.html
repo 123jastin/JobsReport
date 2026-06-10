@@ -34,15 +34,6 @@
     
     <!-- Ad Control Styles -->
     <style>
-      /* Hide auto-injected ads at wrong positions */
-      body > div[id*="clever"]:first-child,
-      body > div[class*="clever"]:first-child,
-      body > ins:first-child,
-      body > iframe[src*="clever"]:first-child {
-        display: none !important;
-      }
-      
-      /* Ad container styling */
       .ad-container {
         min-height: 100px;
         display: flex;
@@ -54,13 +45,16 @@
         overflow: hidden;
         background: transparent;
       }
-      
       .ad-container:empty {
         display: none;
       }
     </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
     
-    <!-- Clever Ads Script -->
+    <!-- 🔥 Clever Ads Script - MUST be just before </body> -->
     <script data-cfasync="false" type="text/javascript" id="clever-core">
     /* <![CDATA[ */
         (function (document, window) {
@@ -76,14 +70,6 @@
             c.setAttribute("data-callback-url-click", "put-your-click-macro-here");
             c.setAttribute("data-callback-url-view", "put-your-view-macro-here");
 
-            // Debug
-            c.onload = function() {
-                console.log('✅ Clever Ads script loaded');
-            };
-            c.onerror = function() {
-                console.error('❌ Clever Ads script failed');
-            };
-
             try {
                 a = parent.document.getElementsByTagName("script")[0] || document.getElementsByTagName("script")[0];
             } catch (e) {
@@ -95,63 +81,5 @@
         })(document, window);
     /* ]]> */
     </script>
-
-    <!-- Ad Position Controller -->
-    <script>
-      (function() {
-        console.log('🔄 Ad position controller active');
-        
-        const observer = new MutationObserver(function(mutations) {
-          mutations.forEach(function(mutation) {
-            mutation.addedNodes.forEach(function(node) {
-              if (node.nodeType === 1) {
-                const el = node as HTMLElement;
-                
-                // Detect Clever ad elements
-                const isAd = 
-                  (el.id && el.id.toLowerCase().includes('clever')) ||
-                  (el.className && typeof el.className === 'string' && el.className.toLowerCase().includes('clever')) ||
-                  el.tagName === 'INS' ||
-                  (el.tagName === 'DIV' && el.querySelector('iframe[src*="clever"]'));
-                
-                if (isAd) {
-                  console.log('📢 Ad detected, moving to proper zone');
-                  
-                  // Find target zone
-                  const topZone = document.getElementById('ad-zone-top');
-                  const bottomZone = document.getElementById('ad-zone-bottom');
-                  
-                  // Move to first available zone
-                  setTimeout(() => {
-                    if (topZone && !topZone.hasChildNodes()) {
-                      topZone.appendChild(el);
-                      console.log('✅ Ad moved to top zone');
-                    } else if (bottomZone && !bottomZone.hasChildNodes()) {
-                      bottomZone.appendChild(el);
-                      console.log('✅ Ad moved to bottom zone');
-                    }
-                  }, 200);
-                }
-              }
-            });
-          });
-        });
-
-        // Start observing after DOM is ready
-        if (document.body) {
-          observer.observe(document.body, { childList: true, subtree: true });
-          console.log('👀 Watching for ads...');
-        } else {
-          document.addEventListener('DOMContentLoaded', function() {
-            observer.observe(document.body, { childList: true, subtree: true });
-            console.log('👀 Watching for ads...');
-          });
-        }
-      })();
-    </script>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
