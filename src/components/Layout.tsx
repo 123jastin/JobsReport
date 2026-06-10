@@ -11,6 +11,7 @@ import {
   LogIn, 
   LogOut, 
   Briefcase,
+  Building2,
   AlertCircle,
   Globe
 } from 'lucide-react';
@@ -65,6 +66,9 @@ export default function Layout({ children }: LayoutProps) {
           <div className="hidden lg:flex items-center gap-6 border-l border-white/10 pl-6 h-6">
             <NavLink to="/" className={({ isActive }) => `text-xs font-bold uppercase tracking-widest transition-colors ${isActive ? 'text-white border-b-2 border-blue-500 pb-4 pt-4 -mb-4' : 'text-gray-500 hover:text-white'}`}>
               Intelligence Feed
+            </NavLink>
+            <NavLink to="/companies" className={({ isActive }) => `text-xs font-bold uppercase tracking-widest transition-colors ${isActive ? 'text-white border-b-2 border-emerald-500 pb-4 pt-4 -mb-4' : 'text-gray-500 hover:text-white'}`}>
+              Companies
             </NavLink>
             <NavLink to="/jobs" className={({ isActive }) => `text-xs font-bold uppercase tracking-widest transition-colors ${isActive ? 'text-white border-b-2 border-blue-500 pb-4 pt-4 -mb-4' : 'text-gray-500 hover:text-white'}`}>
               All Jobs List
@@ -272,6 +276,15 @@ export default function Layout({ children }: LayoutProps) {
               >
                 <Home size={16} className="text-blue-500" />
                 Intelligence Feed
+              </Link>
+              
+              <Link 
+                to="/companies" 
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="p-3 rounded-2xl bg-white/[0.02] border border-white/5 text-sm font-bold text-white hover:bg-white/5 transition-all flex items-center gap-3"
+              >
+                <Building2 size={16} className="text-emerald-500" />
+                Companies & Employers
               </Link>
               
               <Link 
