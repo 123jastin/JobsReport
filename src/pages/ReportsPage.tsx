@@ -1,18 +1,33 @@
 import { useState, useEffect } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { BookOpen, Calendar, TrendingUp, Search, RefreshCw, Star, ArrowUpRight, Globe, Filter, ChevronRight } from 'lucide-react';
-import { Link } from 'react-router-dom';
 import { Report } from '../types';
 import ReportCard from '../components/ReportCard';
 import SEO from '../components/SEO';
 import { useCountry } from '../context/CountryContext';
 
 export default function ReportsPage() {
+  // 🔥 FIX 1: Read country from URL params for real indexable pages
+  const { country: urlCountry } = useParams();
+  const { selectedCountry, setSelectedCountry, currentFlag } = useCountry();
+  
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const { selectedCountry, setSelectedCountry, currentFlag } = useCountry();
+
+  // 🔥 FIX 1: Set country from URL on mount (creates real indexable pages)
+  useEffect(() => {
+    if (urlCountry) {
+      // Convert slug back to country name
+      const countryName = urlCountry
+        .split('-')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+      setSelectedCountry(countryName);
+    }
+  }, [urlCountry, setSelectedCountry]);
 
   useEffect(() => {
     const fetchReports = async () => {
@@ -71,7 +86,6 @@ export default function ReportsPage() {
     }
   });
 
-  // 🔥 FIX 1: Better SEO title matching search intent
   const countryText = selectedCountry === 'Worldwide' ? '' : selectedCountry;
   
   const pageTitle = selectedCountry === 'Worldwide'
@@ -86,21 +100,18 @@ export default function ReportsPage() {
     ? 'https://jobsreport.online/reports'
     : `https://jobsreport.online/reports/${countryText.toLowerCase().replace(/\s+/g, '-')}`;
 
-  // 🔥 FIX 5: More crawlable intro content keywords
   const seoKeywords = selectedCountry === 'Worldwide'
     ? 'job market reports, hiring trends, employment reports, career insights, salary analysis, industry demand, labor market, workforce trends'
     : `job market reports ${countryText}, ${countryText} hiring trends, ${countryText} employment analysis, ${countryText} career insights, ${countryText} salary report`;
 
-  // Countries with reports for internal linking
   const countriesWithReports = [...new Set(
     reports.map(r => r.country).filter(Boolean)
   )].sort();
 
-  // Recent reports for sidebar
   const recentReports = filteredReports.slice(0, 5);
 
-  // Structured data
-  const structuredData = {
+  // CollectionPage structured data
+  const collectionPageSchema = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
     "name": pageTitle,
@@ -140,8 +151,8 @@ export default function ReportsPage() {
     }
   };
 
-  // 🔥 FIX 4: Breadcrumb structured data
-  const breadcrumbData = {
+  // 🔥 FIX 3: Breadcrumb as separate schema object (passed to SEO component)
+  const breadcrumbSchema = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
     "itemListElement": [
@@ -154,7 +165,7 @@ export default function ReportsPage() {
       {
         "@type": "ListItem",
         "position": 2,
-        "name": "Reports",
+        "name": selectedCountry === 'Worldwide' ? 'Reports' : `Reports in ${countryText}`,
         "item": canonicalUrl
       }
     ]
@@ -203,20 +214,24 @@ export default function ReportsPage() {
         ogTitle={pageTitle}
         ogDescription={pageDescription}
         ogUrl={canonicalUrl}
-        structuredData={structuredData}
+        // 🔥 FIX 3: Pass both schemas through SEO component (no raw script tags)
+        structuredData={[collectionPageSchema, breadcrumbSchema]}
       />
-
-      {/* 🔥 FIX 4: Breadcrumb structured data injected */}
-      <script type="application/ld+json">
-        {JSON.stringify(breadcrumbData)}
-      </script>
 
       <div className="space-y-10">
         {/* Breadcrumb Navigation */}
         <div className="flex items-center gap-2 text-[10px] text-gray-500 font-mono uppercase tracking-wider">
           <Link to="/" className="hover:text-white transition-colors">Home</Link>
           <ChevronRight size={10} />
-          <span className="text-blue-400">Reports</span>
+          {selectedCountry !== 'Worldwide' ? (
+            <>
+              <Link to="/reports" className="hover:text-white transition-colors">Reports</Link>
+              <ChevronRight size={10} />
+              <span className="text-blue-400">{countryText}</span>
+            </>
+          ) : (
+            <span className="text-blue-400">Reports</span>
+          )}
         </div>
 
         {/* Page Header */}
@@ -226,7 +241,6 @@ export default function ReportsPage() {
             Market Intelligence Archives
           </div>
           
-          {/* 🔥 FIX 2: Better H1 matching search intent */}
           <h1 className="text-3xl md:text-5xl font-black text-white leading-none tracking-tight mb-4">
             {selectedCountry === 'Worldwide' 
               ? 'Job Market Reports & Hiring Trend Analysis'
@@ -239,7 +253,7 @@ export default function ReportsPage() {
               : `Employment reports, hiring trends, and labor market insights for ${countryText}. Analysis of industry demand, salary benchmarks, and career opportunities across ${countryText}.`}
           </p>
           
-          {/* 🔥 FIX 5: Crawlable intro content for SEO */}
+          {/* Crawlable intro content for SEO */}
           <div className="mt-4 text-stone-400/80 text-sm leading-relaxed max-w-3xl space-y-2">
             <p>
               JobsReport publishes employment reports, hiring trend analysis, salary intelligence and labor market insights from different employers around the world with the aim of exploring industry demand, emerging careers, remote work trends and country-specific employment patterns.
@@ -302,12 +316,16 @@ export default function ReportsPage() {
             </div>
 
             {(searchQuery || selectedCountry !== 'Worldwide') && (
-              <button
-                onClick={handleClearFilters}
+              <Link
+                to="/reports"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedCountry('Worldwide');
+                }}
                 className="px-3.5 py-2 hover:bg-white/5 border border-white/10 rounded-2xl text-[10px] font-bold text-gray-400 hover:text-white uppercase tracking-wider transition-all flex items-center gap-1.5"
               >
                 Reset Filters
-              </button>
+              </Link>
             )}
           </div>
         </div>
@@ -316,9 +334,9 @@ export default function ReportsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-10">
           {/* Sidebar */}
           <div className="lg:col-span-1 space-y-6">
-            {/* 🔥 FIX 6: Country report links for internal SEO */}
+            {/* 🔥 FIX 2: Country links use <Link> instead of <button> for crawlability */}
             {countriesWithReports.length > 0 && (
-              <div className="p-5 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
+              <nav className="p-5 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4" aria-label="Reports by country">
                 <h3 className="text-xs font-bold text-white uppercase tracking-widest border-b border-white/5 pb-2">
                   Reports by Country
                 </h3>
@@ -329,9 +347,9 @@ export default function ReportsPage() {
                     const isActive = selectedCountry.toLowerCase() === country.toLowerCase();
                     
                     return (
-                      <button
+                      <Link
                         key={country}
-                        onClick={() => setSelectedCountry(country)}
+                        to={`/reports/${countrySlug}`}
                         className={`w-full text-left px-3 py-2 rounded-xl text-xs transition-all flex items-center justify-between ${
                           isActive
                             ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
@@ -342,7 +360,7 @@ export default function ReportsPage() {
                         <span className="text-[10px] font-mono text-gray-500">
                           {countryReportCount}
                         </span>
-                      </button>
+                      </Link>
                     );
                   })}
                 </div>
@@ -351,7 +369,7 @@ export default function ReportsPage() {
                     +{countriesWithReports.length - 10} more countries
                   </p>
                 )}
-              </div>
+              </nav>
             )}
 
             {/* Recent Reports */}
@@ -428,7 +446,7 @@ export default function ReportsPage() {
                 Data Sources
               </h3>
               <p className="text-[10px] text-gray-400 leading-relaxed mb-4">
-                 Reports are updated regularly to reflect current market conditions.
+                Reports are updated regularly to reflect current market conditions.
               </p>
             </div>
           </div>
@@ -448,12 +466,16 @@ export default function ReportsPage() {
                         : 'No reports published yet. Check back for market intelligence reports.'}
                   </p>
                 </div>
-                <button
-                  onClick={handleClearFilters}
+                <Link
+                  to="/reports"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSelectedCountry('Worldwide');
+                  }}
                   className="px-4 py-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all"
                 >
                   Clear Filters
-                </button>
+                </Link>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
