@@ -71,11 +71,46 @@ export default function CompaniesPage() {
     company.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Structured data for companies directory page
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    "name": "Companies & Employers | Browse Top Hiring Companies | JobsReport",
+    "description": "Browse top companies and employers actively hiring in your Regions. Find available job opportunities from leading organizations across various industries.",
+    "url": "https://jobsreport.online/companies",
+    "isPartOf": {
+      "@type": "WebSite",
+      "name": "JobsReport",
+      "url": "https://jobsreport.online"
+    },
+    "mainEntity": {
+      "@type": "ItemList",
+      "numberOfItems": companies.length,
+      "itemListElement": companies.map((company, index) => ({
+        "@type": "ListItem",
+        "position": index + 1,
+        "item": {
+          "@type": "Organization",
+          "name": company.name,
+          "url": company.url || `https://jobsreport.online/companies`,
+          "logo": company.logoUrl || undefined,
+          "description": `${company.name} - Hiring ${getCompanyJobs(company.name).filter(j => j.active).length} active job(s). Find career opportunities at ${company.name}.`
+        }
+      }))
+    }
+  };
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="w-8 h-8 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
-      </div>
+      <>
+        <SEO
+          title="Companies & Employers | Browse Top Hiring Companies | JobsReport"
+          description="Browse top companies and employers actively hiring. Find job opportunities from leading organizations across various industries."
+        />
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="w-8 h-8 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+        </div>
+      </>
     );
   }
 
@@ -84,8 +119,12 @@ export default function CompaniesPage() {
       <SEO
         title="Companies & Employers | Browse Top Hiring Companies | JobsReport"
         description="Browse top companies and employers actively hiring. Find job opportunities from leading organizations across various industries."
-        keywords="companies hiring, top employers, company jobs, employer directory, find companies"
+        keywords="companies hiring, top employers, company jobs, employer directory, find companies, hiring organizations"
         canonicalUrl="https://jobsreport.online/companies"
+        ogTitle="Companies & Employers | Browse Top Hiring Companies | JobsReport"
+        ogDescription="Browse top companies and employers actively hiring. Find job opportunities from leading organizations."
+        ogUrl="https://jobsreport.online/companies"
+        structuredData={structuredData}
       />
 
       <div className="min-h-screen space-y-8">
@@ -99,8 +138,26 @@ export default function CompaniesPage() {
             Companies & Employers
           </h1>
           <p className="text-gray-400 text-lg max-w-2xl">
-            Browse top companies actively hiring. Find job opportunities from leading organizations.
+            Browse top companies actively hiring in your Regions. Find available job opportunities from leading organizations.
           </p>
+          
+          {/* Quick Stats */}
+          <div className="flex gap-6 mt-4">
+            <div className="flex items-center gap-2 text-sm">
+              <Building2 size={16} className="text-blue-500" />
+              <span className="text-gray-400">
+                <span className="text-white font-bold">{companies.length}</span> Companies
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <Briefcase size={16} className="text-emerald-500" />
+              <span className="text-gray-400">
+                <span className="text-white font-bold">
+                  {jobs.filter(j => j.active !== false).length}
+                </span> Active Jobs
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* Search */}
@@ -113,7 +170,7 @@ export default function CompaniesPage() {
               setSearchTerm(e.target.value);
               setSelectedCompany(null);
             }}
-            placeholder="Search companies..."
+            placeholder={`Search ${companies.length} companies...`}
             className="w-full bg-white/[0.02] border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white text-sm focus:outline-none focus:border-blue-500/50 transition-colors"
           />
         </div>
@@ -171,6 +228,20 @@ export default function CompaniesPage() {
                       <ExternalLink size={12} />
                     </a>
                   )}
+                  
+                  {/* Company Stats */}
+                  <div className="flex gap-4 mt-3">
+                    <span className="text-[10px] text-gray-400">
+                      <span className="text-white font-bold">
+                        {getCompanyJobs(selectedCompany.name).filter(j => j.active).length}
+                      </span> active jobs
+                    </span>
+                    <span className="text-[10px] text-gray-400">
+                      <span className="text-white font-bold">
+                        {getCompanyJobs(selectedCompany.name).length}
+                      </span> total listings
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
