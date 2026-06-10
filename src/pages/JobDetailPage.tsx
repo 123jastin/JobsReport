@@ -3,16 +3,9 @@ import { useParams, Link } from 'react-router-dom';
 import {
   Building2, MapPin, Clock, ExternalLink, ArrowLeft,
   FileText, Eye, ChevronLeft, ChevronRight, X, Download,
-  Briefcase, DollarSign, Calendar, Globe, Share2
+  Briefcase, Calendar, Globe, Share2
 } from 'lucide-react';
 import { useCareerRedirect } from '../context/CareerRedirectContext';
-
-// ✅ Currency symbols for display
-const currencySymbols: Record<string, string> = {
-  'TZS': 'TSh', 'KES': 'KSh', 'UGX': 'USh', 'RWF': 'RF',
-  'USD': '$', 'EUR': '€', 'GBP': '£', 'ZAR': 'R', 'NGN': '₦',
-  'GHS': 'GH₵', 'ZMW': 'ZK', 'MWK': 'MK', 'AED': 'د.إ', 'SAR': '﷼'
-};
 
 export default function JobDetailPage() {
   const { jobId } = useParams<{ jobId: string }>();
@@ -87,27 +80,10 @@ export default function JobDetailPage() {
   const hasDescription = job.description && job.description.trim() !== '';
   const isEmailLink = job.url && job.url.startsWith('mailto:');
 
-  // ✅ Get currency info from API response (not hardcoded)
-  const currencyCode = job.salary_currency || 'TZS';
-  const currencySymbol = job.salary_currency_symbol || currencySymbols[currencyCode] || 'TSh';
-  const currencyName = job.salary_currency_name || 'Tanzanian Shilling';
+  // ✅ Salary - API already returns formatted with proper currency symbol
+  const salaryDisplay = job.salary || null;
   const currencyFlag = job.salary_currency_flag || '🇹🇿';
-
-  // ✅ Format salary display - use API formatted salary directly to avoid double symbols
-  const getSalaryDisplay = () => {
-    // The API (market.ts) already formats salary with proper currency symbol
-    // So just use it directly if it exists
-    if (job.salary && job.salary.trim()) return job.salary;
-    
-    // Fallback: build from schema fields if no display salary
-    const symbol = job.salary_currency_symbol || currencySymbols[currencyCode] || currencyCode;
-    if (job.salary_min && job.salary_max) return `${symbol} ${Number(job.salary_min).toLocaleString()} - ${Number(job.salary_max).toLocaleString()}`;
-    if (job.salary_min) return `${symbol} ${Number(job.salary_min).toLocaleString()}+`;
-    if (job.salary_max) return `${symbol} Up to ${Number(job.salary_max).toLocaleString()}`;
-    return null;
-  };
-
-  const salaryDisplay = getSalaryDisplay();
+  const currencyName = job.salary_currency_name || 'Tanzanian Shilling';
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -250,7 +226,7 @@ export default function JobDetailPage() {
           <span className="flex items-center gap-1.5"><MapPin size={13} /> {job.location || 'Remote'}</span>
           {salaryDisplay && (
             <span className="flex items-center gap-1.5 text-emerald-400 font-bold">
-              <DollarSign size={13} /> {salaryDisplay}
+              💰 {salaryDisplay}
             </span>
           )}
           <span className="flex items-center gap-1.5"><Briefcase size={13} /> {job.role}</span>
@@ -319,9 +295,9 @@ export default function JobDetailPage() {
             ['Company', job.company],
             ['Location', job.location || 'Remote'],
             ['Role', job.role],
-            ['Salary', salaryDisplay || 'Not specified'],
+            ['Salary', salaryDisplay ? `${currencyFlag} ${salaryDisplay}` : 'Not specified'],
             ['Category', job.job_category || 'General'],
-            ['Employment Type', job.employment_type === 'FULL_TIME' ? 'Full Time' : job.employment_type || 'Full Time'],
+            ['Employment Type', job.employment_type === 'FULL_TIME' ? 'Full Time' : (job.employment_type || 'Full Time')],
             ['Workplace', job.workplace_type || 'Onsite'],
             ['Education', job.education_level || 'Any'],
             ['Experience', job.experience_months ? `${job.experience_months} months` : 'Not specified'],
