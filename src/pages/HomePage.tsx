@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
-import { Sparkles, TrendingUp, RefreshCw, ArrowRight, Zap, BarChart3, Building2, Globe, Clock, MapPin, Briefcase, ChevronRight, Search, Code, Calculator, Palette, Headphones, Users, Shield, Truck, Stethoscope, BookOpen, Scale, Leaf, Settings, Utensils } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Sparkles, TrendingUp, RefreshCw, ArrowRight, Zap, BarChart3, Building2, Globe, Clock, MapPin, Briefcase, ChevronRight, Search, Code, Calculator, Palette, Headphones, Users, Shield, Truck, Stethoscope, BookOpen, Scale, Leaf, Settings, Utensils, ChevronDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import SEO from '../components/SEO';
 import TrendingCard from '../components/TrendingCard';
@@ -44,7 +44,10 @@ export default function HomePage() {
   const [spotlightCompanies, setSpotlightCompanies] = useState<string[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAllCategories, setShowAllCategories] = useState(false);
   const { selectedCountry, setSelectedCountry, currentFlag, countriesList } = useCountry();
+
+  const INITIAL_CATEGORIES_COUNT = 10;
 
   // Generate SEO metadata
   const countrySlug = selectedCountry === 'Worldwide' 
@@ -91,7 +94,6 @@ export default function HomePage() {
           setJobs(activeJobs.slice(0, 5));
         }
 
-        // Fetch roles/categories from API
         if (rolesRes.ok) {
           const rolesData = await rolesRes.json();
           setRoles(Array.isArray(rolesData) ? rolesData : []);
@@ -113,6 +115,13 @@ export default function HomePage() {
     ).length;
     return { ...role, jobCount };
   }).sort((a, b) => b.jobCount - a.jobCount);
+
+  // Split categories
+  const visibleCategories = showAllCategories 
+    ? rolesWithCounts 
+    : rolesWithCounts.slice(0, INITIAL_CATEGORIES_COUNT);
+  
+  const hiddenCount = rolesWithCounts.length - INITIAL_CATEGORIES_COUNT;
 
   // Structured data for SEO
   const structuredData = {
@@ -232,9 +241,29 @@ export default function HomePage() {
                 Job Categories
               </h2>
               <p className="text-xs text-gray-500 mt-1 font-mono">
-                Browse jobs by category — {roles.length} categories available
+                {showAllCategories 
+                  ? `Showing all ${rolesWithCounts.length} categories` 
+                  : `Top ${INITIAL_CATEGORIES_COUNT} of ${rolesWithCounts.length} categories`}
               </p>
             </div>
+            {rolesWithCounts.length > INITIAL_CATEGORIES_COUNT && (
+              <button
+                onClick={() => setShowAllCategories(!showAllCategories)}
+                className="flex items-center gap-1.5 text-[10px] text-blue-500 hover:text-blue-400 font-bold uppercase tracking-wider transition-colors group"
+              >
+                {showAllCategories ? (
+                  <>
+                    Show Less
+                    <ChevronDown size={14} className="rotate-180 group-hover:-translate-y-0.5 transition-transform" />
+                  </>
+                ) : (
+                  <>
+                    See More ({hiddenCount} more)
+                    <ChevronDown size={14} className="group-hover:translate-y-0.5 transition-transform" />
+                  </>
+                )}
+              </button>
+            )}
           </div>
           
           {rolesWithCounts.length === 0 ? (
@@ -242,30 +271,73 @@ export default function HomePage() {
               No job categories available yet.
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {rolesWithCounts.map((role) => {
-                const iconName = getIconForRole(role.name, role.slug);
-                const IconComponent = ICON_COMPONENTS[iconName] || Briefcase;
-                const roleSlug = role.slug || role.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-                
-                return (
-                  <Link
-                    key={role.id}
-                    to={`/market?role=${roleSlug}`}
-                    className="group p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-blue-500/30 transition-all"
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                      <IconComponent size={20} className="text-blue-400" />
-                    </div>
-                    <h3 className="text-sm font-bold text-white mb-1 group-hover:text-blue-400 transition-colors truncate">
-                      {role.name}
-                    </h3>
-                    <p className="text-[10px] text-gray-500 font-mono uppercase tracking-wider">
-                      {role.jobCount > 0 ? `${role.jobCount} job${role.jobCount !== 1 ? 's' : ''}` : 'View jobs'}
-                    </p>
-                  </Link>
-                );
-              })}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={showAllCategories ? 'expanded' : 'collapsed'}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"
+              >
+                {visibleCategories.map((role, index) => {
+                  const iconName = getIconForRole(role.name, role.slug);
+                  const IconComponent = ICON_COMPONENTS[iconName] || Briefcase;
+                  const roleSlug = role.slug || role.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+                  
+                  return (
+                    <motion.div
+                      key={role.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.03, duration: 0.2 }}
+                    >
+                      <Link
+                        to={`/market?role=${roleSlug}`}
+                        className="group p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-blue-500/30 transition-all h-full flex flex-col"
+                      >
+                        <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                          <IconComponent size={20} className="text-blue-400" />
+                        </div>
+                        <h3 className="text-sm font-bold text-white mb-1 group-hover:text-blue-400 transition-colors truncate">
+                          {role.name}
+                        </h3>
+                        <p className="text-[10px] text-gray-500 font-mono uppercase tracking-wider mt-auto">
+                          {role.jobCount > 0 ? (
+                            <span>
+                              <span className="text-white font-bold">{role.jobCount}</span> job{role.jobCount !== 1 ? 's' : ''}
+                            </span>
+                          ) : (
+                            'View jobs'
+                          )}
+                        </p>
+                      </Link>
+                    </motion.div>
+                  );
+                })}
+              </motion.div>
+            </AnimatePresence>
+          )}
+
+          {/* Show More / Show Less Button at Bottom */}
+          {rolesWithCounts.length > INITIAL_CATEGORIES_COUNT && (
+            <div className="mt-4 text-center">
+              <button
+                onClick={() => setShowAllCategories(!showAllCategories)}
+                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-white/[0.02] border border-white/10 hover:bg-white/[0.05] hover:border-blue-500/30 text-xs font-bold text-gray-400 hover:text-white uppercase tracking-wider transition-all group"
+              >
+                {showAllCategories ? (
+                  <>
+                    Show Less
+                    <ChevronDown size={14} className="rotate-180 group-hover:-translate-y-0.5 transition-transform" />
+                  </>
+                ) : (
+                  <>
+                    See All {rolesWithCounts.length} Categories
+                    <ChevronDown size={14} className="group-hover:translate-y-0.5 transition-transform" />
+                  </>
+                )}
+              </button>
             </div>
           )}
         </section>
