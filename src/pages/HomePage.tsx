@@ -9,18 +9,18 @@ import { useCountry } from '../context/CountryContext';
 
 // Role categories with icons and SEO-friendly slugs
 const ROLE_CATEGORIES = [
-  { name: 'Software Engineer', icon: Code, slug: 'software-engineer', color: 'blue' },
-  { name: 'Data Analyst', icon: BarChart3, slug: 'data-analyst', color: 'violet' },
-  { name: 'Accountant', icon: Calculator, slug: 'accountant', color: 'emerald' },
-  { name: 'UI/UX Designer', icon: Palette, slug: 'ui-ux-designer', color: 'pink' },
-  { name: 'Customer Support', icon: Headphones, slug: 'customer-support', color: 'orange' },
-  { name: 'Project Manager', icon: Users, slug: 'project-manager', color: 'cyan' },
-  { name: 'Cybersecurity', icon: Shield, slug: 'cybersecurity', color: 'red' },
-  { name: 'Logistics', icon: Truck, slug: 'logistics', color: 'yellow' },
-  { name: 'Healthcare', icon: Stethoscope, slug: 'healthcare', color: 'green' },
-  { name: 'Marketing', icon: TrendingUp, slug: 'marketing', color: 'purple' },
-  { name: 'Sales', icon: Briefcase, slug: 'sales', color: 'indigo' },
-  { name: 'HR & Recruiting', icon: Users, slug: 'hr-recruiting', color: 'teal' },
+  { name: 'Software Engineer', icon: Code, slug: 'software-engineer' },
+  { name: 'Data Analyst', icon: BarChart3, slug: 'data-analyst' },
+  { name: 'Accountant', icon: Calculator, slug: 'accountant' },
+  { name: 'UI/UX Designer', icon: Palette, slug: 'ui-ux-designer' },
+  { name: 'Customer Support', icon: Headphones, slug: 'customer-support' },
+  { name: 'Project Manager', icon: Users, slug: 'project-manager' },
+  { name: 'Cybersecurity', icon: Shield, slug: 'cybersecurity' },
+  { name: 'Logistics', icon: Truck, slug: 'logistics' },
+  { name: 'Healthcare', icon: Stethoscope, slug: 'healthcare' },
+  { name: 'Marketing', icon: TrendingUp, slug: 'marketing' },
+  { name: 'Sales', icon: Briefcase, slug: 'sales' },
+  { name: 'HR & Recruiting', icon: Users, slug: 'hr-recruiting' },
 ];
 
 export default function HomePage() {
@@ -31,13 +31,26 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const { selectedCountry, setSelectedCountry, currentFlag, countriesList } = useCountry();
 
-  // SEO metadata state
-  const [pageMetadata, setPageMetadata] = useState({
-    title: 'Jobs Worldwide | Find Latest Job Vacancies & Career Opportunities | JobsReport',
-    description: 'Discover the latest job vacancies, trending roles, and career opportunities worldwide. Real-time job market intelligence with verified listings from top employers.',
-    keywords: 'jobs worldwide, global jobs, international careers, find jobs, job vacancies, career opportunities',
-    canonicalUrl: 'https://jobsreport.online',
-  });
+  // Generate SEO metadata
+  const countrySlug = selectedCountry === 'Worldwide' 
+    ? '' 
+    : selectedCountry.toLowerCase().replace(/\s+/g, '-');
+  
+  const seoTitle = selectedCountry === 'Worldwide'
+    ? 'Jobs Worldwide | Find Latest Job Vacancies & Career Opportunities | JobsReport'
+    : `Jobs in ${selectedCountry} | Latest ${selectedCountry} Vacancies & Careers | JobsReport`;
+  
+  const seoDescription = selectedCountry === 'Worldwide'
+    ? 'Discover the latest job vacancies, trending roles, and career opportunities worldwide. Real-time job market intelligence with verified listings from top employers.'
+    : `Find the latest jobs, vacancies, and career opportunities in ${selectedCountry}. Browse verified job listings from top employers hiring in ${selectedCountry}. Real-time market intelligence.`;
+  
+  const seoKeywords = selectedCountry === 'Worldwide'
+    ? 'jobs worldwide, global jobs, international careers, find jobs, job vacancies, career opportunities'
+    : `jobs in ${selectedCountry}, ${selectedCountry} jobs, ${selectedCountry} vacancies, ${selectedCountry} careers, find jobs in ${selectedCountry}`;
+  
+  const canonicalUrl = selectedCountry === 'Worldwide'
+    ? 'https://jobsreport.online'
+    : `https://jobsreport.online/country/${countrySlug}`;
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -71,55 +84,13 @@ export default function HomePage() {
     fetchDashboardData();
   }, [selectedCountry]);
 
-  // Update metadata when country changes
-  useEffect(() => {
-    const countryName = selectedCountry;
-    const countrySlug = selectedCountry === 'Worldwide' 
-      ? '' 
-      : selectedCountry.toLowerCase().replace(/\s+/g, '-');
-    
-    setPageMetadata({
-      title: selectedCountry === 'Worldwide'
-        ? 'Jobs Worldwide | Find Latest Job Vacancies & Career Opportunities | JobsReport'
-        : `Jobs in ${countryName} | Latest ${countryName} Vacancies & Careers | JobsReport`,
-      description: selectedCountry === 'Worldwide'
-        ? 'Discover the latest job vacancies, trending roles, and career opportunities worldwide. Real-time job market intelligence with verified listings.'
-        : `Find the latest jobs, vacancies, and career opportunities in ${countryName}. Browse verified job listings from top employers in ${countryName}. Real-time market intelligence.`,
-      keywords: selectedCountry === 'Worldwide'
-        ? 'jobs worldwide, global jobs, international careers, find jobs, job vacancies'
-        : `jobs in ${countryName}, ${countryName} jobs, ${countryName} vacancies, ${countryName} careers, find jobs in ${countryName}, ${countryName} employment`,
-      canonicalUrl: selectedCountry === 'Worldwide'
-        ? 'https://jobsreport.online'
-        : `https://jobsreport.online/country/${countrySlug}`,
-    });
-  }, [selectedCountry]);
-
-  const topReports = reports.slice(0, 3);
-
-  if (loading) {
-    return (
-      <>
-        <Helmet>
-          <title>{pageMetadata.title}</title>
-          <meta name="description" content={pageMetadata.description} />
-        </Helmet>
-        <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
-          <RefreshCw size={24} className="text-blue-500 animate-spin" />
-          <span className="text-[10px] font-mono text-gray-500 tracking-widest uppercase">
-            Compiling Live Market Intelligence...
-          </span>
-        </div>
-      </>
-    );
-  }
-
-  // Generate structured data
+  // Structured data for SEO
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": pageMetadata.title,
-    "description": pageMetadata.description,
-    "url": pageMetadata.canonicalUrl,
+    "name": seoTitle,
+    "description": seoDescription,
+    "url": canonicalUrl,
     "isPartOf": {
       "@type": "WebSite",
       "name": "JobsReport",
@@ -151,30 +122,48 @@ export default function HomePage() {
     }
   };
 
+  const topReports = reports.slice(0, 3);
+
+  if (loading) {
+    return (
+      <>
+        <Helmet>
+          <title>{seoTitle}</title>
+          <meta name="description" content={seoDescription} />
+        </Helmet>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
+          <RefreshCw size={24} className="text-blue-500 animate-spin" />
+          <span className="text-[10px] font-mono text-gray-500 tracking-widest uppercase">
+            Compiling Live Market Intelligence...
+          </span>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <Helmet>
-        <title>{pageMetadata.title}</title>
-        <meta name="description" content={pageMetadata.description} />
-        <meta name="keywords" content={pageMetadata.keywords} />
-        <link rel="canonical" href={pageMetadata.canonicalUrl} />
+        <title>{seoTitle}</title>
+        <meta name="description" content={seoDescription} />
+        <meta name="keywords" content={seoKeywords} />
+        <link rel="canonical" href={canonicalUrl} />
         
         {/* Open Graph */}
-        <meta property="og:title" content={pageMetadata.title} />
-        <meta property="og:description" content={pageMetadata.description} />
-        <meta property="og:url" content={pageMetadata.canonicalUrl} />
+        <meta property="og:title" content={seoTitle} />
+        <meta property="og:description" content={seoDescription} />
+        <meta property="og:url" content={canonicalUrl} />
         <meta property="og:type" content="website" />
         <meta property="og:site_name" content="JobsReport" />
         
         {/* Twitter Card */}
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={pageMetadata.title} />
-        <meta name="twitter:description" content={pageMetadata.description} />
+        <meta name="twitter:title" content={seoTitle} />
+        <meta name="twitter:description" content={seoDescription} />
         
-        {/* Additional SEO */}
+        {/* Robots */}
         <meta name="robots" content="index, follow" />
         <meta name="googlebot" content="index, follow" />
-        <meta name="author" content="JobsReport" />
         
         {/* Structured Data */}
         <script type="application/ld+json">
@@ -182,13 +171,13 @@ export default function HomePage() {
         </script>
       </Helmet>
 
-      <div className="space-y-16">
+      <div className="space-y-12">
         {/* Hero Section */}
-        <section>
+        <section className="py-8 md:py-16">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="max-w-4xl"
+            className="max-w-3xl"
           >
             <div className="flex items-center gap-2 text-blue-500 font-bold text-xs uppercase tracking-widest mb-6">
               <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
@@ -213,24 +202,14 @@ export default function HomePage() {
               )}
             </h1>
             
-            <p className="text-gray-400 text-lg md:text-2xl leading-relaxed max-w-2xl mb-8">
+            <p className="text-gray-400 text-lg md:text-2xl leading-relaxed max-w-2xl">
               {selectedCountry === 'Worldwide'
-                ? 'Insight-first job discovery. We aggregate real-time market data to show you where the demand is actually shifting across the globe.'
+                ? 'Insight-first job discovery. We aggregate real-time market data to show you where the demand is actually shifting.'
                 : `Find the latest jobs and career opportunities in ${selectedCountry}. Browse verified vacancies from top employers hiring in ${selectedCountry}.`}
             </p>
             
-            {/* Search CTA */}
-            <Link
-              to="/market"
-              className="inline-flex items-center gap-3 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold transition-all group"
-            >
-              <Search size={18} />
-              <span>Browse All Jobs</span>
-              <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
-            </Link>
-            
             {/* Quick Stats */}
-            <div className="flex flex-wrap gap-6 mt-10">
+            <div className="flex gap-6 mt-8">
               <div className="flex items-center gap-2 text-sm">
                 <Zap size={16} className="text-blue-500" />
                 <span className="text-gray-400">
@@ -253,9 +232,9 @@ export default function HomePage() {
           </motion.div>
         </section>
 
-        {/* 🔥 Role Categories Section - SEO Gold */}
+        {/* 🔥 Job Categories Section */}
         <section>
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-lg font-bold text-white uppercase tracking-widest flex items-center gap-3">
                 <div className="w-1.5 h-6 bg-gradient-to-b from-blue-500 to-violet-500"></div>
@@ -270,16 +249,15 @@ export default function HomePage() {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {ROLE_CATEGORIES.map((category) => {
               const Icon = category.icon;
-              const countryPath = selectedCountry === 'Worldwide' ? '' : `/country/${selectedCountry.toLowerCase().replace(/\s+/g, '-')}`;
               
               return (
                 <Link
                   key={category.slug}
                   to={`/market?role=${category.slug}`}
-                  className={`group p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-${category.color}-500/30 transition-all`}
+                  className="group p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-blue-500/30 transition-all"
                 >
-                  <div className={`w-10 h-10 rounded-xl bg-${category.color}-500/10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
-                    <Icon size={20} className={`text-${category.color}-400`} />
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                    <Icon size={20} className="text-blue-400" />
                   </div>
                   <h3 className="text-sm font-bold text-white mb-1 group-hover:text-blue-400 transition-colors">
                     {category.name}
@@ -303,7 +281,7 @@ export default function HomePage() {
               </h2>
               <p className="text-xs text-gray-500 mt-1 font-mono">
                 {selectedCountry === 'Worldwide'
-                  ? 'Top active job listings from the global market telemetry stream'
+                  ? 'Top active job listings from the market telemetry stream'
                   : `Latest job vacancies in ${selectedCountry} — updated in real-time`}
               </p>
             </div>
@@ -323,43 +301,42 @@ export default function HomePage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {jobs.map((job: any, idx: number) => (
-                <article key={job.id}>
-                  <Link 
-                    to={`/market/${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${job.id}`}
-                    className="block p-4 bg-white/[0.01] border border-white/5 rounded-2xl hover:bg-white/[0.03] transition-all group h-full"
-                  >
-                    <div className="flex items-start gap-3">
-                      {/* Company Logo */}
-                      <div className="w-10 h-10 rounded-xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
-                        {job.logoUrl ? (
-                          <img src={job.logoUrl} alt={`${job.company} logo`} className="w-full h-full object-cover rounded-xl" />
-                        ) : (
-                          <div className="w-full h-full bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400">
-                            {job.company?.charAt(0)?.toUpperCase() || '?'}
-                          </div>
-                        )}
-                      </div>
-                      
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="px-1.5 py-0.5 rounded text-[7px] font-bold bg-blue-500/10 text-blue-400 uppercase">
-                            {job.role || 'General'}
-                          </span>
+                <Link 
+                  key={job.id} 
+                  to={`/market/${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${job.id}`}
+                  className="block p-4 bg-white/[0.01] border border-white/5 rounded-2xl hover:bg-white/[0.03] transition-all group"
+                >
+                  <div className="flex items-start gap-3">
+                    {/* Company Logo */}
+                    <div className="w-10 h-10 rounded-xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
+                      {job.logoUrl ? (
+                        <img src={job.logoUrl} alt={`${job.company} logo`} className="w-full h-full object-cover rounded-xl" />
+                      ) : (
+                        <div className="w-full h-full bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400">
+                          {job.company?.charAt(0)?.toUpperCase() || '?'}
                         </div>
-                        <h3 className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors truncate">
-                          {job.title}
-                        </h3>
-                        <div className="flex items-center gap-2 mt-1.5 text-[10px] text-gray-500">
-                          <span className="flex items-center gap-1"><Building2 size={10} />{job.company}</span>
-                          <span className="flex items-center gap-1"><MapPin size={10} />{job.location || 'Remote'}</span>
-                        </div>
-                        {job.salary && (
-                          <span className="text-[9px] text-emerald-400 font-mono mt-1 block">{job.salary}</span>
-                        )}
-                      </div>
+                      )}
                     </div>
-                  </Link>
-                </article>
+                    
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="px-1.5 py-0.5 rounded text-[7px] font-bold bg-blue-500/10 text-blue-400 uppercase">
+                          {job.role || 'General'}
+                        </span>
+                      </div>
+                      <h3 className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors truncate">
+                        {job.title}
+                      </h3>
+                      <div className="flex items-center gap-2 mt-1.5 text-[10px] text-gray-500">
+                        <span className="flex items-center gap-1"><Building2 size={10} />{job.company}</span>
+                        <span className="flex items-center gap-1"><MapPin size={10} />{job.location || 'Remote'}</span>
+                      </div>
+                      {job.salary && (
+                        <span className="text-[9px] text-emerald-400 font-mono mt-1 block">{job.salary}</span>
+                      )}
+                    </div>
+                  </div>
+                </Link>
               ))}
             </div>
           )}
@@ -370,7 +347,7 @@ export default function HomePage() {
           <div className="flex items-center justify-between mb-8 px-1">
             <div>
               <h2 className="text-lg font-bold text-white uppercase tracking-widest flex items-center gap-3">
-                <div className="w-1.5 h-6 bg-gradient-to-b from-blue-500 to-cyan-500"></div>
+                <div className="w-1.5 h-6 bg-blue-500"></div>
                 Trending Roles
               </h2>
               <p className="text-xs text-gray-500 mt-1 font-mono">
@@ -405,12 +382,10 @@ export default function HomePage() {
               <div>
                 <h2 className="text-lg font-bold text-white uppercase tracking-widest flex items-center gap-3">
                   <div className="w-1.5 h-6 bg-violet-500"></div>
-                  Market Intelligence Reports
+                  Latest Reports
                 </h2>
                 <p className="text-xs text-gray-500 mt-1 font-mono">
-                  {selectedCountry === 'Worldwide'
-                    ? 'In-depth analysis of global job market trends and sector insights'
-                    : `Latest job market analysis and employment trends for ${selectedCountry}`}
+                  Market intelligence reports and sector analysis
                 </p>
               </div>
               <Link 
@@ -430,21 +405,21 @@ export default function HomePage() {
           </section>
         )}
 
-        {/* 🌍 Explore Jobs by Country - SEO Internal Linking */}
+        {/* 🌍 Explore Jobs by Country Section */}
         <section>
-          <div className="flex items-center mb-8">
+          <div className="flex items-center mb-6">
             <div>
               <h2 className="text-lg font-bold text-white uppercase tracking-widest flex items-center gap-3">
                 <div className="w-1.5 h-6 bg-emerald-500"></div>
                 Explore Jobs by Country
               </h2>
               <p className="text-xs text-gray-500 mt-1 font-mono">
-                Find job opportunities in your region 
+                Find job opportunities in your region
               </p>
             </div>
           </div>
           
-          <nav aria-label="Country navigation" className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2">
             <Link
               to="/"
               className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
@@ -456,7 +431,7 @@ export default function HomePage() {
               🌍 Worldwide
             </Link>
             
-            {countriesList.slice(0, 30).map((country) => {
+            {countriesList.map((country) => {
               const countrySlug = country.name.toLowerCase().replace(/\s+/g, '-');
               const isActive = selectedCountry.toLowerCase() === country.name.toLowerCase();
               
@@ -474,7 +449,7 @@ export default function HomePage() {
                 </Link>
               );
             })}
-          </nav>
+          </div>
         </section>
 
         {/* 🏢 Weekly Spotlight */}
@@ -488,9 +463,7 @@ export default function HomePage() {
                     Weekly Spotlight
                   </h3>
                   <p className="text-gray-400 text-sm">
-                    {selectedCountry === 'Worldwide'
-                      ? 'Top companies actively shifting their hiring strategy based on market telemetry.'
-                      : `Leading employers hiring in ${selectedCountry} — based on live market data.`}
+                    Top companies actively shifting their hiring strategy based on market telemetry.
                   </p>
                 </div>
                 <span className="text-[10px] text-gray-500 font-mono uppercase tracking-widest bg-white/5 px-3 py-1 rounded-full">
@@ -524,60 +497,6 @@ export default function HomePage() {
             <div className="absolute bottom-0 left-0 w-24 h-24 bg-blue-500/5 rounded-full blur-2xl" />
           </div>
         </section>
-
-        {/* SEO Footer Section */}
-        <footer className="border-t border-white/5 pt-8 pb-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-8">
-            <div>
-              <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3">Popular Roles</h4>
-              <ul className="space-y-2">
-                {ROLE_CATEGORIES.slice(0, 6).map(cat => (
-                  <li key={cat.slug}>
-                    <Link 
-                      to={`/market?role=${cat.slug}`}
-                      className="text-[10px] text-gray-500 hover:text-blue-400 transition-colors"
-                    >
-                      {cat.name} Jobs
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3">Top Countries</h4>
-              <ul className="space-y-2">
-                {countriesList.slice(0, 6).map(country => (
-                  <li key={country.code}>
-                    <Link 
-                      to={`/country/${country.name.toLowerCase().replace(/\s+/g, '-')}`}
-                      className="text-[10px] text-gray-500 hover:text-blue-400 transition-colors"
-                    >
-                      Jobs in {country.name}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3">Quick Links</h4>
-              <ul className="space-y-2">
-                <li><Link to="/market" className="text-[10px] text-gray-500 hover:text-blue-400 transition-colors">Browse Jobs</Link></li>
-                <li><Link to="/reports" className="text-[10px] text-gray-500 hover:text-blue-400 transition-colors">Market Reports</Link></li>
-                <li><Link to="/" className="text-[10px] text-gray-500 hover:text-blue-400 transition-colors">Worldwide Jobs</Link></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3">About JobsReport</h4>
-              <p className="text-[10px] text-gray-500 leading-relaxed">
-                JobsReport shows real-time job market data to help job seekers to find the best career opportunities across different locations. 
-                We track hiring trends across industries and locations worldwide and also helping companies hire various professionals from different backgrounds
-              </p>
-            </div>
-          </div>
-          <div className="text-center text-[10px] text-gray-600 font-mono">
-            © {new Date().getFullYear()} JobsReport. All rights reserved.
-          </div>
-        </footer>
       </div>
     </>
   );
