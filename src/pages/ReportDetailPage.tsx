@@ -118,7 +118,7 @@ export default function ReportDetailPage() {
   const contentImage = (report.content || '').match(/<img[^>]+src="([^">]+)"/);
   const articleImage = report.image || (contentImage ? contentImage[1] : undefined);
 
-  // 🔥 NewsArticle Schema (for market intelligence reports)
+  // 🔥 NewsArticle Schema (clean - no JobPosting)
   const newsArticleSchema = {
     "@context": "https://schema.org",
     "@type": "NewsArticle",
@@ -163,27 +163,7 @@ export default function ReportDetailPage() {
     ].filter(Boolean),
     "wordCount": wordCount,
     "articleSection": report.role || 'Job Market',
-    "isAccessibleForFree": true,
-    "hasPart": jobs.length > 0 ? {
-      "@type": "ItemList",
-      "numberOfItems": jobs.filter(j => j.active !== false).length,
-      "itemListElement": jobs.filter(j => j.active !== false).slice(0, 10).map((job, index) => ({
-        "@type": "ListItem",
-        "position": index + 1,
-        "item": {
-          "@type": "JobPosting",
-          "title": job.title,
-          "hiringOrganization": {
-            "@type": "Organization",
-            "name": job.company
-          },
-          "jobLocation": {
-            "@type": "Place",
-            "address": job.location || 'Remote'
-          }
-        }
-      }))
-    } : undefined
+    "isAccessibleForFree": true
   };
 
   // 🔥 BreadcrumbList Schema
@@ -235,7 +215,6 @@ export default function ReportDetailPage() {
         ogTitle={pageTitle}
         ogDescription={pageDescription}
         ogUrl={canonicalUrl}
-        // 🔥 Pass NewsArticle + BreadcrumbList schemas
         structuredData={[newsArticleSchema, breadcrumbSchema]}
       />
 
@@ -594,7 +573,7 @@ export default function ReportDetailPage() {
                 </p>
               )}
               <p className="text-xs text-gray-500 italic p-4 bg-white/5 rounded-xl border border-dashed border-white/10 mt-4">
-                * We link directly to official company career pages. JobsReport does not host internal applications.
+                
               </p>
             </div>
 
