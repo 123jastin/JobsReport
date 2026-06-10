@@ -5,15 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     
     <!-- SEO Meta Tags -->
-    <title>JobsReport - Real-time Job platform for employers and Job seekers| Find Latest Jobs</title>
-    <meta name="description" content="Discover the latest job vacancies, trending roles, and career opportunities worldwide in Real-time job platform with verified listings from top employers." />
-    <meta name="keywords" content="jobs, job vacancies, career opportunities, find jobs, hiring, employment" />
+    <title>JobsReport - Real-time Job Platform for Employers and Job Seekers | Find Latest Jobs</title>
+    <meta name="description" content="Discover the latest job vacancies, trending roles, and career opportunities worldwide. Real-time job platform with verified listings from top employers." />
+    <meta name="keywords" content="jobs, job vacancies, career opportunities, find jobs, hiring, employment, job seekers, employers" />
     <meta name="robots" content="index, follow" />
     <meta name="googlebot" content="index, follow" />
     <meta name="author" content="JobsReport" />
     
     <!-- Open Graph -->
-    <meta property="og:title" content="JobsReport - Real-time Job platform for employers and Job seekers" />
+    <meta property="og:title" content="JobsReport - Real-time Job Platform for Employers and Job Seekers" />
     <meta property="og:description" content="Discover the latest job vacancies, trending roles, and career opportunities worldwide." />
     <meta property="og:url" content="https://jobsreport.online" />
     <meta property="og:type" content="website" />
@@ -21,7 +21,7 @@
     
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="JobsReport - Real-time Job platform for employers and Job seekers " />
+    <meta name="twitter:title" content="JobsReport - Real-time Job Platform for Employers and Job Seekers" />
     <meta name="twitter:description" content="Discover the latest job vacancies, trending roles, and career opportunities worldwide." />
     
     <!-- Canonical -->
@@ -31,6 +31,34 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    
+    <!-- Ad Control Styles -->
+    <style>
+      /* Hide auto-injected ads at wrong positions */
+      body > div[id*="clever"]:first-child,
+      body > div[class*="clever"]:first-child,
+      body > ins:first-child,
+      body > iframe[src*="clever"]:first-child {
+        display: none !important;
+      }
+      
+      /* Ad container styling */
+      .ad-container {
+        min-height: 100px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin: 16px auto;
+        max-width: 1280px;
+        padding: 0 16px;
+        overflow: hidden;
+        background: transparent;
+      }
+      
+      .ad-container:empty {
+        display: none;
+      }
+    </style>
     
     <!-- Clever Ads Script -->
     <script data-cfasync="false" type="text/javascript" id="clever-core">
@@ -48,6 +76,14 @@
             c.setAttribute("data-callback-url-click", "put-your-click-macro-here");
             c.setAttribute("data-callback-url-view", "put-your-view-macro-here");
 
+            // Debug
+            c.onload = function() {
+                console.log('✅ Clever Ads script loaded');
+            };
+            c.onerror = function() {
+                console.error('❌ Clever Ads script failed');
+            };
+
             try {
                 a = parent.document.getElementsByTagName("script")[0] || document.getElementsByTagName("script")[0];
             } catch (e) {
@@ -58,6 +94,60 @@
             a.parentNode.insertBefore(c, a);
         })(document, window);
     /* ]]> */
+    </script>
+
+    <!-- Ad Position Controller -->
+    <script>
+      (function() {
+        console.log('🔄 Ad position controller active');
+        
+        const observer = new MutationObserver(function(mutations) {
+          mutations.forEach(function(mutation) {
+            mutation.addedNodes.forEach(function(node) {
+              if (node.nodeType === 1) {
+                const el = node as HTMLElement;
+                
+                // Detect Clever ad elements
+                const isAd = 
+                  (el.id && el.id.toLowerCase().includes('clever')) ||
+                  (el.className && typeof el.className === 'string' && el.className.toLowerCase().includes('clever')) ||
+                  el.tagName === 'INS' ||
+                  (el.tagName === 'DIV' && el.querySelector('iframe[src*="clever"]'));
+                
+                if (isAd) {
+                  console.log('📢 Ad detected, moving to proper zone');
+                  
+                  // Find target zone
+                  const topZone = document.getElementById('ad-zone-top');
+                  const bottomZone = document.getElementById('ad-zone-bottom');
+                  
+                  // Move to first available zone
+                  setTimeout(() => {
+                    if (topZone && !topZone.hasChildNodes()) {
+                      topZone.appendChild(el);
+                      console.log('✅ Ad moved to top zone');
+                    } else if (bottomZone && !bottomZone.hasChildNodes()) {
+                      bottomZone.appendChild(el);
+                      console.log('✅ Ad moved to bottom zone');
+                    }
+                  }, 200);
+                }
+              }
+            });
+          });
+        });
+
+        // Start observing after DOM is ready
+        if (document.body) {
+          observer.observe(document.body, { childList: true, subtree: true });
+          console.log('👀 Watching for ads...');
+        } else {
+          document.addEventListener('DOMContentLoaded', function() {
+            observer.observe(document.body, { childList: true, subtree: true });
+            console.log('👀 Watching for ads...');
+          });
+        }
+      })();
     </script>
   </head>
   <body>
