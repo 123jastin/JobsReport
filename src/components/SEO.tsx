@@ -8,7 +8,7 @@ interface SEOProps {
   ogTitle?: string;
   ogDescription?: string;
   ogUrl?: string;
-  structuredData?: object;
+  structuredData?: object | object[]; // 🔥 Now supports single object OR array of objects
 }
 
 export default function SEO({
@@ -22,8 +22,10 @@ export default function SEO({
   structuredData,
 }: SEOProps) {
   useEffect(() => {
+    // Update document title
     document.title = title;
 
+    // Helper to set meta tags
     const setMeta = (name: string, content: string, isProperty = false) => {
       const attr = isProperty ? 'property' : 'name';
       let el = document.querySelector(`meta[${attr}="${name}"]`);
@@ -35,6 +37,7 @@ export default function SEO({
       el.setAttribute('content', content);
     };
 
+    // Set all meta tags
     setMeta('description', description);
     if (keywords) setMeta('keywords', keywords);
     if (ogTitle) setMeta('og:title', ogTitle, true);
@@ -47,6 +50,7 @@ export default function SEO({
     setMeta('robots', 'index, follow');
     setMeta('googlebot', 'index, follow');
 
+    // Set canonical URL
     if (canonicalUrl) {
       let link = document.querySelector('link[rel="canonical"]');
       if (!link) {
@@ -57,14 +61,23 @@ export default function SEO({
       link.setAttribute('href', canonicalUrl);
     }
 
+    // 🔥 FIX: Handle structured data - supports single object OR array of objects
     if (structuredData) {
-      let script = document.querySelector('script[type="application/ld+json"]');
-      if (!script) {
-        script = document.createElement('script');
+      // Remove all existing structured data scripts
+      const existingScripts = document.querySelectorAll('script[type="application/ld+json"][data-schema]');
+      existingScripts.forEach(el => el.remove());
+
+      // Convert to array if single object
+      const schemas = Array.isArray(structuredData) ? structuredData : [structuredData];
+
+      // Add each schema as a separate script tag
+      schemas.forEach((schema, index) => {
+        const script = document.createElement('script');
         script.setAttribute('type', 'application/ld+json');
+        script.setAttribute('data-schema', `schema-${index}`); // Track for cleanup
+        script.textContent = JSON.stringify(schema);
         document.head.appendChild(script);
-      }
-      script.textContent = JSON.stringify(structuredData);
+      });
     }
   }, [title, description, keywords, canonicalUrl, ogTitle, ogDescription, ogUrl, structuredData]);
 
