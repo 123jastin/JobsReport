@@ -9,6 +9,8 @@ import Layout from './components/Layout';
 import HomePage from './pages/HomePage';
 import CountryPage from './pages/CountryPage';
 import CompaniesPage from './pages/CompaniesPage';
+import RegionsPage from './pages/RegionsPage';
+import RegionPage from './pages/RegionPage';
 import ReportDetailPage from './pages/ReportDetailPage';
 import ReportsPage from './pages/ReportsPage';
 import MarketPage from './pages/MarketPage';
@@ -33,6 +35,10 @@ export default function App() {
                 {/* 🌍 Country Pages - SEO Indexable */}
                 <Route path="/country/:slug" element={<CountryPage />} />
                 <Route path="/jobs-in/:slug" element={<CountryPage />} />
+
+                {/* 📍 Regions Pages - SEO Indexable */}
+                <Route path="/regions" element={<RegionsPage />} />
+                <Route path="/country/:countrySlug/region/:regionSlug" element={<RegionPage />} />
 
                 {/* 🏢 Companies Page */}
                 <Route path="/companies" element={<CompaniesPage />} />
