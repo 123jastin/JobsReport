@@ -4,7 +4,6 @@
  */
 
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { HelmetProvider } from 'react-helmet-async';
 
 import Layout from './components/Layout';
 import HomePage from './pages/HomePage';
@@ -21,42 +20,40 @@ import { CareerRedirectProvider } from './context/CareerRedirectContext';
 
 export default function App() {
   return (
-    <HelmetProvider>
-      <CountryProvider>
-        <CareerRedirectProvider>
-          <AuthProvider>
-            <Router>
-              <Layout>
-                <Routes>
-                  {/* 🏠 Homepage */}
-                  <Route path="/" element={<HomePage />} />
+    <CountryProvider>
+      <CareerRedirectProvider>
+        <AuthProvider>
+          <Router>
+            <Layout>
+              <Routes>
+                {/* 🏠 Homepage */}
+                <Route path="/" element={<HomePage />} />
 
-                  {/* 🌍 Country Pages - SEO Indexable */}
-                  <Route path="/country/:slug" element={<CountryPage />} />
-                  <Route path="/jobs-in/:slug" element={<CountryPage />} />
+                {/* 🌍 Country Pages - SEO Indexable */}
+                <Route path="/country/:slug" element={<CountryPage />} />
+                <Route path="/jobs-in/:slug" element={<CountryPage />} />
 
-                  {/* 📊 Market Routes */}
-                  <Route path="/market/search/:query" element={<MarketPage />} />
-                  <Route path="/market/:jobId" element={<JobDetailPage />} />
-                  <Route path="/market" element={<MarketPage />} />
+                {/* 📊 Market Routes */}
+                <Route path="/market/search/:query" element={<MarketPage />} />
+                <Route path="/market/:jobId" element={<JobDetailPage />} />
+                <Route path="/market" element={<MarketPage />} />
 
-                  {/* 📰 Reports */}
-                  <Route path="/reports" element={<ReportsPage />} />
-                  <Route path="/report/:slug" element={<ReportDetailPage />} />
+                {/* 📰 Reports */}
+                <Route path="/reports" element={<ReportsPage />} />
+                <Route path="/report/:slug" element={<ReportDetailPage />} />
 
-                  {/* 🔐 Admin */}
-                  <Route path="/admin" element={<AdminPage />} />
+                {/* 🔐 Admin */}
+                <Route path="/admin" element={<AdminPage />} />
 
-                  {/* Fallbacks */}
-                  <Route path="/jobs" element={<Navigate to="/market" replace />} />
-                  <Route path="/companies" element={<Navigate to="/" replace />} />
-                  <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
-              </Layout>
-            </Router>
-          </AuthProvider>
-        </CareerRedirectProvider>
-      </CountryProvider>
-    </HelmetProvider>
+                {/* Fallbacks */}
+                <Route path="/jobs" element={<Navigate to="/market" replace />} />
+                <Route path="/companies" element={<Navigate to="/" replace />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Layout>
+          </Router>
+        </AuthProvider>
+      </CareerRedirectProvider>
+    </CountryProvider>
   );
 }
