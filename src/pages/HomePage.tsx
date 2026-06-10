@@ -84,7 +84,7 @@ export default function HomePage() {
     fetchDashboardData();
   }, [selectedCountry]);
 
-  // Structured data for SEO
+  // Structured data for SEO - WebPage only (no JobPosting)
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "WebPage",
@@ -100,25 +100,6 @@ export default function HomePage() {
         "target": "https://jobsreport.online/market/search/{search_term_string}",
         "query-input": "required name=search_term_string"
       }
-    },
-    "mainEntity": {
-      "@type": "ItemList",
-      "itemListElement": jobs.map((job, index) => ({
-        "@type": "ListItem",
-        "position": index + 1,
-        "item": {
-          "@type": "JobPosting",
-          "title": job.title,
-          "hiringOrganization": {
-            "@type": "Organization",
-            "name": job.company
-          },
-          "jobLocation": {
-            "@type": "Place",
-            "address": job.location || 'Remote'
-          }
-        }
-      }))
     }
   };
 
