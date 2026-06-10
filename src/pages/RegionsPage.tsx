@@ -33,7 +33,6 @@ export default function RegionsPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch locations and jobs in parallel
         const countryParam = selectedCountry === 'Worldwide' ? '' : selectedCountry;
         const [locationsRes, marketRes] = await Promise.all([
           fetch('/api/locations'),
@@ -49,19 +48,16 @@ export default function RegionsPage() {
         const marketData = await marketRes.json();
         const jobs = marketData.jobs || [];
 
-        // If a country is selected, filter locations by that country
         const filteredLocations = selectedCountry === 'Worldwide'
           ? locations
           : locations.filter(loc => 
               loc.country.toLowerCase() === selectedCountry.toLowerCase()
             );
 
-        // Map locations to regions with job counts
         const regionsWithJobs: RegionData[] = filteredLocations.map(loc => {
           const locationName = loc.name.toLowerCase();
           const regionName = loc.region?.toLowerCase() || '';
           
-          // Find jobs matching this location
           const matchingJobs = jobs.filter((job: any) => {
             if (!job.location) return false;
             const jobLoc = job.location.toLowerCase();
@@ -79,7 +75,6 @@ export default function RegionsPage() {
           };
         });
 
-        // Sort: regions with jobs first, then by job count
         const sorted = regionsWithJobs.sort((a, b) => {
           if (a.jobCount > 0 && b.jobCount === 0) return -1;
           if (a.jobCount === 0 && b.jobCount > 0) return 1;
@@ -97,17 +92,14 @@ export default function RegionsPage() {
     fetchData();
   }, [selectedCountry]);
 
-  // Filter by search
   const filteredRegions = regions.filter(r =>
     r.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     r.country.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Separate regions with jobs and without
   const regionsWithJobs = filteredRegions.filter(r => r.jobCount > 0);
   const regionsWithoutJobs = filteredRegions.filter(r => r.jobCount === 0);
 
-  // Group by country for worldwide view
   const groupedByCountry = selectedCountry === 'Worldwide'
     ? regionsWithJobs.reduce((acc, region) => {
         const country = region.country || 'Other';
@@ -117,32 +109,76 @@ export default function RegionsPage() {
       }, {} as Record<string, RegionData[]>)
     : null;
 
-  // Total stats
   const totalActiveJobs = regionsWithJobs.reduce((sum, r) => sum + r.activeJobs, 0);
   const totalLocations = regions.length;
   const locationsWithJobs = regionsWithJobs.length;
 
+  // SEO metadata
+  const pageTitle = selectedCountry === 'Worldwide'
+    ? 'Jobs by City & Region | Browse Job Locations Worldwide | JobsReport'
+    : `Jobs by Region in ${selectedCountry} | Browse ${selectedCountry} Cities | JobsReport`;
+
+  const pageDescription = selectedCountry === 'Worldwide'
+    ? `Browse jobs by city and region worldwide. Find opportunities across ${locationsWithJobs} locations with ${totalActiveJobs} active jobs.`
+    : `Browse jobs by region in ${selectedCountry}. Find opportunities across ${locationsWithJobs} locations with ${totalActiveJobs} active jobs.`;
+
+  // Structured data for regions directory page
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    "name": pageTitle,
+    "description": pageDescription,
+    "url": "https://jobsreport.online/regions",
+    "isPartOf": {
+      "@type": "WebSite",
+      "name": "JobsReport",
+      "url": "https://jobsreport.online"
+    },
+    "mainEntity": {
+      "@type": "ItemList",
+      "numberOfItems": regionsWithJobs.length,
+      "itemListElement": regionsWithJobs.slice(0, 50).map((region, index) => ({
+        "@type": "ListItem",
+        "position": index + 1,
+        "item": {
+          "@type": "Place",
+          "name": region.name,
+          "address": {
+            "@type": "PostalAddress",
+            "addressLocality": region.name,
+            "addressCountry": region.country
+          },
+          "url": `https://jobsreport.online/country/${region.countrySlug}/region/${region.slug}`,
+          "description": `${region.activeJobs} active job(s) available in ${region.name}, ${region.country}.`
+        }
+      }))
+    }
+  };
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="w-8 h-8 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
-      </div>
+      <>
+        <SEO title={pageTitle} description={pageDescription} />
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="w-8 h-8 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+        </div>
+      </>
     );
   }
 
   return (
     <>
       <SEO
-        title={selectedCountry === 'Worldwide'
-          ? 'Jobs by City & Region | Browse Job Locations Worldwide | JobsReport'
-          : `Jobs by Region in ${selectedCountry} | Browse ${selectedCountry} Cities | JobsReport`}
-        description={selectedCountry === 'Worldwide'
-          ? `Browse jobs by city and region worldwide. Find opportunities across ${locationsWithJobs} locations with ${totalActiveJobs} active jobs.`
-          : `Browse jobs by region in ${selectedCountry}. Find opportunities across ${locationsWithJobs} locations with ${totalActiveJobs} active jobs.`}
+        title={pageTitle}
+        description={pageDescription}
         keywords={selectedCountry === 'Worldwide'
           ? 'jobs by region, jobs by city, regional jobs, local jobs, find jobs near me'
           : `jobs in ${selectedCountry} regions, ${selectedCountry} cities jobs, regional jobs ${selectedCountry}`}
         canonicalUrl="https://jobsreport.online/regions"
+        ogTitle={pageTitle}
+        ogDescription={pageDescription}
+        ogUrl="https://jobsreport.online/regions"
+        structuredData={structuredData}
       />
 
       <div className="min-h-screen space-y-8 pt-8">
@@ -196,8 +232,8 @@ export default function RegionsPage() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder={selectedCountry === 'Worldwide' 
-              ? "Search cities or countries..." 
-              : `Search regions in ${selectedCountry}...`}
+              ? `Search ${locationsWithJobs} cities or countries...` 
+              : `Search ${locationsWithJobs} regions in ${selectedCountry}...`}
             className="w-full bg-white/[0.02] border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white text-sm focus:outline-none focus:border-amber-500/50 transition-colors"
           />
         </div>
