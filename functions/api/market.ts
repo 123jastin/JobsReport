@@ -17,7 +17,6 @@ function formatSalary(job: any, currencies: Record<string, {symbol: string, name
   if (min) return `${symbol} ${min}+`;
   if (max) return `${symbol} Up to ${max}`;
   
-  // Fallback to display salary
   if (job.salary && job.salary.trim()) return `${symbol} ${job.salary}`;
   
   return '';
@@ -37,7 +36,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       currenciesList.push({ code: c.code, symbol: c.symbol, name: c.name, flag: c.flag || '' });
     }
 
-    // 1. Get all active jobs with full schema data
+    // 🔥 Get ALL jobs (active + expired) for job detail pages and related jobs
     const jobsResult = await DB.prepare(`
       SELECT 
         j.id, j.title, j.description,
@@ -52,9 +51,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       FROM jobs j
       JOIN roles r ON j.role_id = r.id
       JOIN companies c ON j.company_id = c.id
-      WHERE j.is_active = 1
       ORDER BY j.posted_at DESC
-      LIMIT 100
+      LIMIT 200
     `).all();
 
     // Map jobs with all fields
@@ -112,11 +110,14 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           slug: `${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${job.id}`,
           postedAt: job.posted_at,
           expiresAt: job.expires_at,
-          active: job.is_active === 1,
+          active: job.is_active === 1, // 🔥 Keep this for expired detection
           images: images
         };
       })
     );
+
+    // 🔥 Separate active jobs for listings (homepage, market page)
+    const activeJobs = jobs.filter(j => j.active);
 
     // Get roles, companies, activity
     const rolesResult = await DB.prepare('SELECT name FROM roles ORDER BY name').all();
@@ -147,11 +148,17 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     const workplaceTypes = workplaceResult.results.map((w: any) => w.workplace_type);
 
     return new Response(JSON.stringify({
-      jobs, roles, companies, recentActivity, jobCategories, workplaceTypes,
+      // 🔥 Return ALL jobs (active + expired) for job detail pages
+      jobs: jobs,
+      // 🔥 Also return active-only for listings
+      activeJobs: activeJobs,
+      roles, companies, recentActivity, jobCategories, workplaceTypes,
       currencies: currenciesList,
       stats: {
-        totalJobs: jobs.length, totalCompanies: companies.length,
-        totalRoles: roles.length, activeJobs: jobs.filter(j => j.active).length
+        totalJobs: jobs.length,
+        activeJobs: activeJobs.length,
+        totalCompanies: companies.length,
+        totalRoles: roles.length
       }
     }), {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-cache' }
@@ -160,8 +167,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   } catch (err) {
     console.error('Market API Error:', err);
     return new Response(JSON.stringify({
-      jobs: [], roles: [], companies: [], recentActivity: [], jobCategories: [], workplaceTypes: [], currencies: [],
-      stats: { totalJobs: 0, totalCompanies: 0, totalRoles: 0, activeJobs: 0 },
+      jobs: [], activeJobs: [], roles: [], companies: [], recentActivity: [], jobCategories: [], workplaceTypes: [], currencies: [],
+      stats: { totalJobs: 0, activeJobs: 0, totalCompanies: 0, totalRoles: 0 },
       error: err instanceof Error ? err.message : 'Failed to load market data'
     }), { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
   }
