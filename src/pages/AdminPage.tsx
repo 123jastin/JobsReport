@@ -1128,25 +1128,31 @@ const handleCreateCompany = async (e: FormEvent) => {
     }
   };
 
-  const handleDeleteRole = async (id: string) => {
-    if (userRole === 'editor') {
-      showFeedback('error', 'PERMISSION DENIED: Role expulsion rejected.');
-      return;
-    }
+const handleDeleteRole = async (id: string) => {
+  if (userRole === 'editor') {
+    showFeedback('error', 'PERMISSION DENIED: Role expulsion rejected.');
+    return;
+  }
 
-    if (!confirm("Expel this role mapping category?")) return;
+  if (!confirm("Delete this role? Jobs using this role will need to be reassigned.")) return;
 
-    try {
-      const res = await fetch(`/api/admin/roles/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setRolesState(prev => prev.filter(r => r.id !== id));
-        showFeedback('success', 'Normalization algorithm reference expelled.');
-        fetchSystemData();
-      }
-    } catch (err) {
-      showFeedback('error', 'Could not purge role mapping.');
+  try {
+    const res = await fetch(`/api/admin/roles/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    
+    if (res.ok) {
+      setRolesState(prev => prev.filter(r => r.id !== id));
+      showFeedback('success', 'Role deleted successfully.');
+      fetchSystemData();
+    } else {
+      showFeedback('error', data.error || 'Could not delete role.');
     }
-  };
+  } catch (err) {
+    showFeedback('error', 'Could not purge role mapping.');
+  }
+};
+  
+
 
   const handlePostReport = async (e: FormEvent) => {
     e.preventDefault();
