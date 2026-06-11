@@ -961,100 +961,139 @@ const handleIngestJob = async (e: FormEvent) => {
       showFeedback('error', 'Failed delete operation.');
     }
   };
-const handleCreateCompany = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!companyForm.name) return;
 
-    if (userRole === 'editor') {
-      showFeedback('error', 'PERMISSION DENIED: Corporate index editing is blocked.');
+
+
+// Add handleEditCompany function
+const handleEditCompany = (co: Company) => {
+  setEditingCompanyId(co.id);
+  setCompanyForm({
+    name: co.name,
+    url: co.url || '',
+    logoUrl: co.logoUrl || ''
+  });
+  window.scrollTo({ top: 300, behavior: 'smooth' });
+};
+
+// Add handleCancelEditCompany function
+const handleCancelEditCompany = () => {
+  setEditingCompanyId(null);
+  setCompanyForm({ name: '', url: '', logoUrl: '' });
+};
+
+// Updated handleDeleteCompany with better error handling
+const handleDeleteCompany = async (id: string) => {
+  if (userRole === 'editor') {
+    showFeedback('error', 'PERMISSION DENIED: Purge request rejected.');
+    return;
+  }
+
+  if (!confirm("Remove this company? This will also delete all jobs associated with this company.")) return;
+
+  try {
+    const res = await fetch(`/api/admin/companies/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    
+    if (res.ok) {
+      setCompaniesState(prev => prev.filter(c => c.id !== id));
+      showFeedback('success', data.message || 'Company removed from active inventory.');
+      fetchSystemData();
+    } else {
+      showFeedback('error', data.error || data.details || 'Could not delete company.');
+    }
+  } catch (err) {
+    showFeedback('error', 'Network error. Could not delete company profile.');
+  }
+};
+
+// Updated handleCreateCompany for both create and edit
+const handleCreateCompany = async (e: FormEvent) => {
+  e.preventDefault();
+  if (!companyForm.name) return;
+
+  if (userRole === 'editor') {
+    showFeedback('error', 'PERMISSION DENIED: Corporate index editing is blocked.');
+    return;
+  }
+
+  if (!editingCompanyId) {
+    const duplicateExists = companiesState.some(
+      c => c.name.toLowerCase() === companyForm.name.toLowerCase().trim()
+    );
+    if (duplicateExists) {
+      showFeedback('error', `Company "${companyForm.name}" already exists.`);
       return;
     }
+  }
 
-    if (!editingCompanyId) {
-      const duplicateExists = companiesState.some(
-        c => c.name.toLowerCase() === companyForm.name.toLowerCase().trim()
-      );
-      if (duplicateExists) {
-        showFeedback('error', `Company "${companyForm.name}" already exists.`);
-        return;
-      }
-    }
-
-    setActionLoading(true);
-    try {
-      let logoUrl = companyForm.logoUrl;
+  setActionLoading(true);
+  try {
+    let logoUrl = companyForm.logoUrl;
+    
+    // Upload logo to R2 if it's a base64 image
+    if (logoUrl && logoUrl.startsWith('data:image')) {
+      const fileInput = document.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement;
+      const file = fileInput?.files?.[0];
       
-      // ✅ Upload logo to R2 if it's a base64 image or file
-      if (logoUrl && logoUrl.startsWith('data:image')) {
-        // Get the file from the input
-        const fileInput = document.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement;
-        const file = fileInput?.files?.[0];
-        
-        if (file) {
-          // Compress to WebP first
+      if (file) {
+        try {
           const compressedLogo = await compressToWebP(file, 200);
-          
-          // Convert base64 to blob for upload
           const response = await fetch(compressedLogo);
           const blob = await response.blob();
-          
-          // Upload to R2
           const formData = new FormData();
           const logoFileName = `logo-${companyForm.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}.webp`;
           formData.append('file', blob, logoFileName);
           formData.append('name', logoFileName);
           formData.append('altText', `${companyForm.name} logo`);
-          
           const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
           if (uploadRes.ok) {
             const uploadData = await uploadRes.json();
-            logoUrl = uploadData.url; // ✅ R2 URL: https://media.jobsreport.online/logo-xxx.webp
+            logoUrl = uploadData.url;
             console.log('Logo uploaded to R2:', logoUrl);
-          } else {
-            showFeedback('error', 'Logo upload failed. Saving anyway.');
           }
-        }
+        } catch (logoErr) { console.error('Logo upload failed:', logoErr); }
       }
-
-      const url = editingCompanyId 
-        ? `/api/admin/companies/${editingCompanyId}` 
-        : '/api/admin/companies';
-      const method = editingCompanyId ? 'PUT' : 'POST';
-
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: companyForm.name.trim(),
-          url: companyForm.url,
-          logoUrl: logoUrl // ✅ Now R2 URL
-        })
-      });
-      
-      if (res.ok) {
-        const data = await res.json();
-        if (editingCompanyId) {
-          setCompaniesState(prev => prev.map(c => c.id === editingCompanyId ? { ...c, ...data } : c));
-          showFeedback('success', `Updated ${companyForm.name}.`);
-        } else {
-          setCompaniesState(prev => [...prev, data]);
-          showFeedback('success', `Created ${companyForm.name}.`);
-        }
-        setCompanyForm({ name: '', url: '', logoUrl: '' });
-        setEditingCompanyId(null);
-        fetchSystemData();
-      } else {
-        const errData = await res.json();
-        showFeedback('error', errData.error || 'Failed to save company');
-      }
-    } catch (err) {
-      showFeedback('error', 'Error establishing corporate database reference.');
-    } finally {
-      setActionLoading(false);
     }
-  };
 
+    const url = editingCompanyId 
+      ? `/api/admin/companies/${editingCompanyId}` 
+      : '/api/admin/companies';
+    const method = editingCompanyId ? 'PUT' : 'POST';
 
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: companyForm.name.trim(),
+        url: companyForm.url,
+        logoUrl: logoUrl
+      })
+    });
+    
+    const data = await res.json();
+    
+    if (res.ok) {
+      if (editingCompanyId) {
+        setCompaniesState(prev => prev.map(c => c.id === editingCompanyId ? { ...c, ...data, logoUrl: data.logoUrl || c.logoUrl } : c));
+        showFeedback('success', `Updated ${companyForm.name}.`);
+      } else {
+        setCompaniesState(prev => [...prev, { ...data, logoUrl: data.logoUrl || '' }]);
+        showFeedback('success', `Created ${companyForm.name}.`);
+      }
+      setCompanyForm({ name: '', url: '', logoUrl: '' });
+      setEditingCompanyId(null);
+      fetchSystemData();
+    } else {
+      showFeedback('error', data.error || data.details || 'Failed to save company');
+    }
+  } catch (err) {
+    showFeedback('error', 'Error establishing corporate database reference.');
+    console.error('Company save error:', err);
+  } finally {
+    setActionLoading(false);
+  }
+};
+  
 
 
   const handleDeleteCompany = async (id: string) => {
