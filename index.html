@@ -31,12 +31,21 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    
+    <!-- Google Analytics - Captures ALL traffic across ALL pages -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-KMM0JJEPZ5"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-KMM0JJEPZ5');
+    </script>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     
-    <!-- Clever Ads Script - Just before </body> -->
+    <!-- Clever Ads Script -->
     <script data-cfasync="false" type="text/javascript" id="clever-core">
     /* <![CDATA[ */
         (function (document, window) {
