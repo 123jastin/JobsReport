@@ -43,6 +43,9 @@ export default function App() {
                 {/* 🏢 Companies Page */}
                 <Route path="/companies" element={<CompaniesPage />} />
 
+                {/* 🎯 Role/Category Pages - SEO Indexable */}
+                <Route path="/role/:roleSlug" element={<MarketPage />} />
+
                 {/* 📊 Market Routes */}
                 <Route path="/market/search/:query" element={<MarketPage />} />
                 <Route path="/market/:jobId" element={<JobDetailPage />} />
