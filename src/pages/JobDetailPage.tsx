@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import SEO from '../components/SEO';
 import {
   Building2, MapPin, Clock, ExternalLink, ArrowLeft,
   FileText, Eye, ChevronLeft, ChevronRight, X, Download,
-  Briefcase, Calendar, Globe, Share2
+  Briefcase, Calendar, Globe, Share2, AlertCircle
 } from 'lucide-react';
 import { useCareerRedirect } from '../context/CareerRedirectContext';
 
 export default function JobDetailPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const [job, setJob] = useState<any>(null);
+  const [allJobs, setAllJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { triggerRedirect } = useCareerRedirect();
   
@@ -17,12 +19,22 @@ export default function JobDetailPage() {
   const [viewerIndex, setViewerIndex] = useState(0);
   const [viewerFiles, setViewerFiles] = useState<any[]>([]);
 
+  // 🔥 Single source of truth for expired detection
+  const isExpired = job ? (
+    job.active === false || 
+    (job.expiresAt && new Date(job.expiresAt) < new Date())
+  ) : false;
+
   useEffect(() => {
     async function loadJob() {
       try {
         const res = await fetch('/api/market');
         if (res.ok) {
           const data = await res.json();
+          
+          // 🔥 Store all jobs for related jobs
+          setAllJobs(data.jobs || []);
+          
           const jobIdMatch = jobId?.match(/job-([a-z0-9]+)$/i);
           const extractedId = jobIdMatch ? `job-${jobIdMatch[1]}` : jobId;
           
@@ -56,6 +68,32 @@ export default function JobDetailPage() {
     window.scrollTo(0, 0);
   }, [jobId]);
 
+  // 🔥 Generate related jobs (6 minimum)
+  const getRelatedJobs = () => {
+    if (!job || allJobs.length === 0) return [];
+    
+    // First: same role, company, or category
+    const related = allJobs.filter(j => 
+      j.id !== job.id && (
+        j.role === job.role ||
+        j.company === job.company ||
+        j.job_category === job.job_category
+      )
+    );
+    
+    // Fill up to 6 with other jobs if needed
+    if (related.length < 6) {
+      const remaining = allJobs
+        .filter(j => j.id !== job.id && !related.find(r => r.id === j.id))
+        .slice(0, 6 - related.length);
+      related.push(...remaining);
+    }
+    
+    return related.slice(0, 6);
+  };
+
+  const relatedJobs = getRelatedJobs();
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -80,79 +118,89 @@ export default function JobDetailPage() {
   const hasDescription = job.description && job.description.trim() !== '';
   const isEmailLink = job.url && job.url.startsWith('mailto:');
 
-  // ✅ Salary - API already returns formatted with proper currency symbol
+  // Salary display
   const salaryDisplay = job.salary || null;
   const currencyFlag = job.salary_currency_flag || '🇹🇿';
-  const currencyName = job.salary_currency_name || 'Tanzanian Shilling';
 
   return (
     <div className="min-h-screen bg-black text-white">
       
-      {/* ========== GOOGLE JOB POSTING STRUCTURED DATA ========== */}
+      {/* ========== SEO COMPONENT ========== */}
+      <SEO
+        title={isExpired 
+          ? `${job.title} - ${job.company} (Expired) | JobsReport`
+          : `${job.title} - ${job.company} | JobsReport`
+        }
+        description={`${job.title} at ${job.company} in ${job.location || 'Remote'}. ${isExpired ? 'This job listing has expired.' : 'Apply now!'} ${job.role || ''} ${job.salary ? '• ' + job.salary : ''}`}
+        canonicalUrl={`https://jobsreport.online/market/${job.slug || job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${job.id}`}
+      />
+
+      {/* ========== SCHEMA: Active=JobPosting, Expired=WebPage ========== */}
       <script type="application/ld+json">
-        {JSON.stringify({
-          "@context": "https://schema.org",
-          "@type": "JobPosting",
-          "title": job.title,
-          "description": (job.description || '').replace(/<[^>]*>/g, '').substring(0, 5000),
-          "identifier": {
-            "@type": "PropertyValue",
-            "name": "JobsReport",
-            "value": job.id
-          },
-          "datePosted": job.postedAt,
-          "validThrough": job.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          "employmentType": job.employment_type || 'FULL_TIME',
-          "hiringOrganization": {
-            "@type": "Organization",
-            "name": job.company,
-            "sameAs": job.companyWebsite || '',
-            "logo": job.logoUrl || ''
-          },
-          "jobLocation": {
-            "@type": "Place",
-            "address": {
-              "@type": "PostalAddress",
-              "streetAddress": job.street_address || '',
-              "addressLocality": job.city || job.location || '',
-              "addressRegion": job.region || '',
-              "addressCountry": "TZ",
-              "postalCode": job.postcode || ''
-            }
-          },
-          "baseSalary": (job.salary_min || job.salary_max) ? {
-            "@type": "MonetaryAmount",
-            "currency": (job.salary_currency || 'TZS').toUpperCase(),
-            "value": {
-              "@type": "QuantitativeValue",
-              "minValue": Number(job.salary_min || job.salary_max),
-              "maxValue": Number(job.salary_max || job.salary_min),
-              "unitText": "MONTH"
-            }
-          } : undefined,
-          "educationRequirements": (job.education_level && job.education_level !== 'Any' && job.education_level !== '') ? {
-            "@type": "EducationalOccupationalCredential",
-            "credentialCategory": (() => {
-              const edu = (job.education_level || '').toLowerCase();
-              if (edu.includes('high school')) return 'high school';
-              if (edu.includes('diploma')) return 'associate degree';
-              if (edu.includes('bachelor')) return 'bachelor degree';
-              if (edu.includes('master')) return 'master degree';
-              if (edu.includes('phd') || edu.includes('doctorate')) return 'doctoral degree';
-              return job.education_level;
-            })()
-          } : undefined,
-          "experienceRequirements": job.experience_months > 0 ? {
-            "@type": "OccupationalExperienceRequirements",
-            "monthsOfExperience": Number(job.experience_months)
-          } : undefined,
-          "skills": Array.isArray(job.skills) && job.skills.length > 0 ? job.skills.join(', ') : undefined,
-          "jobBenefits": Array.isArray(job.benefits) && job.benefits.length > 0 ? job.benefits.join(', ') : undefined,
-          "industry": job.industry || undefined,
-          "occupationalCategory": job.job_category || job.role || undefined,
-          "image": job.images?.find((i: any) => i.type === 'image')?.url || job.logoUrl || undefined,
-          "url": `https://jobsreport.online/market/${job.slug || job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${job.id}`
-        })}
+        {JSON.stringify(
+          isExpired 
+            ? {
+                "@context": "https://schema.org",
+                "@type": "WebPage",
+                "name": `${job.title} at ${job.company} (Expired Job Listing)`,
+                "description": `${job.title} at ${job.company} in ${job.location || 'Remote'}. This job listing has expired. Browse similar jobs on JobsReport.`,
+                "url": `https://jobsreport.online/market/${job.slug || job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${job.id}`
+              }
+            : {
+                "@context": "https://schema.org",
+                "@type": "JobPosting",
+                "title": job.title,
+                "description": (job.description || '').replace(/<[^>]*>/g, '').substring(0, 5000),
+                "identifier": {
+                  "@type": "PropertyValue",
+                  "name": "JobsReport",
+                  "value": job.id
+                },
+                "datePosted": job.postedAt,
+                "validThrough": job.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                "employmentType": job.employment_type || 'FULL_TIME',
+                "hiringOrganization": {
+                  "@type": "Organization",
+                  "name": job.company,
+                  "sameAs": job.companyWebsite || '',
+                  "logo": job.logoUrl || ''
+                },
+                "jobLocation": {
+                  "@type": "Place",
+                  "address": {
+                    "@type": "PostalAddress",
+                    "streetAddress": job.street_address || '',
+                    "addressLocality": job.city || job.location || '',
+                    "addressRegion": job.region || '',
+                    "addressCountry": "TZ",
+                    "postalCode": job.postcode || ''
+                  }
+                },
+                "baseSalary": (job.salary_min || job.salary_max) ? {
+                  "@type": "MonetaryAmount",
+                  "currency": (job.salary_currency || 'TZS').toUpperCase(),
+                  "value": {
+                    "@type": "QuantitativeValue",
+                    "minValue": Number(job.salary_min || job.salary_max),
+                    "maxValue": Number(job.salary_max || job.salary_min),
+                    "unitText": "MONTH"
+                  }
+                } : undefined,
+                "educationRequirements": (job.education_level && job.education_level !== 'Any' && job.education_level !== '') ? {
+                  "@type": "EducationalOccupationalCredential",
+                  "credentialCategory": job.education_level
+                } : undefined,
+                "experienceRequirements": job.experience_months > 0 ? {
+                  "@type": "OccupationalExperienceRequirements",
+                  "monthsOfExperience": Number(job.experience_months)
+                } : undefined,
+                "skills": Array.isArray(job.skills) && job.skills.length > 0 ? job.skills.join(', ') : undefined,
+                "jobBenefits": Array.isArray(job.benefits) && job.benefits.length > 0 ? job.benefits.join(', ') : undefined,
+                "industry": job.industry || undefined,
+                "occupationalCategory": job.job_category || job.role || undefined,
+                "url": `https://jobsreport.online/market/${job.slug || job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${job.id}`
+              }
+        )}
       </script>
 
       {/* ========== BREADCRUMB SCHEMA ========== */}
@@ -177,6 +225,12 @@ export default function JobDetailPage() {
           </Link>
           
           <div className="flex items-center gap-3">
+            {/* 🔥 Expired Badge in header */}
+            {isExpired && (
+              <span className="px-3 py-1 rounded-full bg-red-500/10 text-red-400 text-[10px] font-bold uppercase tracking-wider">
+                Expired
+              </span>
+            )}
             <button
               onClick={() => {
                 if (navigator.share) {
@@ -220,7 +274,27 @@ export default function JobDetailPage() {
           </div>
         </div>
 
-        <h1 className="text-xl md:text-2xl font-bold text-white mb-3 leading-tight">{job.title}</h1>
+        {/* 🔥 Title with Expired Badge */}
+        <div className="flex items-center gap-3 mb-3">
+          <h1 className="text-xl md:text-2xl font-bold text-white leading-tight">
+            {job.title}
+          </h1>
+          {isExpired && (
+            <span className="px-3 py-1 rounded-full bg-red-500/10 text-red-400 text-xs font-bold uppercase whitespace-nowrap">
+              Expired
+            </span>
+          )}
+        </div>
+
+        {/* 🔥 Expired Warning */}
+        {isExpired && (
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/5 border border-red-500/10 mb-3">
+            <AlertCircle size={14} className="text-red-400 flex-shrink-0" />
+            <p className="text-[11px] text-red-400/80">
+              This job listing has expired. Applications are no longer accepted. Browse related jobs below.
+            </p>
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-gray-400">
           <span className="flex items-center gap-1.5"><MapPin size={13} /> {job.location || 'Remote'}</span>
@@ -231,25 +305,52 @@ export default function JobDetailPage() {
           )}
           <span className="flex items-center gap-1.5"><Briefcase size={13} /> {job.role}</span>
           <span className="flex items-center gap-1.5"><Calendar size={13} /> {job.postedAt || 'Recent'}</span>
-          {job.expiresAt && <span className="flex items-center gap-1.5 text-amber-400"><Clock size={13} /> Expires: {job.expiresAt}</span>}
+          {job.expiresAt && (
+            <span className={`flex items-center gap-1.5 ${isExpired ? 'text-red-400' : 'text-amber-400'}`}>
+              <Clock size={13} /> {isExpired ? 'Expired' : 'Expires'}: {job.expiresAt}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2 mt-3">
-          <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-500/10 text-blue-400 uppercase tracking-wider">{job.role || 'General'}</span>
-          {job.active === false && <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-500/10 text-amber-400 uppercase tracking-wider">Draft</span>}
+          <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+            isExpired ? 'bg-red-500/10 text-red-400' : 'bg-blue-500/10 text-blue-400'
+          }`}>
+            {job.role || 'General'}
+          </span>
+          {job.job_category && (
+            <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-violet-500/10 text-violet-400 uppercase tracking-wider">
+              {job.job_category}
+            </span>
+          )}
         </div>
       </div>
 
-      {/* ========== APPLY BUTTON - Sticky Bottom ========== */}
+      {/* ========== APPLY BUTTON - Disabled when expired ========== */}
       <div className="sticky bottom-0 z-40 bg-black/95 backdrop-blur border-t border-white/5 px-4 py-3">
-        {job.url && (
+        {job.url && !isExpired && (
           <p className="text-[10px] text-gray-500 text-center mb-2 truncate px-4">
             {isEmailLink ? '📧 ' : '🔗 '}
             {isEmailLink ? job.url.replace('mailto:', '') : (() => { try { const url = new URL(job.url); return url.hostname.replace('www.', '') + url.pathname; } catch { return job.url; } })()}
           </p>
         )}
-        <button onClick={() => job.url && triggerRedirect(job.url, job.company, job.title)} disabled={!job.url} className={`w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${job.url ? 'bg-blue-600 hover:bg-blue-500 text-white active:scale-[0.98]' : 'bg-white/5 text-gray-600'}`}>
-          {isEmailLink ? '✉️ Send Application' : 'Apply Now'} <ExternalLink size={16} />
+        <button 
+          onClick={() => {
+            if (!isExpired && job.url) {
+              triggerRedirect(job.url, job.company, job.title);
+            }
+          }} 
+          disabled={isExpired || !job.url} 
+          className={`w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
+            isExpired 
+              ? 'bg-red-500/10 text-red-400 cursor-not-allowed' 
+              : job.url 
+                ? 'bg-blue-600 hover:bg-blue-500 text-white active:scale-[0.98]' 
+                : 'bg-white/5 text-gray-600 cursor-not-allowed'
+          }`}
+        >
+          {isExpired ? '🚫 Application Closed' : isEmailLink ? '✉️ Send Application' : 'Apply Now'}
+          {!isExpired && <ExternalLink size={16} />}
         </button>
       </div>
 
@@ -292,6 +393,7 @@ export default function JobDetailPage() {
         <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4">Job Details</h3>
         <div className="space-y-3">
           {[
+            ['Status', isExpired ? 'Expired' : 'Active'],
             ['Company', job.company],
             ['Location', job.location || 'Remote'],
             ['Role', job.role],
@@ -306,11 +408,71 @@ export default function JobDetailPage() {
           ].map(([label, value]) => (
             <div key={label as string} className="flex justify-between items-center py-2 border-b border-white/[0.03]">
               <span className="text-xs text-gray-500">{label}</span>
-              <span className="text-xs font-bold text-white">{value}</span>
+              <span className={`text-xs font-bold ${label === 'Status' ? (isExpired ? 'text-red-400' : 'text-green-400') : 'text-white'}`}>
+                {value}
+              </span>
             </div>
           ))}
         </div>
       </div>
+
+      {/* ========== 🔥 RELATED JOBS SECTION ========== */}
+      {relatedJobs.length > 0 && (
+        <div className="px-4 py-8 border-t border-white/5">
+          <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+            <Briefcase size={18} className="text-blue-500" />
+            {isExpired ? 'Similar Active Jobs' : 'Related Jobs'}
+          </h3>
+          <p className="text-xs text-gray-500 mb-4">
+            {isExpired 
+              ? 'This job has expired. Here are similar active opportunities you might be interested in.'
+              : `Explore more ${job.role || ''} jobs similar to this one.`
+            }
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {relatedJobs.map((rj: any) => {
+              const rjSlug = rj.slug || rj.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+              const rjExpired = rj.active === false || (rj.expiresAt && new Date(rj.expiresAt) < new Date());
+              
+              return (
+                <Link
+                  key={rj.id}
+                  to={`/market/${rjSlug}-${rj.id}`}
+                  className={`p-4 rounded-xl border transition-all group ${
+                    rjExpired 
+                      ? 'border-white/5 bg-white/[0.005] opacity-60' 
+                      : 'border-white/5 bg-white/[0.01] hover:bg-white/[0.03] hover:border-blue-500/30'
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="font-bold text-white text-sm group-hover:text-blue-400 transition-colors truncate pr-2">
+                      {rj.title}
+                    </div>
+                    {rjExpired && (
+                      <span className="text-[9px] text-red-400 bg-red-500/10 px-2 py-0.5 rounded whitespace-nowrap">
+                        Expired
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 text-[11px] text-gray-400">
+                    <span className="flex items-center gap-1">
+                      <Building2 size={11} />
+                      {rj.company}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <MapPin size={11} />
+                      {rj.location || 'Remote'}
+                    </span>
+                  </div>
+                  {rj.salary && (
+                    <div className="text-[10px] text-emerald-400 mt-1.5 font-mono">{rj.salary}</div>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ========== SHARE ========== */}
       <div className="px-4 py-6">
@@ -347,6 +509,3 @@ export default function JobDetailPage() {
     </div>
   );
 }
-
-
-
