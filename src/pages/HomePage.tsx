@@ -40,7 +40,8 @@ interface Role {
 export default function HomePage() {
   const [trends, setTrends] = useState<any[]>([]);
   const [reports, setReports] = useState<any[]>([]);
-  const [jobs, setJobs] = useState<any[]>([]);
+  const [displayJobs, setDisplayJobs] = useState<any[]>([]); // Top 5 for display
+  const [allActiveJobs, setAllActiveJobs] = useState<any[]>([]); // All for category counts
   const [spotlightCompanies, setSpotlightCompanies] = useState<string[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
@@ -90,8 +91,10 @@ export default function HomePage() {
 
         if (marketRes.ok) {
           const marketData = await marketRes.json();
-          const activeJobs = (marketData.jobs || []).filter((j: any) => j.active !== false);
-          setJobs(activeJobs.slice(0, 5));
+          // 🔥 Use activeJobs for active-only, fallback to jobs
+          const activeJobs = (marketData.activeJobs || marketData.jobs || []).filter((j: any) => j.active !== false);
+          setAllActiveJobs(activeJobs); // All active jobs for category counts
+          setDisplayJobs(activeJobs.slice(0, 5)); // Top 5 for display section
         }
 
         if (rolesRes.ok) {
@@ -108,9 +111,9 @@ export default function HomePage() {
     fetchDashboardData();
   }, [selectedCountry]);
 
-  // Get role/category with job count
+  // 🔥 Get role/category with accurate job counts from ALL active jobs
   const rolesWithCounts = roles.map(role => {
-    const jobCount = jobs.filter((j: any) => 
+    const jobCount = allActiveJobs.filter((j: any) => 
       j.role?.toLowerCase() === role.name.toLowerCase()
     ).length;
     return { ...role, jobCount };
@@ -142,6 +145,33 @@ export default function HomePage() {
     }
   };
 
+  // 🔥 Organization schema
+  const organizationSchema = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "JobsReport",
+    "alternateName": "JobsReport.online",
+    "url": "https://jobsreport.online",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://media.jobsreport.online/file_0000000084b47243aec7e8cf3cbeb6bd.png",
+      "width": 112,
+      "height": 112
+    },
+    "description": "JobsReport aggregates real-time job market data to help you find the best career opportunities. We track hiring trends across industries and locations worldwide.",
+    "foundingDate": "2025",
+    "areaServed": "Worldwide",
+    "sameAs": [
+      "https://www.facebook.com/J2Accessories"
+    ],
+    "contactPoint": {
+      "@type": "ContactPoint",
+      "contactType": "customer support",
+      "email": "jjovinatha@gmail.com",
+      "telephone": "+255616069692"
+    }
+  };
+
   const topReports = reports.slice(0, 3);
 
   if (loading) {
@@ -168,7 +198,7 @@ export default function HomePage() {
         ogTitle={seoTitle}
         ogDescription={seoDescription}
         ogUrl={canonicalUrl}
-        structuredData={structuredData}
+        structuredData={[structuredData, organizationSchema]}
       />
 
       <div className="space-y-12">
@@ -225,7 +255,7 @@ export default function HomePage() {
               <div className="flex items-center gap-2 text-sm">
                 <Building2 size={16} className="text-violet-500" />
                 <span className="text-gray-400">
-                  <span className="text-white font-bold">{jobs.length}</span> Active Jobs
+                  <span className="text-white font-bold">{allActiveJobs.length}</span> Active Jobs
                 </span>
               </div>
             </div>
@@ -243,7 +273,7 @@ export default function HomePage() {
               <p className="text-xs text-gray-500 mt-1 font-mono">
                 {showAllCategories 
                   ? `Showing all ${rolesWithCounts.length} categories` 
-                  : `Top ${INITIAL_CATEGORIES_COUNT} of ${rolesWithCounts.length} categories`}
+                  : `Top ${Math.min(INITIAL_CATEGORIES_COUNT, rolesWithCounts.length)} of ${rolesWithCounts.length} categories`}
               </p>
             </div>
             {rolesWithCounts.length > INITIAL_CATEGORIES_COUNT && (
@@ -292,8 +322,9 @@ export default function HomePage() {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.03, duration: 0.2 }}
                     >
+                      {/* 🔥 Use /role/ path instead of /market?role= */}
                       <Link
-                        to={`/market?role=${roleSlug}`}
+                        to={`/role/${roleSlug}`}
                         className="group p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-blue-500/30 transition-all h-full flex flex-col"
                       >
                         <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
@@ -342,7 +373,7 @@ export default function HomePage() {
           )}
         </section>
 
-        {/* 🔥 Top 5 Jobs Section */}
+        {/* 🔥 Top 5 Jobs Section - Uses displayJobs */}
         <section>
           <div className="flex items-center justify-between mb-6">
             <div>
@@ -365,19 +396,20 @@ export default function HomePage() {
             </Link>
           </div>
 
-          {jobs.length === 0 ? (
+          {displayJobs.length === 0 ? (
             <div className="text-center py-12 text-gray-500 text-sm font-mono">
               No active job listings yet. Market signals incoming...
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {jobs.map((job: any, idx: number) => (
+              {displayJobs.map((job: any, idx: number) => (
                 <Link 
                   key={job.id} 
                   to={`/market/${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${job.id}`}
                   className="block p-4 bg-white/[0.01] border border-white/5 rounded-2xl hover:bg-white/[0.03] transition-all group"
                 >
                   <div className="flex items-start gap-3">
+                    {/* Company Logo */}
                     <div className="w-10 h-10 rounded-xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
                       {job.logoUrl ? (
                         <img src={job.logoUrl} alt={`${job.company} logo`} className="w-full h-full object-cover rounded-xl" />
