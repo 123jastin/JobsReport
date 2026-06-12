@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import SEO from '../components/SEO';
 import {
@@ -19,45 +19,11 @@ export default function JobDetailPage() {
   const [viewerIndex, setViewerIndex] = useState(0);
   const [viewerFiles, setViewerFiles] = useState<any[]>([]);
 
-  // 🔥 Refs for lazy loading ads
-  const adRefs = useRef<(HTMLDivElement | null)[]>([]);
-
   // 🔥 Single source of truth for expired detection
   const isExpired = job ? (
     job.active === false || 
     (job.expiresAt && new Date(job.expiresAt) < new Date())
   ) : false;
-
-  // 🔥 Lazy load ads when they enter viewport
-  useEffect(() => {
-    if (!job) return;
-    
-    const observers: IntersectionObserver[] = [];
-    
-    adRefs.current.forEach((ref, index) => {
-      if (ref) {
-        const observer = new IntersectionObserver(
-          (entries) => {
-            entries.forEach(entry => {
-              if (entry.isIntersecting) {
-                try {
-                  (window as any).adsbygoogle?.push({});
-                } catch (e) {
-                  // AdSense not loaded yet
-                }
-                observer.unobserve(entry.target);
-              }
-            });
-          },
-          { rootMargin: '200px' }
-        );
-        observer.observe(ref);
-        observers.push(observer);
-      }
-    });
-
-    return () => observers.forEach(o => o.disconnect());
-  }, [job]);
 
   useEffect(() => {
     async function loadJob() {
@@ -100,6 +66,17 @@ export default function JobDetailPage() {
     if (jobId) loadJob();
     window.scrollTo(0, 0);
   }, [jobId]);
+
+  // 🔥 Push ads when job loads
+  useEffect(() => {
+    if (job) {
+      setTimeout(() => {
+        try {
+          (window as any).adsbygoogle?.push({});
+        } catch (e) {}
+      }, 500);
+    }
+  }, [job]);
 
   // 🔥 Generate related jobs (6 minimum)
   const getRelatedJobs = () => {
@@ -380,19 +357,6 @@ export default function JobDetailPage() {
         </button>
       </div>
 
-      {/* ========== 🔥 AD #1 - Below Hero Header (Display) ========== */}
-      <div 
-        ref={el => adRefs.current[0] = el}
-        style={{ minHeight: '280px', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '16px auto', maxWidth: '728px', padding: '0 16px', overflow: 'hidden' }}
-      >
-        <ins className="adsbygoogle"
-          style={{ display: 'block', minHeight: '280px' }}
-          data-ad-client="ca-pub-8155064094205693"
-          data-ad-slot="4550717155"
-          data-ad-format="auto"
-          data-full-width-responsive="true" />
-      </div>
-
       {/* ========== JOB DESCRIPTION ========== */}
       {hasDescription && (
         <div className="px-4 py-6 border-b border-white/5">
@@ -407,15 +371,12 @@ export default function JobDetailPage() {
         </div>
       )}
 
-      {/* ========== 🔥 AD #2 - Above Attachments (Display) ========== */}
-      <div 
-        ref={el => adRefs.current[1] = el}
-        style={{ minHeight: '280px', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '16px auto', maxWidth: '728px', padding: '0 16px', overflow: 'hidden' }}
-      >
+      {/* ========== 🔥 AD #1 - Display (After Description, Before Attachments) ========== */}
+      <div style={{ minHeight: '280px', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '16px auto', maxWidth: '728px', padding: '0 16px', overflow: 'hidden' }}>
         <ins className="adsbygoogle"
           style={{ display: 'block', minHeight: '280px' }}
           data-ad-client="ca-pub-8155064094205693"
-          data-ad-slot="1373889473"
+          data-ad-slot="4550717155"
           data-ad-format="auto"
           data-full-width-responsive="true" />
       </div>
@@ -439,19 +400,6 @@ export default function JobDetailPage() {
           </div>
         </div>
       )}
-
-      {/* ========== 🔥 AD #3 - In-Article (Above Job Details) ========== */}
-      <div 
-        ref={el => adRefs.current[2] = el}
-        style={{ minHeight: '200px', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '16px auto', maxWidth: '728px', padding: '0 16px', overflow: 'hidden' }}
-      >
-        <ins className="adsbygoogle"
-          style={{ display: 'block', textAlign: 'center', minHeight: '200px' }}
-          data-ad-layout="in-article"
-          data-ad-format="fluid"
-          data-ad-client="ca-pub-8155064094205693"
-          data-ad-slot="8298390472" />
-      </div>
 
       {/* ========== JOB DETAILS ========== */}
       <div className="px-4 py-6 border-b border-white/5">
@@ -481,17 +429,14 @@ export default function JobDetailPage() {
         </div>
       </div>
 
-      {/* ========== 🔥 AD #4 - In-Feed (Above Related Jobs) ========== */}
-      <div 
-        ref={el => adRefs.current[3] = el}
-        style={{ minHeight: '200px', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '16px auto', maxWidth: '728px', padding: '0 16px', overflow: 'hidden' }}
-      >
+      {/* ========== 🔥 AD #2 - Display (After Job Details, Before Related Jobs) ========== */}
+      <div style={{ minHeight: '280px', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '16px auto', maxWidth: '728px', padding: '0 16px', overflow: 'hidden' }}>
         <ins className="adsbygoogle"
-          style={{ display: 'block', minHeight: '200px' }}
-          data-ad-format="fluid"
-          data-ad-layout-key="-fb+5w+4e-db+86"
+          style={{ display: 'block', minHeight: '280px' }}
           data-ad-client="ca-pub-8155064094205693"
-          data-ad-slot="4344543451" />
+          data-ad-slot="1373889473"
+          data-ad-format="auto"
+          data-full-width-responsive="true" />
       </div>
 
       {/* ========== 🔥 RELATED JOBS SECTION ========== */}
@@ -552,11 +497,8 @@ export default function JobDetailPage() {
         </div>
       )}
 
-      {/* ========== 🔥 AD #5 - Footer (Display) ========== */}
-      <div 
-        ref={el => adRefs.current[4] = el}
-        style={{ minHeight: '280px', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '16px auto', maxWidth: '728px', padding: '0 16px', overflow: 'hidden' }}
-      >
+      {/* ========== 🔥 AD #3 - Footer Display ========== */}
+      <div style={{ minHeight: '280px', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '16px auto', maxWidth: '728px', padding: '0 16px', overflow: 'hidden' }}>
         <ins className="adsbygoogle"
           style={{ display: 'block', minHeight: '280px' }}
           data-ad-client="ca-pub-8155064094205693"
