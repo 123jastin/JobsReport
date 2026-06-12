@@ -7,59 +7,64 @@ interface AdBannerProps {
 }
 
 export default function AdBanner({ slot, format = 'auto', style }: AdBannerProps) {
-  const adRef = useRef<HTMLModElement>(null);
-  const pushedRef = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Only push if not already pushed
-    if (pushedRef.current) return;
-
+    // Wait for DOM to be ready
     const timer = setTimeout(() => {
-      try {
-        // Reset the ad element
-        if (adRef.current) {
-          // Clear any existing ad content
-          adRef.current.innerHTML = '';
-          adRef.current.className = 'adsbygoogle';
+      if (containerRef.current) {
+        // 🔥 Clear any existing ad content completely
+        const existingIns = containerRef.current.querySelector('.adsbygoogle');
+        if (existingIns) {
+          existingIns.remove();
         }
-
-        // Push new ad
-        ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
-        pushedRef.current = true;
         
-        console.log(`✅ Ad pushed for slot: ${slot}`);
-      } catch (err: any) {
-        console.log(`⚠️ Ad push error for ${slot}:`, err.message);
+        // 🔥 Create fresh ins element
+        const ins = document.createElement('ins');
+        ins.className = 'adsbygoogle';
+        ins.style.display = 'block';
+        ins.style.width = '100%';
+        ins.style.minHeight = '280px';
+        ins.setAttribute('data-ad-client', 'ca-pub-8155064094205693');
+        ins.setAttribute('data-ad-slot', slot);
+        ins.setAttribute('data-ad-format', format);
+        ins.setAttribute('data-full-width-responsive', 'true');
+        
+        containerRef.current.appendChild(ins);
+        
+        // 🔥 Push new ad
+        try {
+          ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+          console.log(`✅ Fresh ad pushed for slot: ${slot}`);
+        } catch (err: any) {
+          console.log(`⚠️ Ad push error for ${slot}:`, err.message);
+        }
       }
-    }, 300);
+    }, 200);
 
     return () => {
       clearTimeout(timer);
-      pushedRef.current = false;
+      // 🔥 Clean up on unmount
+      if (containerRef.current) {
+        containerRef.current.innerHTML = '';
+      }
     };
   }, [slot]);
 
   return (
-    <div style={{ 
-      minHeight: '280px', 
-      display: 'flex', 
-      justifyContent: 'center', 
-      alignItems: 'center', 
-      margin: '16px auto', 
-      maxWidth: '728px', 
-      padding: '0 16px', 
-      overflow: 'hidden',
-      ...style 
-    }}>
-      <ins
-        ref={adRef}
-        className="adsbygoogle"
-        style={{ display: 'block', width: '100%', minHeight: '280px' }}
-        data-ad-client="ca-pub-8155064094205693"
-        data-ad-slot={slot}
-        data-ad-format={format}
-        data-full-width-responsive="true"
-      />
-    </div>
+    <div 
+      ref={containerRef}
+      style={{ 
+        minHeight: '280px', 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        margin: '16px auto', 
+        maxWidth: '728px', 
+        padding: '0 16px', 
+        overflow: 'hidden',
+        ...style 
+      }}
+    />
   );
 }
