@@ -178,16 +178,21 @@ export function CareerRedirectProvider({ children }: { children: ReactNode }) {
               <p className="text-[11px] text-gray-500 leading-relaxed font-mono">
                 You are leaving the JobsReport telemetry interface. External applications and career dashboards are hosted directly by hiring corporate entities and may store local profiling cookies.
               </p>
-              
-{/* 🔥 AD - Career Page (Above Buttons) - Compact size */}
-<div style={{ minHeight: '80px', maxHeight: '120px', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', margin: '0 -8px' }}>
+{/* 🔥 AD - Career Page 2 (Compact Vertical - 120x300) */}
+<div style={{ 
+  display: 'flex', 
+  justifyContent: 'center', 
+  alignItems: 'center', 
+  overflow: 'hidden',
+  minHeight: '300px',
+  margin: '8px 0'
+}}>
   <ins className="adsbygoogle"
-    style={{ display: 'block', width: '100%', maxHeight: '120px' }}
+    style={{ display: 'inline-block', width: '120px', height: '300px' }}
     data-ad-client="ca-pub-8155064094205693"
-    data-ad-slot="1091652594"
-    data-ad-format="horizontal"
-    data-full-width-responsive="true" />
-</div>
+    data-ad-slot="3874604315" />
+</div>              
+
               
 
               {/* Action Buttons */}
