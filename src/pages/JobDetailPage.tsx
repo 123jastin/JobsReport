@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import SEO from '../components/SEO';
 import {
@@ -19,11 +19,45 @@ export default function JobDetailPage() {
   const [viewerIndex, setViewerIndex] = useState(0);
   const [viewerFiles, setViewerFiles] = useState<any[]>([]);
 
+  // 🔥 Refs for lazy loading ads
+  const adRefs = useRef<(HTMLDivElement | null)[]>([]);
+
   // 🔥 Single source of truth for expired detection
   const isExpired = job ? (
     job.active === false || 
     (job.expiresAt && new Date(job.expiresAt) < new Date())
   ) : false;
+
+  // 🔥 Lazy load ads when they enter viewport
+  useEffect(() => {
+    if (!job) return;
+    
+    const observers: IntersectionObserver[] = [];
+    
+    adRefs.current.forEach((ref, index) => {
+      if (ref) {
+        const observer = new IntersectionObserver(
+          (entries) => {
+            entries.forEach(entry => {
+              if (entry.isIntersecting) {
+                try {
+                  (window as any).adsbygoogle?.push({});
+                } catch (e) {
+                  // AdSense not loaded yet
+                }
+                observer.unobserve(entry.target);
+              }
+            });
+          },
+          { rootMargin: '200px' }
+        );
+        observer.observe(ref);
+        observers.push(observer);
+      }
+    });
+
+    return () => observers.forEach(o => o.disconnect());
+  }, [job]);
 
   useEffect(() => {
     async function loadJob() {
@@ -32,7 +66,6 @@ export default function JobDetailPage() {
         if (res.ok) {
           const data = await res.json();
           
-          // 🔥 Store all jobs for related jobs
           setAllJobs(data.jobs || []);
           
           const jobIdMatch = jobId?.match(/job-([a-z0-9]+)$/i);
@@ -72,7 +105,6 @@ export default function JobDetailPage() {
   const getRelatedJobs = () => {
     if (!job || allJobs.length === 0) return [];
     
-    // First: same role, company, or category
     const related = allJobs.filter(j => 
       j.id !== job.id && (
         j.role === job.role ||
@@ -81,7 +113,6 @@ export default function JobDetailPage() {
       )
     );
     
-    // Fill up to 6 with other jobs if needed
     if (related.length < 6) {
       const remaining = allJobs
         .filter(j => j.id !== job.id && !related.find(r => r.id === j.id))
@@ -117,8 +148,6 @@ export default function JobDetailPage() {
   const hasFiles = job.images && job.images.length > 0;
   const hasDescription = job.description && job.description.trim() !== '';
   const isEmailLink = job.url && job.url.startsWith('mailto:');
-
-  // Salary display
   const salaryDisplay = job.salary || null;
   const currencyFlag = job.salary_currency_flag || '🇹🇿';
 
@@ -225,7 +254,6 @@ export default function JobDetailPage() {
           </Link>
           
           <div className="flex items-center gap-3">
-            {/* 🔥 Expired Badge in header */}
             {isExpired && (
               <span className="px-3 py-1 rounded-full bg-red-500/10 text-red-400 text-[10px] font-bold uppercase tracking-wider">
                 Expired
@@ -274,7 +302,6 @@ export default function JobDetailPage() {
           </div>
         </div>
 
-        {/* 🔥 Title with Expired Badge */}
         <div className="flex items-center gap-3 mb-3">
           <h1 className="text-xl md:text-2xl font-bold text-white leading-tight">
             {job.title}
@@ -286,7 +313,6 @@ export default function JobDetailPage() {
           )}
         </div>
 
-        {/* 🔥 Expired Warning */}
         {isExpired && (
           <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/5 border border-red-500/10 mb-3">
             <AlertCircle size={14} className="text-red-400 flex-shrink-0" />
@@ -326,7 +352,7 @@ export default function JobDetailPage() {
         </div>
       </div>
 
-      {/* ========== APPLY BUTTON - Disabled when expired ========== */}
+      {/* ========== APPLY BUTTON ========== */}
       <div className="sticky bottom-0 z-40 bg-black/95 backdrop-blur border-t border-white/5 px-4 py-3">
         {job.url && !isExpired && (
           <p className="text-[10px] text-gray-500 text-center mb-2 truncate px-4">
@@ -354,6 +380,19 @@ export default function JobDetailPage() {
         </button>
       </div>
 
+      {/* ========== 🔥 AD #1 - Below Hero Header (Display) ========== */}
+      <div 
+        ref={el => adRefs.current[0] = el}
+        style={{ minHeight: '280px', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '16px auto', maxWidth: '728px', padding: '0 16px', overflow: 'hidden' }}
+      >
+        <ins className="adsbygoogle"
+          style={{ display: 'block', minHeight: '280px' }}
+          data-ad-client="ca-pub-8155064094205693"
+          data-ad-slot="4550717155"
+          data-ad-format="auto"
+          data-full-width-responsive="true" />
+      </div>
+
       {/* ========== JOB DESCRIPTION ========== */}
       {hasDescription && (
         <div className="px-4 py-6 border-b border-white/5">
@@ -367,6 +406,19 @@ export default function JobDetailPage() {
           <p className="text-gray-500 text-sm">No detailed description available for this listing.</p>
         </div>
       )}
+
+      {/* ========== 🔥 AD #2 - Above Attachments (Display) ========== */}
+      <div 
+        ref={el => adRefs.current[1] = el}
+        style={{ minHeight: '280px', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '16px auto', maxWidth: '728px', padding: '0 16px', overflow: 'hidden' }}
+      >
+        <ins className="adsbygoogle"
+          style={{ display: 'block', minHeight: '280px' }}
+          data-ad-client="ca-pub-8155064094205693"
+          data-ad-slot="1373889473"
+          data-ad-format="auto"
+          data-full-width-responsive="true" />
+      </div>
 
       {/* ========== ATTACHMENTS ========== */}
       {hasFiles && (
@@ -387,6 +439,19 @@ export default function JobDetailPage() {
           </div>
         </div>
       )}
+
+      {/* ========== 🔥 AD #3 - In-Article (Above Job Details) ========== */}
+      <div 
+        ref={el => adRefs.current[2] = el}
+        style={{ minHeight: '200px', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '16px auto', maxWidth: '728px', padding: '0 16px', overflow: 'hidden' }}
+      >
+        <ins className="adsbygoogle"
+          style={{ display: 'block', textAlign: 'center', minHeight: '200px' }}
+          data-ad-layout="in-article"
+          data-ad-format="fluid"
+          data-ad-client="ca-pub-8155064094205693"
+          data-ad-slot="8298390472" />
+      </div>
 
       {/* ========== JOB DETAILS ========== */}
       <div className="px-4 py-6 border-b border-white/5">
@@ -414,6 +479,19 @@ export default function JobDetailPage() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* ========== 🔥 AD #4 - In-Feed (Above Related Jobs) ========== */}
+      <div 
+        ref={el => adRefs.current[3] = el}
+        style={{ minHeight: '200px', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '16px auto', maxWidth: '728px', padding: '0 16px', overflow: 'hidden' }}
+      >
+        <ins className="adsbygoogle"
+          style={{ display: 'block', minHeight: '200px' }}
+          data-ad-format="fluid"
+          data-ad-layout-key="-fb+5w+4e-db+86"
+          data-ad-client="ca-pub-8155064094205693"
+          data-ad-slot="4344543451" />
       </div>
 
       {/* ========== 🔥 RELATED JOBS SECTION ========== */}
@@ -473,6 +551,19 @@ export default function JobDetailPage() {
           </div>
         </div>
       )}
+
+      {/* ========== 🔥 AD #5 - Footer (Display) ========== */}
+      <div 
+        ref={el => adRefs.current[4] = el}
+        style={{ minHeight: '280px', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '16px auto', maxWidth: '728px', padding: '0 16px', overflow: 'hidden' }}
+      >
+        <ins className="adsbygoogle"
+          style={{ display: 'block', minHeight: '280px' }}
+          data-ad-client="ca-pub-8155064094205693"
+          data-ad-slot="5466053430"
+          data-ad-format="auto"
+          data-full-width-responsive="true" />
+      </div>
 
       {/* ========== SHARE ========== */}
       <div className="px-4 py-6">
