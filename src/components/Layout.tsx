@@ -56,7 +56,7 @@ export default function Layout({ children }: LayoutProps) {
       {/* 🔥 Organization Schema - Appears on ALL pages */}
       <SEO
         title="JobsReport - Real-Time Jobs platform for Employers and Job Seekers"
-        description="Find the latest jobs, vacancies, and career opportunities worldwide in a real-time job market intelligence platfoam with verified listings from top employers."
+        description="Find the latest jobs, vacancies, and career opportunities worldwide in a real-time job market intelligence platform with verified listings from top employers."
         structuredData={{
           "@context": "https://schema.org",
           "@type": "Organization",
@@ -69,7 +69,7 @@ export default function Layout({ children }: LayoutProps) {
             "width": 112,
             "height": 112
           },
-          "description": "JobsReport aggregates real-time job market data that provider that can you find the best career opportunities. Our system track hiring trends across industries and locations worldwide.",
+          "description": "JobsReport aggregates real-time job market data to help you find the best career opportunities. We track hiring trends across industries and locations worldwide.",
           "foundingDate": "2025",
           "areaServed": "Worldwide",
           "sameAs": [
@@ -386,6 +386,21 @@ export default function Layout({ children }: LayoutProps) {
           </div>
         )}
       </AnimatePresence>
+
+      {/* 🔥 Reserved Clever Ad Space - Below Header */}
+      <div 
+        id="clever-ad-space"
+        style={{ 
+          minHeight: '100px', 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          margin: '0 auto', 
+          maxWidth: '728px',
+          padding: '0 16px',
+          overflow: 'hidden'
+        }}
+      />
 
       {/* Main Content */}
       <main className="flex-1 w-full max-w-7xl mx-auto px-4 md:px-8 py-8 pb-12">
