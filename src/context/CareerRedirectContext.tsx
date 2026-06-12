@@ -25,7 +25,7 @@ export function CareerRedirectProvider({ children }: { children: ReactNode }) {
     setTitle(jobTitle || 'Career Opportunity');
     setTimeLeft(10);
     setIsOpen(true);
-    setAnimationKey(prev => prev + 1); // Reset the progress bar animation
+    setAnimationKey(prev => prev + 1);
   };
 
   const handleClose = () => {
@@ -41,7 +41,6 @@ export function CareerRedirectProvider({ children }: { children: ReactNode }) {
     handleClose();
   };
 
-  // Run the 10-second countdown
   useEffect(() => {
     if (isOpen) {
       if (timerRef.current) {
@@ -55,7 +54,6 @@ export function CareerRedirectProvider({ children }: { children: ReactNode }) {
               clearInterval(timerRef.current);
               timerRef.current = null;
             }
-            // Launch URL in new tab safely
             window.open(destinationUrl, '_blank', 'noopener,noreferrer');
             setIsOpen(false);
             return 0;
@@ -72,7 +70,6 @@ export function CareerRedirectProvider({ children }: { children: ReactNode }) {
     };
   }, [isOpen, destinationUrl]);
 
-  // Extract simple domain name for security preview
   const getDomain = (urlStr: string) => {
     try {
       const url = new URL(urlStr);
@@ -81,6 +78,17 @@ export function CareerRedirectProvider({ children }: { children: ReactNode }) {
       return urlStr;
     }
   };
+
+  // 🔥 Push Career page ad when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setTimeout(() => {
+        try {
+          ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+        } catch (e) {}
+      }, 300);
+    }
+  }, [isOpen, animationKey]);
 
   return (
     <CareerRedirectContext.Provider value={{ triggerRedirect }}>
@@ -146,7 +154,7 @@ export function CareerRedirectProvider({ children }: { children: ReactNode }) {
                   </div>
                 </div>
 
-                {/* Smooth CSS Framer-Motion horizontal loader progress bar */}
+                {/* Smooth Progress Bar */}
                 <div className="relative w-full h-3 bg-stone-900 rounded-full border border-white/5 overflow-hidden">
                   <motion.div
                     key={animationKey}
@@ -170,6 +178,16 @@ export function CareerRedirectProvider({ children }: { children: ReactNode }) {
               <p className="text-[11px] text-gray-500 leading-relaxed font-mono">
                 You are leaving the JobsReport telemetry interface. External applications and career dashboards are hosted directly by hiring corporate entities and may store local profiling cookies.
               </p>
+
+              {/* 🔥 AD - Career Page (Above Buttons) */}
+              <div style={{ minHeight: '100px', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
+                <ins className="adsbygoogle"
+                  style={{ display: 'block', width: '100%', minHeight: '100px' }}
+                  data-ad-client="ca-pub-8155064094205693"
+                  data-ad-slot="1091652594"
+                  data-ad-format="auto"
+                  data-full-width-responsive="true" />
+              </div>
 
               {/* Action Buttons */}
               <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
