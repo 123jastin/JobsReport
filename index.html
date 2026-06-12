@@ -38,6 +38,28 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     
+    <!-- Ad Space Reservation Styles -->
+    <style>
+      /* Reserve space for Clever ad - prevents layout shift */
+      #clever-ad-space {
+        min-height: 100px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        overflow: hidden;
+      }
+      
+      /* Prevent Clever from injecting at random positions */
+      body > div[id*="clever"]:not(#clever-ad-space) {
+        position: relative;
+      }
+      
+      /* Hide empty ad containers */
+      .ad-container:empty {
+        display: none;
+      }
+    </style>
+    
     <!-- Google AdSense -->
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8155064094205693"
      crossorigin="anonymous"></script>
