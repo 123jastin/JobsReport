@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import SEO from '../components/SEO';
+import AdBanner from '../components/AdBanner';
 import {
   Building2, MapPin, Clock, ExternalLink, ArrowLeft,
   FileText, Eye, ChevronLeft, ChevronRight, X, Download,
@@ -66,17 +67,6 @@ export default function JobDetailPage() {
     if (jobId) loadJob();
     window.scrollTo(0, 0);
   }, [jobId]);
-
-  // 🔥 Push ads when job loads
-  useEffect(() => {
-    if (job) {
-      setTimeout(() => {
-        try {
-          (window as any).adsbygoogle?.push({});
-        } catch (e) {}
-      }, 500);
-    }
-  }, [job]);
 
   // 🔥 Generate related jobs (6 minimum)
   const getRelatedJobs = () => {
@@ -371,15 +361,8 @@ export default function JobDetailPage() {
         </div>
       )}
 
-      {/* ========== 🔥 AD #1 - Display (After Description, Before Attachments) ========== */}
-      <div style={{ minHeight: '280px', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '16px auto', maxWidth: '728px', padding: '0 16px', overflow: 'hidden' }}>
-        <ins className="adsbygoogle"
-          style={{ display: 'block', minHeight: '280px' }}
-          data-ad-client="ca-pub-8155064094205693"
-          data-ad-slot="4550717155"
-          data-ad-format="auto"
-          data-full-width-responsive="true" />
-      </div>
+      {/* ========== AD #1 - After Description ========== */}
+      <AdBanner slot="4550717155" />
 
       {/* ========== ATTACHMENTS ========== */}
       {hasFiles && (
@@ -429,17 +412,10 @@ export default function JobDetailPage() {
         </div>
       </div>
 
-      {/* ========== 🔥 AD #2 - Display (After Job Details, Before Related Jobs) ========== */}
-      <div style={{ minHeight: '280px', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '16px auto', maxWidth: '728px', padding: '0 16px', overflow: 'hidden' }}>
-        <ins className="adsbygoogle"
-          style={{ display: 'block', minHeight: '280px' }}
-          data-ad-client="ca-pub-8155064094205693"
-          data-ad-slot="1373889473"
-          data-ad-format="auto"
-          data-full-width-responsive="true" />
-      </div>
+      {/* ========== AD #2 - After Job Details ========== */}
+      <AdBanner slot="1373889473" />
 
-      {/* ========== 🔥 RELATED JOBS SECTION ========== */}
+      {/* ========== RELATED JOBS SECTION ========== */}
       {relatedJobs.length > 0 && (
         <div className="px-4 py-8 border-t border-white/5">
           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
@@ -497,15 +473,8 @@ export default function JobDetailPage() {
         </div>
       )}
 
-      {/* ========== 🔥 AD #3 - Footer Display ========== */}
-      <div style={{ minHeight: '280px', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '16px auto', maxWidth: '728px', padding: '0 16px', overflow: 'hidden' }}>
-        <ins className="adsbygoogle"
-          style={{ display: 'block', minHeight: '280px' }}
-          data-ad-client="ca-pub-8155064094205693"
-          data-ad-slot="5466053430"
-          data-ad-format="auto"
-          data-full-width-responsive="true" />
-      </div>
+      {/* ========== AD #3 - Footer ========== */}
+      <AdBanner slot="5466053430" />
 
       {/* ========== SHARE ========== */}
       <div className="px-4 py-6">
