@@ -362,7 +362,7 @@ export default function JobDetailPage() {
       )}
 
       {/* ========== AD #1 - After Description ========== */}
-      <AdBanner slot="4550717155" />
+      <AdBanner key={`ad1-${jobId}`} slot="4550717155" />
 
       {/* ========== ATTACHMENTS ========== */}
       {hasFiles && (
@@ -413,7 +413,7 @@ export default function JobDetailPage() {
       </div>
 
       {/* ========== AD #2 - After Job Details ========== */}
-      <AdBanner slot="1373889473" />
+      <AdBanner key={`ad2-${jobId}`} slot="1373889473" />
 
       {/* ========== RELATED JOBS SECTION ========== */}
       {relatedJobs.length > 0 && (
@@ -474,7 +474,7 @@ export default function JobDetailPage() {
       )}
 
       {/* ========== AD #3 - Footer ========== */}
-      <AdBanner slot="5466053430" />
+      <AdBanner key={`ad3-${jobId}`} slot="5466053430" />
 
       {/* ========== SHARE ========== */}
       <div className="px-4 py-6">
