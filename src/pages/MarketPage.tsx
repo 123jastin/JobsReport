@@ -122,15 +122,8 @@ export default function MarketPage() {
     "name": pageTitle,
     "description": pageDescription,
     "url": canonicalUrl,
-    "isPartOf": {
-      "@type": "WebSite",
-      "name": "JobsReport",
-      "url": "https://jobsreport.online"
-    },
-    "about": selectedCountry !== 'Worldwide' ? {
-      "@type": "Place",
-      "name": selectedCountry
-    } : undefined,
+    "isPartOf": { "@type": "WebSite", "name": "JobsReport", "url": "https://jobsreport.online" },
+    "about": selectedCountry !== 'Worldwide' ? { "@type": "Place", "name": selectedCountry } : undefined,
     "mainEntity": {
       "@type": "ItemList",
       "numberOfItems": activeJobs.length,
@@ -147,54 +140,34 @@ export default function MarketPage() {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
     "itemListElement": [
-      {
-        "@type": "ListItem",
-        "position": 1,
-        "name": "Home",
-        "item": "https://jobsreport.online"
-      },
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://jobsreport.online" },
       ...(selectedCountry !== 'Worldwide' ? [{
-        "@type": "ListItem",
-        "position": 2,
-        "name": `Jobs in ${selectedCountry}`,
+        "@type": "ListItem", "position": 2, "name": `Jobs in ${selectedCountry}`,
         "item": `https://jobsreport.online/country/${selectedCountry.toLowerCase().replace(/\s+/g, '-')}`
       }] : []),
-      {
-        "@type": "ListItem",
-        "position": selectedCountry !== 'Worldwide' ? 3 : 2,
-        "name": selectedRole !== 'All' ? `${selectedRole} Jobs` : 'All Jobs',
-        "item": canonicalUrl
-      }
+      { "@type": "ListItem", "position": selectedCountry !== 'Worldwide' ? 3 : 2,
+        "name": selectedRole !== 'All' ? `${selectedRole} Jobs` : 'All Jobs', "item": canonicalUrl }
     ]
   };
 
-  // 🔥 Native In-Feed Ad component to blend with job cards
+  // 🔥 Native In-Feed Ad - Clean, no fake elements
   const InFeedAd = ({ index }: { index: number }) => (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0, transition: { delay: Math.min(index * 0.04, 0.4) } }}
-      className="p-5 bg-white/[0.01] border border-white/5 rounded-3xl transition-all duration-300"
+      className="p-4 rounded-3xl border border-white/5 transition-all duration-300"
       style={{ background: 'transparent' }}
     >
-      <div className="flex gap-4 items-start">
-        <div className="flex-shrink-0 w-12 h-12 rounded-2xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center p-0.5 mt-0.5">
-          <div className="w-full h-full bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400 font-mono">
-            AD
-          </div>
-        </div>
-        <div className="flex-1 min-w-0">
-          <ins className="adsbygoogle"
-            style={{ display: 'block', background: 'transparent' }}
-            data-ad-format="fluid"
-            data-ad-layout-key="-h0-1a+31-4t+7z"
-            data-ad-client="ca-pub-8155064094205693"
-            data-ad-slot="1805968460" />
-        </div>
-      </div>
+      <ins className="adsbygoogle"
+        style={{ display: 'block', background: 'transparent' }}
+        data-ad-format="fluid"
+        data-ad-layout-key="-h0-1a+31-4t+7z"
+        data-ad-client="ca-pub-8155064094205693"
+        data-ad-slot="1805968460" />
     </motion.div>
   );
 
-  // 🔥 Render job card
+  // 🔥 Job Card Component
   const JobCard = ({ job, idx }: { job: RawJob; idx: number }) => {
     const companyLogo = getCompanyLogo(job.company);
     return (
@@ -343,7 +316,6 @@ export default function MarketPage() {
               className="w-full bg-white/5 border border-white/10 rounded-2xl pl-11 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors font-mono"
             />
           </div>
-
           <div className="flex gap-1.5 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 scrollbar-none">
             {roles.map(role => (
               <button
@@ -361,7 +333,7 @@ export default function MarketPage() {
           </div>
         </div>
 
-        {/* Job Cards with In-Feed Ads every 2 jobs */}
+        {/* Job Cards with In-Feed Ads every 3 jobs */}
         <div className="space-y-3">
           <div className="flex items-center justify-between text-xs text-gray-500 px-1">
             <span className="flex items-center gap-2">
@@ -379,9 +351,7 @@ export default function MarketPage() {
               >
                 <Globe size={32} className="text-gray-600 mx-auto mb-4" />
                 <p className="text-white font-bold text-sm">No Active Market Signals Found</p>
-                <p className="text-xs text-gray-500 mt-1">
-                  No verified job listings matching your telemetry filters.
-                </p>
+                <p className="text-xs text-gray-500 mt-1">No verified job listings matching your telemetry filters.</p>
                 <button 
                   onClick={() => {
                     setSearchQuery('');
@@ -398,15 +368,11 @@ export default function MarketPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {filteredJobs.map((job, idx) => {
                   const elements = [];
-                  
-                  // Add job card
                   elements.push(<JobCard key={job.id || idx} job={job} idx={idx} />);
                   
-                  // 🔥 Add in-feed ad after every 2 jobs
-                  if ((idx + 1) % 2 === 0 && idx < filteredJobs.length - 1) {
-                    elements.push(
-                      <InFeedAd key={`ad-${idx}`} index={idx + 1} />
-                    );
+                  // 🔥 Add in-feed ad after every 3 jobs
+                  if ((idx + 1) % 3 === 0 && idx < filteredJobs.length - 1) {
+                    elements.push(<InFeedAd key={`ad-${idx}`} index={idx + 1} />);
                   }
                   
                   return elements;
