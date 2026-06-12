@@ -7,9 +7,9 @@ import {
 import { RawJob, Company } from '../types';
 import { Link, useSearchParams, useParams } from 'react-router-dom';
 import SEO from '../components/SEO';
+import AdBanner from '../components/AdBanner';
 import { useCountry } from '../context/CountryContext';
 
-// ✅ SEO-friendly slug generator
 const getJobSlug = (job: RawJob): string => {
   const titleSlug = job.title
     ?.toLowerCase()
@@ -31,16 +31,14 @@ export default function MarketPage() {
   
   const { selectedCountry, setSelectedCountry, currentFlag } = useCountry();
   const { query } = useParams<{ query?: string }>();
-  
-  // Load search query from URL path
+
   useEffect(() => {
     if (query) {
       const decodedQuery = decodeURIComponent(query).replace(/-/g, ' ');
       setSearchQuery(decodedQuery);
     }
   }, [query]);
-  
-  // Simple API call
+
   useEffect(() => {
     async function loadMarketData() {
       try {
@@ -60,7 +58,6 @@ export default function MarketPage() {
     loadMarketData();
   }, []);
 
-  // Sync selectedRole with URL params
   useEffect(() => {
     const roleParam = searchParams.get('role');
     if (roleParam) setSelectedRole(roleParam);
@@ -96,10 +93,9 @@ export default function MarketPage() {
   const uniqueCompanies = Array.from(new Set(filteredJobs.map(j => j.company))).length;
   const uniqueRoles = roles.filter(r => r !== 'All').length;
 
-  // 🔥 SEO metadata
   const countryText = selectedCountry === 'Worldwide' ? '' : selectedCountry;
   const roleText = selectedRole !== 'All' ? selectedRole : '';
-  
+
   const pageTitle = selectedCountry === 'Worldwide'
     ? roleText 
       ? `${roleText} Jobs | Find ${roleText} Vacancies Worldwide | JobsReport`
@@ -109,8 +105,8 @@ export default function MarketPage() {
       : `Jobs in ${countryText} | Latest ${countryText} Vacancies & Careers | JobsReport`;
 
   const pageDescription = selectedCountry === 'Worldwide'
-    ? `Browse ${activeJobs.length} active job listings across ${uniqueRoles} categories from ${uniqueCompanies} companies worldwide. Find latest vacancies in software engineering, finance, healthcare, and more.`
-    : `Browse ${activeJobs.length} active job listings in ${countryText} across ${uniqueRoles} categories from ${uniqueCompanies} companies. Find latest vacancies and career opportunities in ${countryText}.`;
+    ? `Browse ${activeJobs.length} active job listings across ${uniqueRoles} categories from ${uniqueCompanies} companies worldwide.`
+    : `Browse ${activeJobs.length} active job listings in ${countryText} across ${uniqueRoles} categories from ${uniqueCompanies} companies.`;
 
   const pageKeywords = selectedCountry === 'Worldwide'
     ? `jobs, job vacancies, career opportunities, find jobs, ${roleText || 'all'} jobs, latest jobs`
@@ -120,7 +116,6 @@ export default function MarketPage() {
     ? 'https://jobsreport.online/market'
     : `https://jobsreport.online/market?country=${countryText.toLowerCase().replace(/\s+/g, '-')}`;
 
-  // 🔥 CollectionPage schema for job listings
   const collectionPageSchema = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
@@ -148,7 +143,6 @@ export default function MarketPage() {
     }
   };
 
-  // 🔥 Breadcrumb schema
   const breadcrumbSchema = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
@@ -174,7 +168,97 @@ export default function MarketPage() {
     ]
   };
 
-  // Simple loading spinner
+  // 🔥 Native In-Feed Ad component to blend with job cards
+  const InFeedAd = ({ index }: { index: number }) => (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0, transition: { delay: Math.min(index * 0.04, 0.4) } }}
+      className="p-5 bg-white/[0.01] border border-white/5 rounded-3xl transition-all duration-300"
+      style={{ background: 'transparent' }}
+    >
+      <div className="flex gap-4 items-start">
+        <div className="flex-shrink-0 w-12 h-12 rounded-2xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center p-0.5 mt-0.5">
+          <div className="w-full h-full bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400 font-mono">
+            AD
+          </div>
+        </div>
+        <div className="flex-1 min-w-0">
+          <ins className="adsbygoogle"
+            style={{ display: 'block', background: 'transparent' }}
+            data-ad-format="fluid"
+            data-ad-layout-key="-h0-1a+31-4t+7z"
+            data-ad-client="ca-pub-8155064094205693"
+            data-ad-slot="1805968460" />
+        </div>
+      </div>
+    </motion.div>
+  );
+
+  // 🔥 Render job card
+  const JobCard = ({ job, idx }: { job: RawJob; idx: number }) => {
+    const companyLogo = getCompanyLogo(job.company);
+    return (
+      <motion.div
+        layout
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0, transition: { delay: Math.min(idx * 0.04, 0.4) } }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        key={job.id || idx}
+        className="group p-5 bg-white/[0.01] border hover:bg-white/[0.03] border-white/5 rounded-3xl transition-all duration-300"
+      >
+        <div className="flex gap-4 items-start">
+          <div className="flex-shrink-0 w-12 h-12 rounded-2xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center p-0.5 mt-0.5">
+            {companyLogo ? (
+              <img src={companyLogo} alt={`${job.company} logo`} className="w-full h-full object-cover rounded-xl" />
+            ) : (
+              <div className="w-full h-full bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400 font-mono">
+                {job.company?.charAt(0)?.toUpperCase() || '?'}
+              </div>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <span className="px-2 py-0.5 rounded text-[8px] font-bold bg-blue-500/10 text-blue-400 font-mono uppercase">
+                {job.role || 'Unknown'}
+              </span>
+              <span className="text-[10px] text-gray-500 font-mono flex items-center gap-1">
+                <Clock size={11} />
+                {job.postedAt || 'Recent'}
+              </span>
+            </div>
+            <Link to={getJobSlug(job)}>
+              <h3 className="font-bold text-white text-base leading-tight hover:text-blue-400 transition-colors cursor-pointer">
+                {job.title}
+              </h3>
+            </Link>
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-xs text-gray-400 font-medium">{job.company}</span>
+              {job.location && (
+                <>
+                  <span className="text-gray-600 font-mono">•</span>
+                  <span className="text-xs text-gray-500 font-medium">{job.location}</span>
+                </>
+              )}
+            </div>
+            {job.salary && (
+              <span className="text-[10px] text-emerald-400 font-mono mt-1 block">{job.salary}</span>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center justify-between border-t border-white/5 pt-4 mt-4">
+          <span className="text-[10px] text-gray-500 font-mono uppercase tracking-widest">
+            SIGNAL: JR-{job.id?.toString().slice(0, 4).toUpperCase() || '????'}
+          </span>
+          {job.expiresAt && (
+            <span className="text-[9px] text-gray-500 font-mono">
+              Expires: {job.expiresAt}
+            </span>
+          )}
+        </div>
+      </motion.div>
+    );
+  };
+
   if (loading) {
     return (
       <>
@@ -208,12 +292,8 @@ export default function MarketPage() {
           </div>
           <h1 className="text-4xl md:text-5xl font-black text-white tracking-widest leading-none uppercase">
             {selectedCountry === 'Worldwide' 
-              ? roleText 
-                ? `${roleText} Jobs`
-                : 'Live Job Market'
-              : roleText
-                ? `${roleText} Jobs in ${countryText}`
-                : `Jobs in ${countryText}`} {currentFlag}
+              ? roleText ? `${roleText} Jobs` : 'Live Job Market'
+              : roleText ? `${roleText} Jobs in ${countryText}` : `Jobs in ${countryText}`} {currentFlag}
           </h1>
           <p className="text-sm text-gray-400 max-w-xl mt-2">
             {selectedCountry === 'Worldwide'
@@ -281,7 +361,7 @@ export default function MarketPage() {
           </div>
         </div>
 
-        {/* Job Cards */}
+        {/* Job Cards with In-Feed Ads every 2 jobs */}
         <div className="space-y-3">
           <div className="flex items-center justify-between text-xs text-gray-500 px-1">
             <span className="flex items-center gap-2">
@@ -317,81 +397,27 @@ export default function MarketPage() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {filteredJobs.map((job, idx) => {
-                  const companyLogo = getCompanyLogo(job.company);
+                  const elements = [];
                   
-                  return (
-                    <motion.div
-                      layout
-                      initial={{ opacity: 0, y: 12 }}
-                      animate={{ opacity: 1, y: 0, transition: { delay: Math.min(idx * 0.04, 0.4) } }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      key={job.id || idx}
-                      className="group p-5 bg-white/[0.01] border hover:bg-white/[0.03] border-white/5 rounded-3xl transition-all duration-300"
-                    >
-                      <div className="flex gap-4 items-start">
-                        {/* Company Logo */}
-                        <div className="flex-shrink-0 w-12 h-12 rounded-2xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center p-0.5 mt-0.5">
-                          {companyLogo ? (
-                            <img src={companyLogo} alt={`${job.company} logo`} className="w-full h-full object-cover rounded-xl" />
-                          ) : (
-                            <div className="w-full h-full bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400 font-mono">
-                              {job.company?.charAt(0)?.toUpperCase() || '?'}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-2 mb-2">
-                            <span className="px-2 py-0.5 rounded text-[8px] font-bold bg-blue-500/10 text-blue-400 font-mono uppercase">
-                              {job.role || 'Unknown'}
-                            </span>
-                            <span className="text-[10px] text-gray-500 font-mono flex items-center gap-1">
-                              <Clock size={11} />
-                              {job.postedAt || 'Recent'}
-                            </span>
-                          </div>
-
-                          {/* ✅ Job Title - Links to /market/title-slug-id */}
-                          <Link to={getJobSlug(job)}>
-                            <h3 className="font-bold text-white text-base leading-tight hover:text-blue-400 transition-colors cursor-pointer">
-                              {job.title}
-                            </h3>
-                          </Link>
-                          
-                          <div className="flex items-center gap-2 mt-2">
-                            <span className="text-xs text-gray-400 font-medium">{job.company}</span>
-                            {job.location && (
-                              <>
-                                <span className="text-gray-600 font-mono">•</span>
-                                <span className="text-xs text-gray-500 font-medium">{job.location}</span>
-                              </>
-                            )}
-                          </div>
-
-                          {job.salary && (
-                            <span className="text-[10px] text-emerald-400 font-mono mt-1 block">{job.salary}</span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Footer */}
-                      <div className="flex items-center justify-between border-t border-white/5 pt-4 mt-4">
-                        <span className="text-[10px] text-gray-500 font-mono uppercase tracking-widest">
-                          SIGNAL: JR-{job.id?.toString().slice(0, 4).toUpperCase() || '????'}
-                        </span>
-                        {job.expiresAt && (
-                          <span className="text-[9px] text-gray-500 font-mono">
-                            Expires: {job.expiresAt}
-                          </span>
-                        )}
-                      </div>
-                    </motion.div>
-                  );
-                })}
+                  // Add job card
+                  elements.push(<JobCard key={job.id || idx} job={job} idx={idx} />);
+                  
+                  // 🔥 Add in-feed ad after every 2 jobs
+                  if ((idx + 1) % 2 === 0 && idx < filteredJobs.length - 1) {
+                    elements.push(
+                      <InFeedAd key={`ad-${idx}`} index={idx + 1} />
+                    );
+                  }
+                  
+                  return elements;
+                }).flat()}
               </div>
             )}
           </AnimatePresence>
         </div>
+
+        {/* Footer Ad */}
+        <AdBanner key="market-footer" slot="5466053430" />
 
         {/* Admin Link */}
         <div className="p-6 rounded-3xl bg-gradient-to-r from-blue-950/20 to-violet-950/20 border border-blue-500/10 flex flex-col md:flex-row items-center justify-between gap-4">
