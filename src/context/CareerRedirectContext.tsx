@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ExternalLink, X, ShieldCheck, ArrowRight, CornerDownRight } from 'lucide-react';
+import { X, ShieldCheck, ArrowRight, CornerDownRight } from 'lucide-react';
 
 interface CareerRedirectContextType {
   triggerRedirect: (url: string, company: string, title?: string) => void;
@@ -36,11 +36,30 @@ export function CareerRedirectProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // 🔥 FIX: Use <a> click for URLs, location.href for mailto
+  const openUrl = (url: string) => {
+    if (url.startsWith('mailto:')) {
+      // Mailto links need location.href
+      window.location.href = url;
+    } else {
+      // Regular URLs: create a real <a> element and click it
+      // This bypasses popup blockers and works in Facebook/Instagram in-app browsers
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener,noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
   const handleSkip = () => {
-    window.open(destinationUrl, '_blank', 'noopener,noreferrer');
+    openUrl(destinationUrl);
     handleClose();
   };
 
+  // Auto-redirect after countdown
   useEffect(() => {
     if (isOpen) {
       if (timerRef.current) {
@@ -54,7 +73,8 @@ export function CareerRedirectProvider({ children }: { children: ReactNode }) {
               clearInterval(timerRef.current);
               timerRef.current = null;
             }
-            window.open(destinationUrl, '_blank', 'noopener,noreferrer');
+            // Auto-redirect using the new method
+            openUrl(destinationUrl);
             setIsOpen(false);
             return 0;
           }
@@ -79,7 +99,7 @@ export function CareerRedirectProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // 🔥 Push Career page ad when modal opens
+  // Push ad when modal opens
   useEffect(() => {
     if (isOpen) {
       setTimeout(() => {
@@ -97,7 +117,7 @@ export function CareerRedirectProvider({ children }: { children: ReactNode }) {
       <AnimatePresence>
         {isOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            {/* Backdrop Blur overlay */}
+            {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -106,7 +126,7 @@ export function CareerRedirectProvider({ children }: { children: ReactNode }) {
               className="absolute inset-0 bg-black/85 backdrop-blur-xl"
             />
             
-            {/* Modal Box */}
+            {/* Modal */}
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -114,27 +134,24 @@ export function CareerRedirectProvider({ children }: { children: ReactNode }) {
               transition={{ type: "spring", duration: 0.4 }}
               className="relative w-full max-w-lg bg-stone-900 border border-white/10 rounded-[2rem] overflow-hidden shadow-2xl p-6 md:p-8 space-y-6 font-sans text-left"
             >
-              {/* Header Info */}
+              {/* Header */}
               <div className="flex items-center justify-between border-b border-white/5 pb-4">
                 <div className="flex items-center gap-2">
                   <span className="p-1 px-2 rounded bg-blue-500/10 text-blue-400 font-mono text-[9px] uppercase tracking-widest font-bold">
                     Telemetry Route Verified
                   </span>
                 </div>
-                <button 
-                  onClick={handleClose}
-                  className="p-1.5 rounded-full hover:bg-white/5 text-gray-400 hover:text-white transition-colors"
-                >
+                <button onClick={handleClose} className="p-1.5 rounded-full hover:bg-white/5 text-gray-400 hover:text-white transition-colors">
                   <X size={16} />
                 </button>
               </div>
 
-              {/* Company Info Header */}
+              {/* Company Info */}
               <div className="space-y-2">
-                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold font-mono">Opening External Carrier Page</p>
-                <h3 className="text-2xl md:text-3xl font-black text-white tracking-tight">
-                  {company}
-                </h3>
+                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold font-mono">
+                  {destinationUrl.startsWith('mailto:') ? 'Opening Email Application' : 'Opening External Career Page'}
+                </p>
+                <h3 className="text-2xl md:text-3xl font-black text-white tracking-tight">{company}</h3>
                 {title && (
                   <p className="text-xs text-blue-400/90 font-mono flex items-center gap-1">
                     <CornerDownRight size={12} /> {title}
@@ -142,19 +159,16 @@ export function CareerRedirectProvider({ children }: { children: ReactNode }) {
                 )}
               </div>
 
-              {/* Professional Countdown & Horizontal Loader Container */}
+              {/* Countdown */}
               <div className="space-y-3 bg-white/[0.02] border border-white/5 p-5 rounded-2xl">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-gray-400 font-mono font-semibold uppercase tracking-wider">
-                    Redirect Bridge Active
-                  </span>
+                  <span className="text-[10px] text-gray-400 font-mono font-semibold uppercase tracking-wider">Redirect Bridge Active</span>
                   <div className="text-right flex items-center gap-1.5">
                     <span className="text-xs text-stone-500 font-mono">Redirecting in:</span>
                     <span className="text-base font-black text-blue-400 font-mono">{timeLeft}s</span>
                   </div>
                 </div>
 
-                {/* Smooth Progress Bar */}
                 <div className="relative w-full h-3 bg-stone-900 rounded-full border border-white/5 overflow-hidden">
                   <motion.div
                     key={animationKey}
@@ -169,31 +183,22 @@ export function CareerRedirectProvider({ children }: { children: ReactNode }) {
                 <div className="flex items-center gap-2 pt-1">
                   <ShieldCheck size={14} className="text-emerald-500 flex-shrink-0" />
                   <span className="text-[10px] text-gray-400 font-mono truncate">
-                    Safe connection: <span className="text-stone-300 font-bold">{getDomain(destinationUrl)}</span>
+                    Safe: <span className="text-stone-300 font-bold">{getDomain(destinationUrl)}</span>
                   </span>
                 </div>
               </div>
 
-              {/* Extra micro copy */}
               <p className="text-[11px] text-gray-500 leading-relaxed font-mono">
-                You are leaving the JobsReport telemetry interface. External applications and career dashboards are hosted directly by hiring corporate entities and may store local profiling cookies.
+                You are leaving the JobsReport telemetry interface. External career pages are hosted directly by hiring corporate entities.
               </p>
-{/* 🔥 AD - Career Page 2 (Compact Vertical - 120x300) */}
-<div style={{ 
-  display: 'flex', 
-  justifyContent: 'center', 
-  alignItems: 'center', 
-  overflow: 'hidden',
-  minHeight: '300px',
-  margin: '8px 0'
-}}>
-  <ins className="adsbygoogle"
-    style={{ display: 'inline-block', width: '120px', height: '300px' }}
-    data-ad-client="ca-pub-8155064094205693"
-    data-ad-slot="3874604315" />
-</div>              
 
-              
+              {/* AD - Career Page 2 */}
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', minHeight: '300px', margin: '8px 0' }}>
+                <ins className="adsbygoogle"
+                  style={{ display: 'inline-block', width: '120px', height: '300px' }}
+                  data-ad-client="ca-pub-8155064094205693"
+                  data-ad-slot="3874604315" />
+              </div>
 
               {/* Action Buttons */}
               <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
@@ -202,7 +207,7 @@ export function CareerRedirectProvider({ children }: { children: ReactNode }) {
                   onClick={handleSkip}
                   className="w-full sm:flex-1 py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-blue-600/25 border border-blue-500"
                 >
-                  <span>Open Immediately</span>
+                  <span>{destinationUrl.startsWith('mailto:') ? '📧 Open Email App' : 'Open Now'}</span>
                   <ArrowRight size={12} />
                 </button>
                 <button
