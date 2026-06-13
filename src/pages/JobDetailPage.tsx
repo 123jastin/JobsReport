@@ -116,6 +116,11 @@ export default function JobDetailPage() {
   const salaryDisplay = job.salary || null;
   const currencyFlag = job.salary_currency_flag || '🇹🇿';
 
+  // 🔥 Generate job URL - slug already contains ID, don't double it
+  const jobUrl = job.slug 
+    ? `https://jobsreport.online/market/${job.slug}` 
+    : `https://jobsreport.online/market/${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${job.id}`;
+
   return (
     <div className="min-h-screen bg-black text-white">
       
@@ -126,10 +131,10 @@ export default function JobDetailPage() {
           : `${job.title} - ${job.company} | JobsReport`
         }
         description={`${job.title} at ${job.company} in ${job.location || 'Remote'}. ${isExpired ? 'This job listing has expired.' : 'Apply now!'} ${job.role || ''} ${job.salary ? '• ' + job.salary : ''}`}
-        canonicalUrl={`https://jobsreport.online/market/${job.slug || job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${job.id}`}
+        canonicalUrl={jobUrl}
         ogTitle={`${job.title} - ${job.company}`}
         ogDescription={`${job.title} at ${job.company} in ${job.location || 'Remote'}. ${job.salary || ''} Apply now on JobsReport.`}
-        ogUrl={`https://jobsreport.online/market/${job.slug || job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${job.id}`}
+        ogUrl={jobUrl}
         ogImage={job.logoUrl || undefined}
       />
 
@@ -142,7 +147,7 @@ export default function JobDetailPage() {
                 "@type": "WebPage",
                 "name": `${job.title} at ${job.company} (Expired Job Listing)`,
                 "description": `${job.title} at ${job.company} in ${job.location || 'Remote'}. This job listing has expired.`,
-                "url": `https://jobsreport.online/market/${job.slug || job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${job.id}`
+                "url": jobUrl
               }
             : {
                 "@context": "https://schema.org",
@@ -180,7 +185,7 @@ export default function JobDetailPage() {
                 "jobBenefits": Array.isArray(job.benefits) && job.benefits.length > 0 ? job.benefits.join(', ') : undefined,
                 "industry": job.industry || undefined,
                 "occupationalCategory": job.job_category || job.role || undefined,
-                "url": `https://jobsreport.online/market/${job.slug || job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${job.id}`
+                "url": jobUrl
               }
         )}
       </script>
@@ -193,7 +198,7 @@ export default function JobDetailPage() {
           "itemListElement": [
             { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://jobsreport.online" },
             { "@type": "ListItem", "position": 2, "name": "Market", "item": "https://jobsreport.online/market" },
-            { "@type": "ListItem", "position": 3, "name": job.title, "item": `https://jobsreport.online/market/${job.slug || job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${job.id}` }
+            { "@type": "ListItem", "position": 3, "name": job.title, "item": jobUrl }
           ]
         })}
       </script>
