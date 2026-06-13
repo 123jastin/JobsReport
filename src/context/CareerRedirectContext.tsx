@@ -36,32 +36,29 @@ export function CareerRedirectProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // 🔥 FIX: Use form submission for URLs (works in ALL browsers), location.href for mailto
-  const openUrl = (url: string) => {
+  // 🔥 FIX: Use location.assign for auto-redirect, window.open only for manual click
+  const openUrl = (url: string, isManualClick: boolean = false) => {
     if (url.startsWith('mailto:')) {
-      // Email links work with location.href
       window.location.href = url;
       return;
     }
 
-    // Create a hidden form and submit it - never blocked as popup
-    const form = document.createElement('form');
-    form.method = 'GET';
-    form.action = url;
-    form.target = '_blank';
-    form.style.display = 'none';
-    
-    document.body.appendChild(form);
-    form.submit();
-    document.body.removeChild(form);
+    if (isManualClick) {
+      // Manual click → can open new tab
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } else {
+      // Auto-redirect after timer → redirect current tab (works everywhere)
+      window.location.assign(url);
+    }
   };
 
   const handleSkip = () => {
-    openUrl(destinationUrl);
+    // Manual button click → open in new tab
+    openUrl(destinationUrl, true);
     handleClose();
   };
 
-  // Auto-redirect after countdown
+  // Auto-redirect after countdown → redirect current tab
   useEffect(() => {
     if (isOpen) {
       if (timerRef.current) {
@@ -75,7 +72,8 @@ export function CareerRedirectProvider({ children }: { children: ReactNode }) {
               clearInterval(timerRef.current);
               timerRef.current = null;
             }
-            openUrl(destinationUrl);
+            // Auto-redirect → current tab (works in Facebook)
+            openUrl(destinationUrl, false);
             setIsOpen(false);
             return 0;
           }
