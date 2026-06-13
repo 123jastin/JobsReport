@@ -133,7 +133,7 @@ export default function JobDetailPage() {
         ogImage={job.logoUrl || undefined}
       />
 
-      {/* ========== SCHEMA: Active=JobPosting, Expired=WebPage ========== */}
+      {/* ========== SCHEMA ========== */}
       <script type="application/ld+json">
         {JSON.stringify(
           isExpired 
@@ -141,7 +141,7 @@ export default function JobDetailPage() {
                 "@context": "https://schema.org",
                 "@type": "WebPage",
                 "name": `${job.title} at ${job.company} (Expired Job Listing)`,
-                "description": `${job.title} at ${job.company} in ${job.location || 'Remote'}. This job listing has expired. Browse similar jobs on JobsReport.`,
+                "description": `${job.title} at ${job.company} in ${job.location || 'Remote'}. This job listing has expired.`,
                 "url": `https://jobsreport.online/market/${job.slug || job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${job.id}`
               }
             : {
@@ -149,20 +149,11 @@ export default function JobDetailPage() {
                 "@type": "JobPosting",
                 "title": job.title,
                 "description": (job.description || '').replace(/<[^>]*>/g, '').substring(0, 5000),
-                "identifier": {
-                  "@type": "PropertyValue",
-                  "name": "JobsReport",
-                  "value": job.id
-                },
+                "identifier": { "@type": "PropertyValue", "name": "JobsReport", "value": job.id },
                 "datePosted": job.postedAt,
                 "validThrough": job.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
                 "employmentType": job.employment_type || 'FULL_TIME',
-                "hiringOrganization": {
-                  "@type": "Organization",
-                  "name": job.company,
-                  "sameAs": job.companyWebsite || '',
-                  "logo": job.logoUrl || ''
-                },
+                "hiringOrganization": { "@type": "Organization", "name": job.company, "sameAs": job.companyWebsite || '', "logo": job.logoUrl || '' },
                 "jobLocation": {
                   "@type": "Place",
                   "address": {
@@ -177,20 +168,13 @@ export default function JobDetailPage() {
                 "baseSalary": (job.salary_min || job.salary_max) ? {
                   "@type": "MonetaryAmount",
                   "currency": (job.salary_currency || 'TZS').toUpperCase(),
-                  "value": {
-                    "@type": "QuantitativeValue",
-                    "minValue": Number(job.salary_min || job.salary_max),
-                    "maxValue": Number(job.salary_max || job.salary_min),
-                    "unitText": "MONTH"
-                  }
+                  "value": { "@type": "QuantitativeValue", "minValue": Number(job.salary_min || job.salary_max), "maxValue": Number(job.salary_max || job.salary_min), "unitText": "MONTH" }
                 } : undefined,
                 "educationRequirements": (job.education_level && job.education_level !== 'Any' && job.education_level !== '') ? {
-                  "@type": "EducationalOccupationalCredential",
-                  "credentialCategory": job.education_level
+                  "@type": "EducationalOccupationalCredential", "credentialCategory": job.education_level
                 } : undefined,
                 "experienceRequirements": job.experience_months > 0 ? {
-                  "@type": "OccupationalExperienceRequirements",
-                  "monthsOfExperience": Number(job.experience_months)
+                  "@type": "OccupationalExperienceRequirements", "monthsOfExperience": Number(job.experience_months)
                 } : undefined,
                 "skills": Array.isArray(job.skills) && job.skills.length > 0 ? job.skills.join(', ') : undefined,
                 "jobBenefits": Array.isArray(job.benefits) && job.benefits.length > 0 ? job.benefits.join(', ') : undefined,
@@ -224,9 +208,7 @@ export default function JobDetailPage() {
           
           <div className="flex items-center gap-3">
             {isExpired && (
-              <span className="px-3 py-1 rounded-full bg-red-500/10 text-red-400 text-[10px] font-bold uppercase tracking-wider">
-                Expired
-              </span>
+              <span className="px-3 py-1 rounded-full bg-red-500/10 text-red-400 text-[10px] font-bold uppercase tracking-wider">Expired</span>
             )}
             <button
               onClick={() => {
@@ -272,53 +254,29 @@ export default function JobDetailPage() {
         </div>
 
         <div className="flex items-center gap-3 mb-3">
-          <h1 className="text-xl md:text-2xl font-bold text-white leading-tight">
-            {job.title}
-          </h1>
+          <h1 className="text-xl md:text-2xl font-bold text-white leading-tight">{job.title}</h1>
           {isExpired && (
-            <span className="px-3 py-1 rounded-full bg-red-500/10 text-red-400 text-xs font-bold uppercase whitespace-nowrap">
-              Expired
-            </span>
+            <span className="px-3 py-1 rounded-full bg-red-500/10 text-red-400 text-xs font-bold uppercase whitespace-nowrap">Expired</span>
           )}
         </div>
 
         {isExpired && (
           <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/5 border border-red-500/10 mb-3">
             <AlertCircle size={14} className="text-red-400 flex-shrink-0" />
-            <p className="text-[11px] text-red-400/80">
-              This job listing has expired. Applications are no longer accepted. Browse related jobs below.
-            </p>
+            <p className="text-[11px] text-red-400/80">This job listing has expired. Applications are no longer accepted. Browse related jobs below.</p>
           </div>
         )}
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-gray-400">
           <span className="flex items-center gap-1.5"><MapPin size={13} /> {job.location || 'Remote'}</span>
           {salaryDisplay && (
-            <span className="flex items-center gap-1.5 text-emerald-400 font-bold">
-              💰 {salaryDisplay}
-            </span>
+            <span className="flex items-center gap-1.5 text-emerald-400 font-bold">💰 {salaryDisplay}</span>
           )}
           <span className="flex items-center gap-1.5"><Briefcase size={13} /> {job.role}</span>
           <span className="flex items-center gap-1.5"><Calendar size={13} /> {job.postedAt || 'Recent'}</span>
           {job.expiresAt && (
             <span className={`flex items-center gap-1.5 ${isExpired ? 'text-red-400' : 'text-amber-400'}`}>
               <Clock size={13} /> {isExpired ? 'Expired' : 'Expires'}: {job.expiresAt}
-            </span>
-          )}
-        </div>
-
-        {/* 🔥 Single category badge - show job_category if different from role, otherwise just role */}
-        <div className="flex items-center gap-2 mt-3">
-          <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
-            isExpired ? 'bg-red-500/10 text-red-400' : 'bg-blue-500/10 text-blue-400'
-          }`}>
-            {job.job_category && job.job_category !== 'Other' && job.job_category !== job.role 
-              ? job.job_category 
-              : job.role || 'General'}
-          </span>
-          {job.job_category && job.job_category !== 'Other' && job.job_category !== job.role && (
-            <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-violet-500/10 text-violet-400 uppercase tracking-wider">
-              {job.role}
             </span>
           )}
         </div>
@@ -333,18 +291,10 @@ export default function JobDetailPage() {
           </p>
         )}
         <button 
-          onClick={() => {
-            if (!isExpired && job.url) {
-              triggerRedirect(job.url, job.company, job.title);
-            }
-          }} 
+          onClick={() => { if (!isExpired && job.url) { triggerRedirect(job.url, job.company, job.title); } }} 
           disabled={isExpired || !job.url} 
           className={`w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
-            isExpired 
-              ? 'bg-red-500/10 text-red-400 cursor-not-allowed' 
-              : job.url 
-                ? 'bg-blue-600 hover:bg-blue-500 text-white active:scale-[0.98]' 
-                : 'bg-white/5 text-gray-600 cursor-not-allowed'
+            isExpired ? 'bg-red-500/10 text-red-400 cursor-not-allowed' : job.url ? 'bg-blue-600 hover:bg-blue-500 text-white active:scale-[0.98]' : 'bg-white/5 text-gray-600 cursor-not-allowed'
           }`}
         >
           {isExpired ? '🚫 Application Closed' : isEmailLink ? '✉️ Send Application' : 'Apply Now'}
@@ -366,7 +316,7 @@ export default function JobDetailPage() {
         </div>
       )}
 
-      {/* ========== AD #1 - After Description ========== */}
+      {/* ========== AD #1 ========== */}
       <AdBanner key={`ad1-${jobId}`} slot="4550717155" />
 
       {/* ========== ATTACHMENTS ========== */}
@@ -409,18 +359,16 @@ export default function JobDetailPage() {
           ].map(([label, value]) => (
             <div key={label as string} className="flex justify-between items-center py-2 border-b border-white/[0.03]">
               <span className="text-xs text-gray-500">{label}</span>
-              <span className={`text-xs font-bold ${label === 'Status' ? (isExpired ? 'text-red-400' : 'text-green-400') : 'text-white'}`}>
-                {value}
-              </span>
+              <span className={`text-xs font-bold ${label === 'Status' ? (isExpired ? 'text-red-400' : 'text-green-400') : 'text-white'}`}>{value}</span>
             </div>
           ))}
         </div>
       </div>
 
-      {/* ========== AD #2 - After Job Details ========== */}
+      {/* ========== AD #2 ========== */}
       <AdBanner key={`ad2-${jobId}`} slot="1373889473" />
 
-      {/* ========== RELATED JOBS SECTION ========== */}
+      {/* ========== RELATED JOBS ========== */}
       {relatedJobs.length > 0 && (
         <div className="px-4 py-8 border-t border-white/5">
           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
@@ -428,49 +376,23 @@ export default function JobDetailPage() {
             {isExpired ? 'Similar Active Jobs' : 'Related Jobs'}
           </h3>
           <p className="text-xs text-gray-500 mb-4">
-            {isExpired 
-              ? 'This job has expired. Here are similar active opportunities you might be interested in.'
-              : `Explore more ${job.role || ''} jobs similar to this one.`
-            }
+            {isExpired ? 'This job has expired. Here are similar active opportunities.' : `Explore more ${job.role || ''} jobs similar to this one.`}
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {relatedJobs.map((rj: any) => {
               const rjSlug = rj.slug || rj.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
               const rjExpired = rj.active === false || (rj.expiresAt && new Date(rj.expiresAt) < new Date());
-              
               return (
-                <Link
-                  key={rj.id}
-                  to={`/market/${rjSlug}-${rj.id}`}
-                  className={`p-4 rounded-xl border transition-all group ${
-                    rjExpired 
-                      ? 'border-white/5 bg-white/[0.005] opacity-60' 
-                      : 'border-white/5 bg-white/[0.01] hover:bg-white/[0.03] hover:border-blue-500/30'
-                  }`}
-                >
+                <Link key={rj.id} to={`/market/${rjSlug}-${rj.id}`} className={`p-4 rounded-xl border transition-all group ${rjExpired ? 'border-white/5 bg-white/[0.005] opacity-60' : 'border-white/5 bg-white/[0.01] hover:bg-white/[0.03] hover:border-blue-500/30'}`}>
                   <div className="flex items-start justify-between mb-2">
-                    <div className="font-bold text-white text-sm group-hover:text-blue-400 transition-colors truncate pr-2">
-                      {rj.title}
-                    </div>
-                    {rjExpired && (
-                      <span className="text-[9px] text-red-400 bg-red-500/10 px-2 py-0.5 rounded whitespace-nowrap">
-                        Expired
-                      </span>
-                    )}
+                    <div className="font-bold text-white text-sm group-hover:text-blue-400 transition-colors truncate pr-2">{rj.title}</div>
+                    {rjExpired && <span className="text-[9px] text-red-400 bg-red-500/10 px-2 py-0.5 rounded whitespace-nowrap">Expired</span>}
                   </div>
                   <div className="flex items-center gap-3 text-[11px] text-gray-400">
-                    <span className="flex items-center gap-1">
-                      <Building2 size={11} />
-                      {rj.company}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <MapPin size={11} />
-                      {rj.location || 'Remote'}
-                    </span>
+                    <span className="flex items-center gap-1"><Building2 size={11} />{rj.company}</span>
+                    <span className="flex items-center gap-1"><MapPin size={11} />{rj.location || 'Remote'}</span>
                   </div>
-                  {rj.salary && (
-                    <div className="text-[10px] text-emerald-400 mt-1.5 font-mono">{rj.salary}</div>
-                  )}
+                  {rj.salary && <div className="text-[10px] text-emerald-400 mt-1.5 font-mono">{rj.salary}</div>}
                 </Link>
               );
             })}
@@ -478,7 +400,7 @@ export default function JobDetailPage() {
         </div>
       )}
 
-      {/* ========== AD #3 - Footer ========== */}
+      {/* ========== AD #3 ========== */}
       <AdBanner key={`ad3-${jobId}`} slot="5466053430" />
 
       {/* ========== SHARE ========== */}
