@@ -1,468 +1,619 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import SEO from '../components/SEO';
-import AdBanner from '../components/AdBanner';
-import {
-  Building2, MapPin, Clock, ExternalLink, ArrowLeft,
-  FileText, Eye, ChevronLeft, ChevronRight, X, Download,
-  Briefcase, Calendar, Globe, Share2, AlertCircle, Flag
+import { motion } from 'motion/react';
+import { 
+  Building2, 
+  TrendingUp, 
+  ArrowLeft, 
+  ExternalLink, 
+  Share2, 
+  Clock,
+  Sparkles,
+  MapPin,
+  Briefcase,
+  Calendar,
+  RefreshCw,
+  ChevronRight
 } from 'lucide-react';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer, 
+  Cell,
+  PieChart,
+  Pie
+} from 'recharts';
+import SEO from '../components/SEO';
+import { Report, RawJob } from '../types';
 import { useCareerRedirect } from '../context/CareerRedirectContext';
 
-export default function JobDetailPage() {
-  const { jobId } = useParams<{ jobId: string }>();
-  const [job, setJob] = useState<any>(null);
-  const [allJobs, setAllJobs] = useState<any[]>([]);
+const COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b'];
+
+export default function ReportDetailPage() {
+  const { slug } = useParams<{ slug: string }>();
+  const [report, setReport] = useState<Report | null>(null);
+  const [jobs, setJobs] = useState<RawJob[]>([]);
   const [loading, setLoading] = useState(true);
   const { triggerRedirect } = useCareerRedirect();
-  
-  const [viewerOpen, setViewerOpen] = useState(false);
-  const [viewerIndex, setViewerIndex] = useState(0);
-  const [viewerFiles, setViewerFiles] = useState<any[]>([]);
-
-  const isExpired = job ? (
-    job.active === false || 
-    (job.expiresAt && new Date(job.expiresAt) < new Date())
-  ) : false;
 
   useEffect(() => {
-    async function loadJob() {
+    const fetchReportData = async () => {
       try {
-        const res = await fetch('/api/market');
-        if (res.ok) {
-          const data = await res.json();
-          
-          setAllJobs(data.jobs || []);
-          
-          const jobIdMatch = jobId?.match(/job-([a-z0-9]+)$/i);
-          const extractedId = jobIdMatch ? `job-${jobIdMatch[1]}` : jobId;
-          
-          let found = data.jobs?.find((j: any) => j.id === extractedId);
-          if (!found && jobId) {
-            found = data.jobs?.find((j: any) => 
-              jobId.includes(j.id) || j.id.includes(extractedId || '')
-            );
-          }
-
-          if (found && data.companies) {
-            const company = data.companies.find(
-              (c: any) => c.name?.toLowerCase() === found.company?.toLowerCase()
-            );
-            if (company?.url) found.companyWebsite = company.url;
-          }
-          
-          setJob(found || null);
-          
-          if (found) {
-            document.title = `${found.title} - ${found.company} | JobsReport`;
-          }
+        const response = await fetch(`/api/reports/${slug}`);
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Report data:', data);
+          setReport(data);
+          setJobs(data.jobs || []);
+        } else if (response.status === 404) {
+          setReport(null);
         }
       } catch (err) {
-        console.error('Failed to load job:', err);
+        console.error("Failed to fetch report:", err);
+        setReport(null);
       } finally {
         setLoading(false);
       }
-    }
-    if (jobId) loadJob();
-    window.scrollTo(0, 0);
-  }, [jobId]);
+    };
 
-  const getRelatedJobs = () => {
-    if (!job || allJobs.length === 0) return [];
-    
-    const related = allJobs.filter(j => 
-      j.id !== job.id && (
-        j.role === job.role ||
-        j.company === job.company ||
-        j.job_category === job.job_category
-      )
-    );
-    
-    if (related.length < 6) {
-      const remaining = allJobs
-        .filter(j => j.id !== job.id && !related.find(r => r.id === j.id))
-        .slice(0, 6 - related.length);
-      related.push(...remaining);
+    if (slug) {
+      fetchReportData();
+      window.scrollTo(0, 0);
     }
-    
-    return related.slice(0, 6);
-  };
-
-  const relatedJobs = getRelatedJobs();
+  }, [slug]);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="w-8 h-8 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
+        <RefreshCw size={24} className="text-blue-500 animate-spin" />
+        <span className="text-[10px] font-mono text-gray-500 tracking-widest uppercase">
+          Loading Intelligence Report...
+        </span>
       </div>
     );
   }
 
-  if (!job) {
+  if (!report) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen px-4 text-center">
-        <h2 className="text-2xl font-bold text-white mb-4">Job Not Found</h2>
-        <p className="text-gray-400 mb-6">This listing may have been removed or expired.</p>
-        <Link to="/market" className="text-blue-500 hover:underline font-bold uppercase tracking-wider text-sm">
-          ← Back to Market
-        </Link>
-      </div>
+      <>
+        <SEO 
+          title="Report Not Found | JobsReport" 
+          description="The requested market intelligence report could not be found." 
+        />
+        <div className="text-center py-20">
+          <h2 className="text-2xl font-bold text-white mb-4">Report Not Found</h2>
+          <p className="text-gray-400 mb-6">The intelligence report you're looking for doesn't exist or has been archived.</p>
+          <Link to="/reports" className="text-blue-500 hover:underline font-bold uppercase tracking-wider text-sm">
+            ← Back to Reports
+          </Link>
+        </div>
+      </>
     );
   }
 
-  const hasFiles = job.images && job.images.length > 0;
-  const hasDescription = job.description && job.description.trim() !== '';
-  const isEmailLink = job.url && job.url.startsWith('mailto:');
-  const salaryDisplay = job.salary || null;
-  const currencyFlag = job.salary_currency_flag || '🇹🇿';
+  // SEO metadata
+  const pageTitle = `${report.title || 'Market Report'} | ${report.role || 'Job Market'} Analysis | JobsReport`;
+  const pageDescription = (report.excerpt || report.content || '')
+    .replace(/<[^>]*>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .substring(0, 160);
+  const canonicalUrl = `https://jobsreport.online/report/${slug}`;
+  const publishedDate = report.createdAt || report.updatedAt || new Date().toISOString();
+  const modifiedDate = report.updatedAt || report.createdAt || new Date().toISOString();
 
-  const jobUrl = job.slug 
-    ? `https://jobsreport.online/market/${job.slug}` 
-    : `https://jobsreport.online/market/${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${job.id}`;
+  // Extract plain text for word count
+  const plainTextContent = (report.content || report.excerpt || '')
+    .replace(/<[^>]*>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const wordCount = plainTextContent.split(/\s+/).length;
+
+  // Extract image from content if any
+  const contentImage = (report.content || '').match(/<img[^>]+src="([^">]+)"/);
+  const articleImage = report.image || (contentImage ? contentImage[1] : undefined);
+
+  // 🔥 NewsArticle Schema (clean - no JobPosting)
+  const newsArticleSchema = {
+    "@context": "https://schema.org",
+    "@type": "NewsArticle",
+    "headline": report.title,
+    "description": pageDescription,
+    "image": articleImage || undefined,
+    "datePublished": publishedDate,
+    "dateModified": modifiedDate,
+    "url": canonicalUrl,
+    "mainEntityOfPage": {
+      "@type": "WebPage",
+      "@id": canonicalUrl
+    },
+    "author": {
+      "@type": "Organization",
+      "name": "JobsReport",
+      "url": "https://jobsreport.online"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "JobsReport",
+      "url": "https://jobsreport.online",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://jobsreport.online/favicon.ico"
+      }
+    },
+    "about": [
+      {
+        "@type": "Thing",
+        "name": report.role || 'Job Market'
+      }
+    ],
+    "keywords": [
+      report.role,
+      report.country,
+      'job market',
+      'hiring trends',
+      'employment report',
+      'career insights',
+      'market analysis'
+    ].filter(Boolean),
+    "wordCount": wordCount,
+    "articleSection": report.role || 'Job Market',
+    "isAccessibleForFree": true
+  };
+
+  // 🔥 BreadcrumbList Schema
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": "https://jobsreport.online"
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "Reports",
+        "item": "https://jobsreport.online/reports"
+      },
+      ...(report.country ? [{
+        "@type": "ListItem",
+        "position": 3,
+        "name": `Reports in ${report.country}`,
+        "item": `https://jobsreport.online/reports/${report.country.toLowerCase().replace(/\s+/g, '-')}`
+      }] : []),
+      {
+        "@type": "ListItem",
+        "position": report.country ? 4 : 3,
+        "name": report.title || 'Report Detail',
+        "item": canonicalUrl
+      }
+    ]
+  };
+
+  // Safe data with fallbacks
+  const stats = report.stats || { companies: 0, growth: 0 };
+  const chartData = report.chartData?.length ? report.chartData : [{ name: 'No Data', demand: 0 }];
+  const distribution = report.distribution?.length ? report.distribution : [{ name: 'No Data', value: 1 }];
+  const companies = report.companies || [];
+  const hasChartData = chartData.length > 0 && chartData[0]?.demand > 0;
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      
-      {/* ========== SEO COMPONENT ========== */}
+    <>
       <SEO
-        title={isExpired 
-          ? `${job.title} - ${job.company} (Expired) | JobsReport`
-          : `${job.title} - ${job.company} | JobsReport`
-        }
-        description={`${job.title} at ${job.company} in ${job.location || 'Remote'}. ${isExpired ? 'This job listing has expired.' : 'Apply now!'} ${job.role || ''} ${job.salary ? '• ' + job.salary : ''}`}
-        canonicalUrl={jobUrl}
-        ogTitle={`${job.title} - ${job.company}`}
-        ogDescription={`${job.title} at ${job.company} in ${job.location || 'Remote'}. ${job.salary || ''} Apply now on JobsReport.`}
-        ogUrl={jobUrl}
-        ogImage={job.logoUrl || undefined}
+        title={pageTitle}
+        description={pageDescription}
+        keywords={`${report.role || 'job'} market report, ${report.country || ''} hiring trends, employment analysis, ${report.role || ''} jobs, career insights`}
+        canonicalUrl={canonicalUrl}
+        ogTitle={pageTitle}
+        ogDescription={pageDescription}
+        ogUrl={canonicalUrl}
+        structuredData={[newsArticleSchema, breadcrumbSchema]}
       />
 
-      {/* ========== SCHEMA ========== */}
-      <script type="application/ld+json">
-        {JSON.stringify(
-          isExpired 
-            ? {
-                "@context": "https://schema.org",
-                "@type": "WebPage",
-                "name": `${job.title} at ${job.company} (Expired Job Listing)`,
-                "description": `${job.title} at ${job.company} in ${job.location || 'Remote'}. This job listing has expired.`,
-                "url": jobUrl
-              }
-            : {
-                "@context": "https://schema.org",
-                "@type": "JobPosting",
-                "title": job.title,
-                "description": (job.description || '').replace(/<[^>]*>/g, '').substring(0, 5000),
-                "identifier": { "@type": "PropertyValue", "name": "JobsReport", "value": job.id },
-                "datePosted": job.postedAt,
-                "validThrough": job.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                "employmentType": job.employment_type || 'FULL_TIME',
-                "hiringOrganization": { "@type": "Organization", "name": job.company, "sameAs": job.companyWebsite || '', "logo": job.logoUrl || '' },
-                "jobLocation": {
-                  "@type": "Place",
-                  "address": {
-                    "@type": "PostalAddress",
-                    "streetAddress": job.street_address || '',
-                    "addressLocality": job.city || job.location || '',
-                    "addressRegion": job.region || '',
-                    "addressCountry": "TZ",
-                    "postalCode": job.postcode || ''
-                  }
-                },
-                "baseSalary": (job.salary_min || job.salary_max) ? {
-                  "@type": "MonetaryAmount",
-                  "currency": (job.salary_currency || 'TZS').toUpperCase(),
-                  "value": { "@type": "QuantitativeValue", "minValue": Number(job.salary_min || job.salary_max), "maxValue": Number(job.salary_max || job.salary_min), "unitText": "MONTH" }
-                } : undefined,
-                "educationRequirements": (job.education_level && job.education_level !== 'Any' && job.education_level !== '') ? {
-                  "@type": "EducationalOccupationalCredential", "credentialCategory": job.education_level
-                } : undefined,
-                "experienceRequirements": job.experience_months > 0 ? {
-                  "@type": "OccupationalExperienceRequirements", "monthsOfExperience": Number(job.experience_months)
-                } : undefined,
-                "skills": Array.isArray(job.skills) && job.skills.length > 0 ? job.skills.join(', ') : undefined,
-                "jobBenefits": Array.isArray(job.benefits) && job.benefits.length > 0 ? job.benefits.join(', ') : undefined,
-                "industry": job.industry || undefined,
-                "occupationalCategory": job.job_category || job.role || undefined,
-                "url": jobUrl
-              }
-        )}
-      </script>
+      <div className="space-y-8 pb-12">
+        {/* Breadcrumb Navigation */}
+        <div className="flex items-center gap-2 text-[10px] text-gray-500 font-mono uppercase tracking-wider flex-wrap">
+          <Link to="/" className="hover:text-white transition-colors">Home</Link>
+          <ChevronRight size={10} />
+          <Link to="/reports" className="hover:text-white transition-colors">Reports</Link>
+          {report.country && (
+            <>
+              <ChevronRight size={10} />
+              <Link 
+                to={`/reports/${report.country.toLowerCase().replace(/\s+/g, '-')}`}
+                className="hover:text-white transition-colors"
+              >
+                {report.country}
+              </Link>
+            </>
+          )}
+          <ChevronRight size={10} />
+          <span className="text-blue-400 truncate max-w-[200px]">{report.title}</span>
+        </div>
 
-      {/* ========== BREADCRUMB SCHEMA ========== */}
-      <script type="application/ld+json">
-        {JSON.stringify({
-          "@context": "https://schema.org",
-          "@type": "BreadcrumbList",
-          "itemListElement": [
-            { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://jobsreport.online" },
-            { "@type": "ListItem", "position": 2, "name": "Market", "item": "https://jobsreport.online/market" },
-            { "@type": "ListItem", "position": 3, "name": job.title, "item": jobUrl }
-          ]
-        })}
-      </script>
-      
-      {/* ========== TOP NAVIGATION BAR ========== */}
-      <div className="sticky top-0 z-40 bg-black/95 backdrop-blur border-b border-white/5">
-        <div className="flex items-center justify-between px-4 h-14">
-          <Link to="/market" className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
-            <ArrowLeft size={18} />
-            <span className="text-xs font-bold uppercase tracking-wider">Market</span>
+        {/* Header Navigation */}
+        <div className="flex items-center justify-between mb-6">
+          <Link to="/reports" className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors group text-xs font-bold uppercase tracking-widest">
+            <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
+            <span>Back to Intel Feed</span>
           </Link>
-          
-          <div className="flex items-center gap-3">
-            {isExpired && (
-              <span className="px-3 py-1 rounded-full bg-red-500/10 text-red-400 text-[10px] font-bold uppercase tracking-wider">Expired</span>
-            )}
-            <button
+          <div className="flex items-center gap-4">
+            <span className="text-[10px] font-mono text-gray-500">
+              Report ID: JR-{(report.id || '????').slice(0, 4).toUpperCase()}
+            </span>
+            <button 
               onClick={() => {
                 if (navigator.share) {
-                  navigator.share({ title: job.title, url: window.location.href });
-                } else {
-                  navigator.clipboard.writeText(window.location.href);
+                  navigator.share({
+                    title: report.title,
+                    url: window.location.href
+                  });
                 }
               }}
-              className="p-2 hover:bg-white/5 rounded-full transition-colors"
+              className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-all"
             >
-              <Share2 size={18} className="text-gray-400" />
+              <Share2 size={18} />
             </button>
           </div>
         </div>
-      </div>
 
-      {/* ========== HERO HEADER ========== */}
-      <div className="px-4 py-6 border-b border-white/5">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-12 h-12 rounded-xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
-            {job.logoUrl ? (
-              <img src={job.logoUrl} alt={job.company} className="w-full h-full object-cover rounded-xl" referrerPolicy="no-referrer" />
-            ) : (
-              <div className="w-full h-full bg-gradient-to-br from-blue-600 to-violet-600 flex items-center justify-center text-white font-bold text-lg">
-                {job.company?.charAt(0)?.toUpperCase() || '?'}
-              </div>
-            )}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <div className="flex items-center gap-3 mb-6">
+            <span className="text-[10px] font-bold text-blue-500 uppercase tracking-[0.2em]">Market Analysis / Intelligence</span>
+            <span className="w-1 h-1 bg-gray-700 rounded-full"></span>
+            <span className="text-[10px] text-gray-500 uppercase tracking-widest">Live Data</span>
           </div>
           
-          <div className="min-w-0">
-            <h2 className="text-sm font-bold text-white">{job.company}</h2>
-            {job.companyWebsite ? (
-              <a href={job.companyWebsite} target="_blank" rel="noopener noreferrer" className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors">
-                <Globe size={11} />
-                {(() => { try { const url = new URL(job.companyWebsite); return url.hostname.replace('www.', ''); } catch { return 'Company Website'; } })()}
-                <ExternalLink size={10} />
-              </a>
-            ) : (
-              <span className="text-[11px] text-gray-600">No website listed</span>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3 mb-3">
-          <h1 className="text-xl md:text-2xl font-bold text-white leading-tight">{job.title}</h1>
-          {isExpired && (
-            <span className="px-3 py-1 rounded-full bg-red-500/10 text-red-400 text-xs font-bold uppercase whitespace-nowrap">Expired</span>
-          )}
-        </div>
-
-        {isExpired && (
-          <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/5 border border-red-500/10 mb-3">
-            <AlertCircle size={14} className="text-red-400 flex-shrink-0" />
-            <p className="text-[11px] text-red-400/80">This job listing has expired. Applications are no longer accepted. Browse related jobs below.</p>
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-gray-400">
-          <span className="flex items-center gap-1.5"><MapPin size={13} /> {job.location || 'Remote'}</span>
-          {salaryDisplay && (
-            <span className="flex items-center gap-1.5 text-emerald-400 font-bold">💰 {salaryDisplay}</span>
-          )}
-          <span className="flex items-center gap-1.5"><Briefcase size={13} /> {job.role}</span>
-          <span className="flex items-center gap-1.5"><Calendar size={13} /> {job.postedAt || 'Recent'}</span>
-          {job.expiresAt && (
-            <span className={`flex items-center gap-1.5 ${isExpired ? 'text-red-400' : 'text-amber-400'}`}>
-              <Clock size={13} /> {isExpired ? 'Expired' : 'Expires'}: {job.expiresAt}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* ========== APPLY BUTTON ========== */}
-      <div className="sticky bottom-0 z-40 bg-black/95 backdrop-blur border-t border-white/5 px-4 py-3">
-        {job.url && !isExpired && (
-          <p className="text-[10px] text-gray-500 text-center mb-2 truncate px-4">
-            {isEmailLink ? '📧 ' : '🔗 '}
-            {isEmailLink ? job.url.replace('mailto:', '') : (() => { try { const url = new URL(job.url); return url.hostname.replace('www.', '') + url.pathname; } catch { return job.url; } })()}
-          </p>
-        )}
-        <button 
-          onClick={() => { if (!isExpired && job.url) { triggerRedirect(job.url, job.company, job.title); } }} 
-          disabled={isExpired || !job.url} 
-          className={`w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
-            isExpired ? 'bg-red-500/10 text-red-400 cursor-not-allowed' : job.url ? 'bg-blue-600 hover:bg-blue-500 text-white active:scale-[0.98]' : 'bg-white/5 text-gray-600 cursor-not-allowed'
-          }`}
-        >
-          {isExpired ? '🚫 Application Closed' : isEmailLink ? '✉️ Send Application' : 'Apply Now'}
-          {!isExpired && <ExternalLink size={16} />}
-        </button>
-      </div>
-
-      {/* ========== JOB DESCRIPTION ========== */}
-      {hasDescription && (
-        <div className="px-4 py-6 border-b border-white/5">
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2"><FileText size={16} className="text-blue-400" /> Job Description</h3>
-          <div className="text-stone-300 text-sm leading-relaxed space-y-4 job-description-content" dangerouslySetInnerHTML={{ __html: job.description }} />
-        </div>
-      )}
-      {!hasDescription && (
-        <div className="px-4 py-6 border-b border-white/5 text-center">
-          <FileText size={32} className="text-gray-600 mx-auto mb-3" />
-          <p className="text-gray-500 text-sm">No detailed description available for this listing.</p>
-        </div>
-      )}
-
-      {/* ========== AD #1 ========== */}
-      <AdBanner key={`ad1-${jobId}`} slot="4550717155" />
-
-      {/* ========== ATTACHMENTS ========== */}
-      {hasFiles && (
-        <div className="px-4 py-6 border-b border-white/5">
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2"><Eye size={16} className="text-blue-400" /> Attachments ({job.images.length})</h3>
-          <div className="flex md:grid md:grid-cols-4 gap-2 overflow-x-auto scrollbar-none">
-            {job.images.map((img: any, index: number) => {
-              const isPDF = img.type === 'pdf' || img.name?.toLowerCase().endsWith('.pdf');
-              const isDoc = img.type === 'document';
-              return (
-                <div key={index} onClick={() => { setViewerFiles(job.images); setViewerIndex(index); setViewerOpen(true); }} className="flex-shrink-0 w-24 h-24 md:w-full md:aspect-square rounded-xl overflow-hidden border border-white/5 bg-slate-900/50 cursor-pointer active:scale-95 transition-transform">
-                  {isPDF ? <div className="w-full h-full flex flex-col items-center justify-center bg-red-900/20 p-2"><span className="text-lg font-black text-red-400">PDF</span><span className="text-[7px] text-gray-400 mt-0.5 text-center truncate w-full">{img.name?.substring(0, 12)}</span></div> :
-                   isDoc ? <div className="w-full h-full flex flex-col items-center justify-center bg-blue-900/20 p-2"><span className="text-lg font-black text-blue-400">DOC</span></div> :
-                   <img src={img.thumbnail || img.url} alt={img.seoTitle || img.name || 'Attachment'} className="w-full h-full object-cover" loading="lazy" />}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* ========== JOB DETAILS ========== */}
-      <div className="px-4 py-6 border-b border-white/5">
-        <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4">Job Details</h3>
-        <div className="space-y-3">
-          {[
-            ['Status', isExpired ? 'Expired' : 'Active'],
-            ['Company', job.company],
-            ['Location', job.location || 'Remote'],
-            ['Role', job.role],
-            ['Salary', salaryDisplay ? `${currencyFlag} ${salaryDisplay}` : 'Not specified'],
-            ['Category', job.job_category || 'General'],
-            ['Employment Type', job.employment_type === 'FULL_TIME' ? 'Full Time' : (job.employment_type || 'Full Time')],
-            ['Workplace', job.workplace_type || 'Onsite'],
-            ['Education', job.education_level || 'Any'],
-            ['Experience', job.experience_months ? `${job.experience_months} months` : 'Not specified'],
-            ['Posted', job.postedAt || 'Recent'],
-            ['Signal ID', `JR-${job.id?.slice(0, 8).toUpperCase()}`]
-          ].map(([label, value]) => (
-            <div key={label as string} className="flex justify-between items-center py-2 border-b border-white/[0.03]">
-              <span className="text-xs text-gray-500">{label}</span>
-              <span className={`text-xs font-bold ${label === 'Status' ? (isExpired ? 'text-red-400' : 'text-green-400') : 'text-white'}`}>{value}</span>
+          <h1 className="text-4xl md:text-6xl font-black text-white mb-6 leading-[1.1] tracking-tighter">
+            {report.title || 'Untitled Report'}
+          </h1>
+          <div className="flex items-center gap-4 text-[10px] text-gray-500 mb-12 border-l border-white/10 pl-6 h-4 flex-wrap">
+            <div className="flex items-center gap-1.5">
+              <Clock size={12} />
+              <span className="uppercase font-bold tracking-widest">
+                Updated: {report.updatedAt ? new Date(report.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently'}
+              </span>
             </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ========== AD #2 ========== */}
-      <AdBanner key={`ad2-${jobId}`} slot="1373889473" />
-
-      {/* ========== 🔴 FRAUD WARNING ========== */}
-      <div style={{ margin: '16px', padding: '16px', borderRadius: '16px', background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-          <div style={{ padding: '6px', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.1)', flexShrink: 0, marginTop: '2px' }}>
-            <AlertCircle size={16} style={{ color: '#f87171' }} />
+            {report.role && (
+              <div className="flex items-center gap-1.5">
+                <Briefcase size={12} />
+                <span className="font-bold tracking-widest uppercase">{report.role}</span>
+              </div>
+            )}
+            {report.country && (
+              <div className="flex items-center gap-1.5">
+                <MapPin size={12} />
+                <span className="font-bold tracking-widest uppercase">{report.country}</span>
+              </div>
+            )}
+            <div className="flex items-center gap-1.5 text-blue-500">
+              <Sparkles size={12} />
+              <span className="font-bold tracking-widest uppercase">Verified Source Data</span>
+            </div>
           </div>
-          <div>
-            <h4 style={{ fontSize: '14px', fontWeight: 'bold', color: '#f87171', marginBottom: '8px' }}>⚠️ Be Cautious!</h4>
-            <p style={{ fontSize: '11px', color: 'rgba(252, 165, 165, 0.8)', lineHeight: 1.6, marginBottom: '12px' }}>
-              Never send money to any potential employer in exchange for employment. Do not pay if charged to be employed. JobsReport does not support paying for jobs or money for employment contracts. Be careful with jobs that have attractive salaries and suspicious conditions.
+        </motion.div>
+
+        {/* 📊 Top Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12">
+          <div className="p-6 rounded-3xl bg-white/[0.02] border border-white/5">
+            <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-2">Companies Hiring</p>
+            <div className="text-4xl font-mono text-white tracking-tighter">{stats.companies || companies.length || 0}</div>
+            <p className="text-[10px] text-green-400 mt-2 font-bold uppercase">Active Employers</p>
+          </div>
+          
+          <div className="p-6 rounded-3xl bg-white/[0.02] border border-white/5">
+            <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-2">Growth Trend</p>
+            <div className="text-4xl font-mono text-white tracking-tighter">+{stats.growth || 0}%</div>
+            <p className="text-[10px] text-gray-400 mt-2 font-bold uppercase italic">Above avg velocity</p>
+          </div>
+          
+          <div className="p-6 rounded-3xl bg-white/[0.02] border border-white/5">
+            <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-2">Active Placements</p>
+            <div className="text-4xl font-mono text-white tracking-tighter">{jobs.length}</div>
+            <p className="text-[10px] text-blue-400 mt-2 font-bold uppercase tracking-widest">{report.role || 'General'} Positions</p>
+          </div>
+        </div>
+
+        {/* 📈 Charts Section */}
+        {hasChartData ? (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 p-6 rounded-3xl bg-white/[0.01] border border-white/5">
+              <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                <TrendingUp size={20} className="text-blue-500" />
+                Job Demand Velocity
+              </h3>
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+                    <XAxis dataKey="name" stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis hide />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '12px' }}
+                      itemStyle={{ color: '#8b5cf6' }}
+                    />
+                    <Bar dataKey="demand" radius={[6, 6, 0, 0]}>
+                      {chartData.map((entry: any, index: number) => (
+                        <Cell key={`cell-${index}`} fill={index === chartData.length - 1 ? '#8b5cf6' : '#27272a'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="p-6 rounded-3xl bg-white/[0.01] border border-white/5">
+              <h3 className="text-xl font-bold text-white mb-6">Location Distribution</h3>
+              <div className="h-[240px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={distribution} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                      {distribution.map((entry: any, index: number) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '12px' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="mt-4 space-y-2">
+                {distribution.map((item: any, index: number) => (
+                  <div key={item.name || index} className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2 text-gray-400">
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                      {item.name}
+                    </div>
+                    <span className="text-white font-mono">{item.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="p-8 rounded-3xl bg-white/[0.01] border border-white/5 text-center">
+            <TrendingUp size={24} className="text-gray-600 mx-auto mb-3" />
+            <p className="text-gray-500 text-xs font-mono uppercase tracking-wider">
+              Chart data will populate as jobs are added for this role
             </p>
-            <a
-              href="mailto:jjovinatha@gmail.com?subject=Report%20Suspicious%20Job&body=I%20want%20to%20report%20this%20job%20listing%3A%0A%0AJob%20Title%3A%20..."
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 12px', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#f87171', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', textDecoration: 'none' }}
-            >
-              <Flag size={12} />
-              🚩 Report This Job
-            </a>
           </div>
-        </div>
-      </div>
+        )}
 
-      {/* ========== RELATED JOBS ========== */}
-      {relatedJobs.length > 0 && (
-        <div className="px-4 py-8 border-t border-white/5">
-          <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-            <Briefcase size={18} className="text-blue-500" />
-            {isExpired ? 'Similar Active Jobs' : 'Related Jobs'}
-          </h3>
-          <p className="text-xs text-gray-500 mb-4">
-            {isExpired ? 'This job has expired. Here are similar active opportunities.' : `Explore more ${job.role || ''} jobs similar to this one.`}
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {relatedJobs.map((rj: any) => {
-              const rjUrl = rj.slug 
-                ? `/market/${rj.slug}` 
-                : `/market/${rj.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${rj.id}`;
-              const rjExpired = rj.active === false || (rj.expiresAt && new Date(rj.expiresAt) < new Date());
-              return (
-                <Link key={rj.id} to={rjUrl} className={`p-4 rounded-xl border transition-all group ${rjExpired ? 'border-white/5 bg-white/[0.005] opacity-60' : 'border-white/5 bg-white/[0.01] hover:bg-white/[0.03] hover:border-blue-500/30'}`}>
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="font-bold text-white text-sm group-hover:text-blue-400 transition-colors truncate pr-2">{rj.title}</div>
-                    {rjExpired && <span className="text-[9px] text-red-400 bg-red-500/10 px-2 py-0.5 rounded whitespace-nowrap">Expired</span>}
-                  </div>
-                  <div className="flex items-center gap-3 text-[11px] text-gray-400">
-                    <span className="flex items-center gap-1"><Building2 size={11} />{rj.company}</span>
-                    <span className="flex items-center gap-1"><MapPin size={11} />{rj.location || 'Remote'}</span>
-                  </div>
-                  {rj.salary && <div className="text-[10px] text-emerald-400 mt-1.5 font-mono">{rj.salary}</div>}
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      )}
+        {/* ✍️ Article Content & Companies */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 mt-12">
+          <div className="lg:col-span-2 space-y-8">
+            {/* Report Content */}
+            <article className="p-6 rounded-3xl bg-white/[0.01] border border-white/5">
+              <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
+                <Sparkles size={24} className="text-blue-500" />
+                Key Insights & Market Analysis
+              </h2>
+              {report.content ? (
+                <div 
+                  className="space-y-4 text-stone-300 text-sm leading-relaxed excerpt-rich-content" 
+                  dangerouslySetInnerHTML={{ __html: report.content }} 
+                />
+              ) : report.excerpt ? (
+                <div className="space-y-3 text-stone-300 text-sm leading-relaxed">
+                  <p>{report.excerpt}</p>
+                </div>
+              ) : (
+                <p className="text-gray-500 text-sm">No content available for this report.</p>
+              )}
+            </article>
 
-      {/* ========== AD #3 ========== */}
-      <AdBanner key={`ad3-${jobId}`} slot="5466053430" />
+            {/* Jobs Section */}
+            <div>
+              <h3 className="text-xl font-black text-white mb-6 uppercase tracking-tight flex items-center gap-2">
+                <Briefcase size={18} className="text-blue-500" />
+                Active Placements for {report.role || 'this role'}
+              </h3>
 
-      {/* ========== SHARE ========== */}
-      <div className="px-4 py-6">
-        <button onClick={() => { if (navigator.share) { navigator.share({ title: job.title, url: window.location.href }); } else { navigator.clipboard.writeText(window.location.href); } }} className="w-full py-3 bg-white/[0.02] hover:bg-white/[0.04] text-gray-400 hover:text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-2">
-          <Share2 size={14} /> Share This Job
-        </button>
-      </div>
+              <div className="space-y-4">
+                {(() => {
+                  const isJobExpired = (job: RawJob) => {
+                    if (!job.active) return true;
+                    if (job.expiresAt) {
+                      const today = new Date().toISOString().split('T')[0];
+                      return job.expiresAt < today;
+                    }
+                    return false;
+                  };
 
-      <div className="h-20" />
+                  const sortedJobs = [...jobs].sort((a, b) => {
+                    const aExpired = isJobExpired(a);
+                    const bExpired = isJobExpired(b);
+                    if (aExpired && !bExpired) return 1;
+                    if (!aExpired && bExpired) return -1;
+                    return new Date(b.postedAt || '').getTime() - new Date(a.postedAt || '').getTime();
+                  });
 
-      {/* ========== FULLSCREEN VIEWER ========== */}
-      {viewerOpen && viewerFiles.length > 0 && (
-        <div className="fixed inset-0 z-50 bg-black flex flex-col">
-          <div className="flex items-center justify-between px-4 h-14 bg-black/90 shrink-0">
-            <span className="text-white text-xs font-mono">{viewerIndex + 1} / {viewerFiles.length}</span>
-            <div className="flex items-center gap-2">
-              <a href={viewerFiles[viewerIndex]?.url} download className="px-3 py-1.5 bg-white/10 text-white text-xs rounded-lg flex items-center gap-1"><Download size={12} /></a>
-              <button onClick={() => setViewerOpen(false)} className="p-1.5 bg-white/10 rounded-full text-white"><X size={18} /></button>
+                  if (sortedJobs.length === 0) {
+                    return (
+                      <div className="p-8 text-center rounded-3xl bg-white/[0.01] border border-white/5">
+                        <p className="text-xs text-gray-500 font-mono">NO ACTIVE PLACEMENTS TRACKED IN THIS QUARTER</p>
+                      </div>
+                    );
+                  }
+
+                  return sortedJobs.map((job) => {
+                    const expired = isJobExpired(job);
+                    return (
+                      <div 
+                        key={job.id}
+                        onClick={() => !expired && job.url && triggerRedirect(job.url, job.company, job.title)}
+                        className={`group relative p-5 bg-white/[0.01] border border-white/5 rounded-3xl transition-all duration-300 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                          expired ? 'opacity-60 cursor-not-allowed' : 'hover:bg-white/[0.03] cursor-pointer'
+                        }`}
+                      >
+                        <div className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-blue-500 to-indigo-500 rounded-l-full opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                        <div className="space-y-1.5 min-w-0">
+                          <div className="flex items-center gap-2.5 flex-wrap">
+                            <span className="text-base font-bold text-stone-100 group-hover:text-blue-400 transition-colors">
+                              {job.title}
+                            </span>
+                            
+                            <span className={`px-2 py-0.5 rounded text-[8px] font-mono tracking-widest font-extrabold uppercase ${
+                              expired 
+                                ? 'bg-red-500/10 text-red-500/95 border border-red-500/10' 
+                                : 'bg-green-500/10 text-green-400 border border-green-400/10'
+                            }`}>
+                              {expired ? 'Expired' : 'Active'}
+                            </span>
+
+                            {job.salary && (
+                              <span className="text-[10px] text-emerald-400 font-mono font-bold">
+                                {job.salary}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
+                            <span className="flex items-center gap-1">
+                              <Building2 size={13} className="text-stone-400" />
+                              <span className="text-gray-400 font-medium">{job.company}</span>
+                            </span>
+
+                            <span className="flex items-center gap-1">
+                              <MapPin size={13} className="text-stone-400" />
+                              <span className="text-gray-400">{job.location}</span>
+                            </span>
+
+                            {job.postedAt && (
+                              <span className="flex items-center gap-1 font-mono text-[10px]">
+                                <Calendar size={13} className="text-stone-400" />
+                                Posted: <span className="text-gray-400">{job.postedAt}</span>
+                              </span>
+                            )}
+
+                            {job.expiresAt && (
+                              <span className={`flex items-center gap-1 font-mono text-[10px] ${
+                                expired ? 'text-red-400/80 font-bold' : 'text-violet-400/80 font-bold'
+                              }`}>
+                                <Clock size={13} />
+                                {expired ? 'Expired' : 'Expires'}: {job.expiresAt}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center self-start sm:self-auto">
+                          <button 
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!expired && job.url) {
+                                triggerRedirect(job.url, job.company, job.title);
+                              }
+                            }}
+                            disabled={expired || !job.url}
+                            className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${
+                              expired || !job.url
+                                ? 'bg-white/5 text-gray-500 cursor-not-allowed' 
+                                : 'bg-blue-600 hover:bg-blue-500 text-stone-100 shadow-md shadow-blue-500/15 group-hover:scale-105'
+                            }`}
+                          >
+                            <span>{expired ? 'Archived' : 'Careers Portal'}</span>
+                            <ExternalLink size={10} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
             </div>
           </div>
-          <div className="flex-1 flex items-center justify-center p-4">
-            {viewerFiles[viewerIndex]?.type === 'pdf' || viewerFiles[viewerIndex]?.name?.endsWith('.pdf') ? (
-              <iframe src={`https://docs.google.com/viewer?url=${encodeURIComponent(viewerFiles[viewerIndex].url)}&embedded=true`} className="w-full h-full" style={{ border: 'none' }} />
-            ) : (
-              <img src={viewerFiles[viewerIndex]?.url} alt="" className="max-w-full max-h-full object-contain" />
-            )}
-          </div>
-          <div className="flex justify-center gap-6 px-4 py-4 bg-black/90 shrink-0">
-            <button onClick={() => setViewerIndex(Math.max(0, viewerIndex - 1))} disabled={viewerIndex === 0} className="p-2 text-white disabled:opacity-30"><ChevronLeft size={24} /></button>
-            <button onClick={() => setViewerIndex(Math.min(viewerFiles.length - 1, viewerIndex + 1))} disabled={viewerIndex === viewerFiles.length - 1} className="p-2 text-white disabled:opacity-30"><ChevronRight size={24} /></button>
+
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* Hiring Companies */}
+            <div>
+              <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-4">
+                Hiring Companies
+              </h3>
+              {companies.length > 0 ? (
+                <div className="space-y-3">
+                  {companies.map((company: any) => (
+                    <div 
+                      key={company.name} 
+                      className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 flex items-center justify-between group hover:border-blue-500/30 transition-all"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center font-bold text-white">
+                          {(company.name || '?')[0]}
+                        </div>
+                        <span className="font-bold text-white text-sm">{company.name}</span>
+                      </div>
+                      {company.url && (
+                        <button 
+                          onClick={() => triggerRedirect(company.url, company.name, 'Official Careers Page')}
+                          className="p-2 rounded-full bg-white/5 text-gray-400 hover:bg-blue-600 hover:text-white transition-all"
+                        >
+                          <ExternalLink size={18} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500 text-center py-8 bg-white/[0.01] rounded-2xl border border-white/5">
+                  No hiring companies tracked for this role yet
+                </p>
+              )}
+              <p className="text-xs text-gray-500 italic p-4 bg-white/5 rounded-xl border border-dashed border-white/10 mt-4">
+                
+              </p>
+            </div>
+
+            {/* Report Info Card */}
+            <aside className="p-5 rounded-3xl bg-white/[0.01] border border-white/5">
+              <h3 className="text-xs font-bold text-white uppercase tracking-widest mb-4 border-b border-white/5 pb-2">
+                Report Details
+              </h3>
+              <div className="space-y-3 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Role</span>
+                  <span className="text-white font-bold">{report.role || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Period</span>
+                  <span className="text-white font-bold">{report.monthYear || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Country</span>
+                  <span className="text-white font-bold">{report.country || 'Tanzania'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Published</span>
+                  <span className="text-white font-bold text-[10px]">
+                    {report.updatedAt ? new Date(report.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Word Count</span>
+                  <span className="text-white font-mono text-[10px]">{wordCount}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Report ID</span>
+                  <span className="text-white font-mono text-[10px]">{(report.id || '').slice(0, 8)}</span>
+                </div>
+              </div>
+            </aside>
           </div>
         </div>
-      )}
-    </div>
+      </div>
+    </>
   );
 }
