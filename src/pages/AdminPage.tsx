@@ -1902,12 +1902,6 @@ const handleDeleteRole = async (id: string) => {
   </p>
 </div>
 
-<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-  
-  <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
-    <p className="text-xs font-bold text-white uppercase tracking-widest font-mono flex items-center gap-2">
-      <Flame size={14} className="text-amber-500" /> Active Trending roles (Automatic priority Matrix)
-    </p>
 
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
