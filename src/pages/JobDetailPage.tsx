@@ -385,10 +385,13 @@ export default function JobDetailPage() {
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {relatedJobs.map((rj: any) => {
-              const rjSlug = rj.slug || rj.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+              // 🔥 FIX: slug already contains ID, use directly
+              const rjUrl = rj.slug 
+                ? `/market/${rj.slug}` 
+                : `/market/${rj.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${rj.id}`;
               const rjExpired = rj.active === false || (rj.expiresAt && new Date(rj.expiresAt) < new Date());
               return (
-                <Link key={rj.id} to={`/market/${rjSlug}-${rj.id}`} className={`p-4 rounded-xl border transition-all group ${rjExpired ? 'border-white/5 bg-white/[0.005] opacity-60' : 'border-white/5 bg-white/[0.01] hover:bg-white/[0.03] hover:border-blue-500/30'}`}>
+                <Link key={rj.id} to={rjUrl} className={`p-4 rounded-xl border transition-all group ${rjExpired ? 'border-white/5 bg-white/[0.005] opacity-60' : 'border-white/5 bg-white/[0.01] hover:bg-white/[0.03] hover:border-blue-500/30'}`}>
                   <div className="flex items-start justify-between mb-2">
                     <div className="font-bold text-white text-sm group-hover:text-blue-400 transition-colors truncate pr-2">{rj.title}</div>
                     {rjExpired && <span className="text-[9px] text-red-400 bg-red-500/10 px-2 py-0.5 rounded whitespace-nowrap">Expired</span>}
