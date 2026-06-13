@@ -373,21 +373,19 @@ export default function JobDetailPage() {
       <AdBanner key={`ad2-${jobId}`} slot="1373889473" />
 
       {/* ========== 🔴 FRAUD WARNING ========== */}
-      <div className="mx-4 p-4 rounded-2xl bg-red-500/5 border border-red-500/20 space-y-3">
-        <div className="flex items-start gap-3">
-          <div className="p-1.5 rounded-lg bg-red-500/10 flex-shrink-0 mt-0.5">
-            <AlertCircle size={16} className="text-red-400" />
+      <div style={{ margin: '16px', padding: '16px', borderRadius: '16px', background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+          <div style={{ padding: '6px', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.1)', flexShrink: 0, marginTop: '2px' }}>
+            <AlertCircle size={16} style={{ color: '#f87171' }} />
           </div>
-          <div className="space-y-2">
-            <h4 className="text-sm font-bold text-red-400">⚠️ Be Cautious!</h4>
-            <p className="text-[11px] text-red-300/80 leading-relaxed">
-              Never send money to any potential employer in exchange for employment. Do not pay if charged to be employed. 
-              JobsReport does not support paying for jobs or money for employment contracts. Be careful with jobs that have 
-              attractive salaries and suspicious conditions.
+          <div>
+            <h4 style={{ fontSize: '14px', fontWeight: 'bold', color: '#f87171', marginBottom: '8px' }}>⚠️ Be Cautious!</h4>
+            <p style={{ fontSize: '11px', color: 'rgba(252, 165, 165, 0.8)', lineHeight: 1.6, marginBottom: '12px' }}>
+              Never send money to any potential employer in exchange for employment. Do not pay if charged to be employed. JobsReport does not support paying for jobs or money for employment contracts. Be careful with jobs that have attractive salaries and suspicious conditions.
             </p>
             <a
-              href="mailto:jjovinatha@gmail.com?subject=Report%20Job%20Listing&body=I%20want%20to%20report%20this%20job%3A%20%0A%0AJob%20Title%3A%20..."
-              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 hover:text-red-300 text-[10px] font-bold uppercase tracking-wider transition-all"
+              href="mailto:jjovinatha@gmail.com?subject=Report%20Suspicious%20Job&body=I%20want%20to%20report%20this%20job%20listing%3A%0A%0AJob%20Title%3A%20..."
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 12px', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#f87171', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', textDecoration: 'none' }}
             >
               <Flag size={12} />
               🚩 Report This Job
