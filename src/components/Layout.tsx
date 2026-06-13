@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import SEO from '../components/SEO';
+import NotificationBell from '../components/NotificationBell';
 import { useAuth } from '../context/AuthContext';
 import { useCountry } from '../context/CountryContext';
 
@@ -315,6 +316,10 @@ export default function Layout({ children }: LayoutProps) {
             </button>
           )}
 
+          {/* 🔔 Notification Bell */}
+          <NotificationBell />
+
+          {/* 🍔 Three bars menu button */}
           <button 
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
