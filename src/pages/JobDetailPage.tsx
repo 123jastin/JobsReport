@@ -5,7 +5,7 @@ import AdBanner from '../components/AdBanner';
 import {
   Building2, MapPin, Clock, ExternalLink, ArrowLeft,
   FileText, Eye, ChevronLeft, ChevronRight, X, Download,
-  Briefcase, Calendar, Globe, Share2, AlertCircle
+  Briefcase, Calendar, Globe, Share2, AlertCircle, Flag
 } from 'lucide-react';
 import { useCareerRedirect } from '../context/CareerRedirectContext';
 
@@ -31,37 +31,26 @@ export default function JobDetailPage() {
         const res = await fetch('/api/market');
         if (res.ok) {
           const data = await res.json();
-          
           setAllJobs(data.jobs || []);
-          
           const jobIdMatch = jobId?.match(/job-([a-z0-9]+)$/i);
           const extractedId = jobIdMatch ? `job-${jobIdMatch[1]}` : jobId;
-          
           let found = data.jobs?.find((j: any) => j.id === extractedId);
           if (!found && jobId) {
             found = data.jobs?.find((j: any) => 
               jobId.includes(j.id) || j.id.includes(extractedId || '')
             );
           }
-
           if (found && data.companies) {
             const company = data.companies.find(
               (c: any) => c.name?.toLowerCase() === found.company?.toLowerCase()
             );
             if (company?.url) found.companyWebsite = company.url;
           }
-          
           setJob(found || null);
-          
-          if (found) {
-            document.title = `${found.title} - ${found.company} | JobsReport`;
-          }
+          if (found) document.title = `${found.title} - ${found.company} | JobsReport`;
         }
-      } catch (err) {
-        console.error('Failed to load job:', err);
-      } finally {
-        setLoading(false);
-      }
+      } catch (err) { console.error('Failed to load job:', err); }
+      finally { setLoading(false); }
     }
     if (jobId) loadJob();
     window.scrollTo(0, 0);
@@ -69,22 +58,13 @@ export default function JobDetailPage() {
 
   const getRelatedJobs = () => {
     if (!job || allJobs.length === 0) return [];
-    
     const related = allJobs.filter(j => 
-      j.id !== job.id && (
-        j.role === job.role ||
-        j.company === job.company ||
-        j.job_category === job.job_category
-      )
+      j.id !== job.id && (j.role === job.role || j.company === job.company || j.job_category === job.job_category)
     );
-    
     if (related.length < 6) {
-      const remaining = allJobs
-        .filter(j => j.id !== job.id && !related.find(r => r.id === j.id))
-        .slice(0, 6 - related.length);
+      const remaining = allJobs.filter(j => j.id !== job.id && !related.find(r => r.id === j.id)).slice(0, 6 - related.length);
       related.push(...remaining);
     }
-    
     return related.slice(0, 6);
   };
 
@@ -103,9 +83,7 @@ export default function JobDetailPage() {
       <div className="flex flex-col items-center justify-center min-h-screen px-4 text-center">
         <h2 className="text-2xl font-bold text-white mb-4">Job Not Found</h2>
         <p className="text-gray-400 mb-6">This listing may have been removed or expired.</p>
-        <Link to="/market" className="text-blue-500 hover:underline font-bold uppercase tracking-wider text-sm">
-          ← Back to Market
-        </Link>
+        <Link to="/market" className="text-blue-500 hover:underline font-bold uppercase tracking-wider text-sm">← Back to Market</Link>
       </div>
     );
   }
@@ -115,21 +93,13 @@ export default function JobDetailPage() {
   const isEmailLink = job.url && job.url.startsWith('mailto:');
   const salaryDisplay = job.salary || null;
   const currencyFlag = job.salary_currency_flag || '🇹🇿';
-
-  // 🔥 Generate job URL - slug already contains ID, don't double it
-  const jobUrl = job.slug 
-    ? `https://jobsreport.online/market/${job.slug}` 
-    : `https://jobsreport.online/market/${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${job.id}`;
+  const jobUrl = job.slug ? `https://jobsreport.online/market/${job.slug}` : `https://jobsreport.online/market/${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${job.id}`;
 
   return (
     <div className="min-h-screen bg-black text-white">
       
-      {/* ========== SEO COMPONENT ========== */}
       <SEO
-        title={isExpired 
-          ? `${job.title} - ${job.company} (Expired) | JobsReport`
-          : `${job.title} - ${job.company} | JobsReport`
-        }
+        title={isExpired ? `${job.title} - ${job.company} (Expired) | JobsReport` : `${job.title} - ${job.company} | JobsReport`}
         description={`${job.title} at ${job.company} in ${job.location || 'Remote'}. ${isExpired ? 'This job listing has expired.' : 'Apply now!'} ${job.role || ''} ${job.salary ? '• ' + job.salary : ''}`}
         canonicalUrl={jobUrl}
         ogTitle={`${job.title} - ${job.company}`}
@@ -138,176 +108,108 @@ export default function JobDetailPage() {
         ogImage={job.logoUrl || undefined}
       />
 
-      {/* ========== SCHEMA ========== */}
       <script type="application/ld+json">
-        {JSON.stringify(
-          isExpired 
-            ? {
-                "@context": "https://schema.org",
-                "@type": "WebPage",
-                "name": `${job.title} at ${job.company} (Expired Job Listing)`,
-                "description": `${job.title} at ${job.company} in ${job.location || 'Remote'}. This job listing has expired.`,
-                "url": jobUrl
-              }
-            : {
-                "@context": "https://schema.org",
-                "@type": "JobPosting",
-                "title": job.title,
-                "description": (job.description || '').replace(/<[^>]*>/g, '').substring(0, 5000),
-                "identifier": { "@type": "PropertyValue", "name": "JobsReport", "value": job.id },
-                "datePosted": job.postedAt,
-                "validThrough": job.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                "employmentType": job.employment_type || 'FULL_TIME',
-                "hiringOrganization": { "@type": "Organization", "name": job.company, "sameAs": job.companyWebsite || '', "logo": job.logoUrl || '' },
-                "jobLocation": {
-                  "@type": "Place",
-                  "address": {
-                    "@type": "PostalAddress",
-                    "streetAddress": job.street_address || '',
-                    "addressLocality": job.city || job.location || '',
-                    "addressRegion": job.region || '',
-                    "addressCountry": "TZ",
-                    "postalCode": job.postcode || ''
-                  }
-                },
-                "baseSalary": (job.salary_min || job.salary_max) ? {
-                  "@type": "MonetaryAmount",
-                  "currency": (job.salary_currency || 'TZS').toUpperCase(),
-                  "value": { "@type": "QuantitativeValue", "minValue": Number(job.salary_min || job.salary_max), "maxValue": Number(job.salary_max || job.salary_min), "unitText": "MONTH" }
-                } : undefined,
-                "educationRequirements": (job.education_level && job.education_level !== 'Any' && job.education_level !== '') ? {
-                  "@type": "EducationalOccupationalCredential", "credentialCategory": job.education_level
-                } : undefined,
-                "experienceRequirements": job.experience_months > 0 ? {
-                  "@type": "OccupationalExperienceRequirements", "monthsOfExperience": Number(job.experience_months)
-                } : undefined,
-                "skills": Array.isArray(job.skills) && job.skills.length > 0 ? job.skills.join(', ') : undefined,
-                "jobBenefits": Array.isArray(job.benefits) && job.benefits.length > 0 ? job.benefits.join(', ') : undefined,
-                "industry": job.industry || undefined,
-                "occupationalCategory": job.job_category || job.role || undefined,
-                "url": jobUrl
-              }
-        )}
-      </script>
-
-      {/* ========== BREADCRUMB SCHEMA ========== */}
-      <script type="application/ld+json">
-        {JSON.stringify({
-          "@context": "https://schema.org",
-          "@type": "BreadcrumbList",
-          "itemListElement": [
-            { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://jobsreport.online" },
-            { "@type": "ListItem", "position": 2, "name": "Market", "item": "https://jobsreport.online/market" },
-            { "@type": "ListItem", "position": 3, "name": job.title, "item": jobUrl }
-          ]
+        {JSON.stringify(isExpired ? {
+          "@context":"https://schema.org","@type":"WebPage","name":`${job.title} at ${job.company} (Expired)`,"description":`${job.title} at ${job.company}. Expired.`,"url":jobUrl
+        } : {
+          "@context":"https://schema.org","@type":"JobPosting","title":job.title,"description":(job.description||'').replace(/<[^>]*>/g,'').substring(0,5000),
+          "identifier":{"@type":"PropertyValue","name":"JobsReport","value":job.id},
+          "datePosted":job.postedAt,"validThrough":job.expiresAt||new Date(Date.now()+30*24*60*60*1000).toISOString().split('T')[0],
+          "employmentType":job.employment_type||'FULL_TIME',
+          "hiringOrganization":{"@type":"Organization","name":job.company,"sameAs":job.companyWebsite||'',"logo":job.logoUrl||''},
+          "jobLocation":{"@type":"Place","address":{"@type":"PostalAddress","streetAddress":job.street_address||'',"addressLocality":job.city||job.location||'',"addressRegion":job.region||'',"addressCountry":"TZ","postalCode":job.postcode||''}},
+          "baseSalary":(job.salary_min||job.salary_max)?{"@type":"MonetaryAmount","currency":(job.salary_currency||'TZS').toUpperCase(),"value":{"@type":"QuantitativeValue","minValue":Number(job.salary_min||job.salary_max),"maxValue":Number(job.salary_max||job.salary_min),"unitText":"MONTH"}}:undefined,
+          "educationRequirements":(job.education_level&&job.education_level!=='Any')?{"@type":"EducationalOccupationalCredential","credentialCategory":job.education_level}:undefined,
+          "experienceRequirements":job.experience_months>0?{"@type":"OccupationalExperienceRequirements","monthsOfExperience":Number(job.experience_months)}:undefined,
+          "skills":Array.isArray(job.skills)&&job.skills.length>0?job.skills.join(', '):undefined,
+          "jobBenefits":Array.isArray(job.benefits)&&job.benefits.length>0?job.benefits.join(', '):undefined,
+          "industry":job.industry||undefined,"occupationalCategory":job.job_category||job.role||undefined,"url":jobUrl
         })}
       </script>
+
+      <script type="application/ld+json">
+        {JSON.stringify({"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[
+          {"@type":"ListItem","position":1,"name":"Home","item":"https://jobsreport.online"},
+          {"@type":"ListItem","position":2,"name":"Market","item":"https://jobsreport.online/market"},
+          {"@type":"ListItem","position":3,"name":job.title,"item":jobUrl}
+        ]})}
+      </script>
       
-      {/* ========== TOP NAVIGATION BAR ========== */}
+      {/* TOP NAVIGATION BAR */}
       <div className="sticky top-0 z-40 bg-black/95 backdrop-blur border-b border-white/5">
         <div className="flex items-center justify-between px-4 h-14">
           <Link to="/market" className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
             <ArrowLeft size={18} />
             <span className="text-xs font-bold uppercase tracking-wider">Market</span>
           </Link>
-          
           <div className="flex items-center gap-3">
-            {isExpired && (
-              <span className="px-3 py-1 rounded-full bg-red-500/10 text-red-400 text-[10px] font-bold uppercase tracking-wider">Expired</span>
-            )}
-            <button
-              onClick={() => {
-                if (navigator.share) {
-                  navigator.share({ title: job.title, url: window.location.href });
-                } else {
-                  navigator.clipboard.writeText(window.location.href);
-                }
-              }}
-              className="p-2 hover:bg-white/5 rounded-full transition-colors"
-            >
+            {isExpired && <span className="px-3 py-1 rounded-full bg-red-500/10 text-red-400 text-[10px] font-bold uppercase tracking-wider">Expired</span>}
+            <button onClick={() => { if(navigator.share){navigator.share({title:job.title,url:window.location.href})}else{navigator.clipboard.writeText(window.location.href)} }} className="p-2 hover:bg-white/5 rounded-full transition-colors">
               <Share2 size={18} className="text-gray-400" />
             </button>
           </div>
         </div>
       </div>
 
-      {/* ========== HERO HEADER ========== */}
+      {/* HERO HEADER */}
       <div className="px-4 py-6 border-b border-white/5">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 rounded-xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
-            {job.logoUrl ? (
-              <img src={job.logoUrl} alt={job.company} className="w-full h-full object-cover rounded-xl" referrerPolicy="no-referrer" />
-            ) : (
-              <div className="w-full h-full bg-gradient-to-br from-blue-600 to-violet-600 flex items-center justify-center text-white font-bold text-lg">
-                {job.company?.charAt(0)?.toUpperCase() || '?'}
-              </div>
-            )}
+            {job.logoUrl ? <img src={job.logoUrl} alt={job.company} className="w-full h-full object-cover rounded-xl" referrerPolicy="no-referrer" /> : <div className="w-full h-full bg-gradient-to-br from-blue-600 to-violet-600 flex items-center justify-center text-white font-bold text-lg">{job.company?.charAt(0)?.toUpperCase()||'?'}</div>}
           </div>
-          
           <div className="min-w-0">
             <h2 className="text-sm font-bold text-white">{job.company}</h2>
-            {job.companyWebsite ? (
-              <a href={job.companyWebsite} target="_blank" rel="noopener noreferrer" className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors">
-                <Globe size={11} />
-                {(() => { try { const url = new URL(job.companyWebsite); return url.hostname.replace('www.', ''); } catch { return 'Company Website'; } })()}
-                <ExternalLink size={10} />
-              </a>
-            ) : (
-              <span className="text-[11px] text-gray-600">No website listed</span>
-            )}
+            {job.companyWebsite ? <a href={job.companyWebsite} target="_blank" rel="noopener noreferrer" className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors"><Globe size={11} />{(()=>{try{return new URL(job.companyWebsite).hostname.replace('www.','')}catch{return'Company Website'}})()}<ExternalLink size={10} /></a> : <span className="text-[11px] text-gray-600">No website listed</span>}
           </div>
         </div>
-
         <div className="flex items-center gap-3 mb-3">
           <h1 className="text-xl md:text-2xl font-bold text-white leading-tight">{job.title}</h1>
-          {isExpired && (
-            <span className="px-3 py-1 rounded-full bg-red-500/10 text-red-400 text-xs font-bold uppercase whitespace-nowrap">Expired</span>
-          )}
+          {isExpired && <span className="px-3 py-1 rounded-full bg-red-500/10 text-red-400 text-xs font-bold uppercase whitespace-nowrap">Expired</span>}
         </div>
-
         {isExpired && (
           <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/5 border border-red-500/10 mb-3">
             <AlertCircle size={14} className="text-red-400 flex-shrink-0" />
             <p className="text-[11px] text-red-400/80">This job listing has expired. Applications are no longer accepted. Browse related jobs below.</p>
           </div>
         )}
-
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-gray-400">
-          <span className="flex items-center gap-1.5"><MapPin size={13} /> {job.location || 'Remote'}</span>
-          {salaryDisplay && (
-            <span className="flex items-center gap-1.5 text-emerald-400 font-bold">💰 {salaryDisplay}</span>
-          )}
+          <span className="flex items-center gap-1.5"><MapPin size={13} /> {job.location||'Remote'}</span>
+          {salaryDisplay && <span className="flex items-center gap-1.5 text-emerald-400 font-bold">💰 {salaryDisplay}</span>}
           <span className="flex items-center gap-1.5"><Briefcase size={13} /> {job.role}</span>
-          <span className="flex items-center gap-1.5"><Calendar size={13} /> {job.postedAt || 'Recent'}</span>
-          {job.expiresAt && (
-            <span className={`flex items-center gap-1.5 ${isExpired ? 'text-red-400' : 'text-amber-400'}`}>
-              <Clock size={13} /> {isExpired ? 'Expired' : 'Expires'}: {job.expiresAt}
-            </span>
-          )}
+          <span className="flex items-center gap-1.5"><Calendar size={13} /> {job.postedAt||'Recent'}</span>
+          {job.expiresAt && <span className={`flex items-center gap-1.5 ${isExpired?'text-red-400':'text-amber-400'}`}><Clock size={13} /> {isExpired?'Expired':'Expires'}: {job.expiresAt}</span>}
         </div>
       </div>
 
-      {/* ========== APPLY BUTTON ========== */}
+      {/* APPLY BUTTON */}
       <div className="sticky bottom-0 z-40 bg-black/95 backdrop-blur border-t border-white/5 px-4 py-3">
         {job.url && !isExpired && (
           <p className="text-[10px] text-gray-500 text-center mb-2 truncate px-4">
-            {isEmailLink ? '📧 ' : '🔗 '}
-            {isEmailLink ? job.url.replace('mailto:', '') : (() => { try { const url = new URL(job.url); return url.hostname.replace('www.', '') + url.pathname; } catch { return job.url; } })()}
+            {isEmailLink?'📧 ':'🔗 '}{isEmailLink?job.url.replace('mailto:',''):(()=>{try{return new URL(job.url).hostname.replace('www.','')+new URL(job.url).pathname}catch{return job.url}})()}
           </p>
         )}
-        <button 
-          onClick={() => { if (!isExpired && job.url) { triggerRedirect(job.url, job.company, job.title); } }} 
-          disabled={isExpired || !job.url} 
-          className={`w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
-            isExpired ? 'bg-red-500/10 text-red-400 cursor-not-allowed' : job.url ? 'bg-blue-600 hover:bg-blue-500 text-white active:scale-[0.98]' : 'bg-white/5 text-gray-600 cursor-not-allowed'
-          }`}
-        >
-          {isExpired ? '🚫 Application Closed' : isEmailLink ? '✉️ Send Application' : 'Apply Now'}
+        <button onClick={()=>{if(!isExpired&&job.url){triggerRedirect(job.url,job.company,job.title)}}} disabled={isExpired||!job.url} className={`w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${isExpired?'bg-red-500/10 text-red-400 cursor-not-allowed':job.url?'bg-blue-600 hover:bg-blue-500 text-white active:scale-[0.98]':'bg-white/5 text-gray-600 cursor-not-allowed'}`}>
+          {isExpired?'🚫 Application Closed':isEmailLink?'✉️ Send Application':'Apply Now'}
           {!isExpired && <ExternalLink size={16} />}
         </button>
       </div>
 
-      {/* ========== JOB DESCRIPTION ========== */}
+      {/* 🔴 FRAUD WARNING - Compact professional design */}
+      <div className="mx-4 mt-3 px-4 py-3 rounded-xl border border-red-500/15 bg-red-500/[0.03] flex items-center gap-3">
+        <AlertCircle size={14} className="text-red-400 flex-shrink-0" />
+        <p className="text-[11px] text-red-300/70 leading-relaxed flex-1">
+          <span className="font-semibold text-red-400">Stay safe:</span> Never pay for job applications or employment offers. 
+        </p>
+        <a
+          href={`mailto:jjovinatha@gmail.com?subject=Report%20Job&body=Please%20review%20this%20listing%3A%20${encodeURIComponent(jobUrl)}`}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 text-[10px] font-bold uppercase tracking-wider transition-all flex-shrink-0"
+        >
+          <Flag size={11} />
+          Report
+        </a>
+      </div>
+
+      {/* JOB DESCRIPTION */}
       {hasDescription && (
         <div className="px-4 py-6 border-b border-white/5">
           <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2"><FileText size={16} className="text-blue-400" /> Job Description</h3>
@@ -321,10 +223,10 @@ export default function JobDetailPage() {
         </div>
       )}
 
-      {/* ========== AD #1 ========== */}
+      {/* AD #1 */}
       <AdBanner key={`ad1-${jobId}`} slot="4550717155" />
 
-      {/* ========== ATTACHMENTS ========== */}
+      {/* ATTACHMENTS */}
       {hasFiles && (
         <div className="px-4 py-6 border-b border-white/5">
           <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2"><Eye size={16} className="text-blue-400" /> Attachments ({job.images.length})</h3>
@@ -344,7 +246,7 @@ export default function JobDetailPage() {
         </div>
       )}
 
-      {/* ========== JOB DETAILS ========== */}
+      {/* JOB DETAILS */}
       <div className="px-4 py-6 border-b border-white/5">
         <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4">Job Details</h3>
         <div className="space-y-3">
@@ -370,10 +272,10 @@ export default function JobDetailPage() {
         </div>
       </div>
 
-      {/* ========== AD #2 ========== */}
+      {/* AD #2 */}
       <AdBanner key={`ad2-${jobId}`} slot="1373889473" />
 
-      {/* ========== RELATED JOBS ========== */}
+      {/* RELATED JOBS */}
       {relatedJobs.length > 0 && (
         <div className="px-4 py-8 border-t border-white/5">
           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
@@ -385,10 +287,7 @@ export default function JobDetailPage() {
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {relatedJobs.map((rj: any) => {
-              // 🔥 FIX: slug already contains ID, use directly
-              const rjUrl = rj.slug 
-                ? `/market/${rj.slug}` 
-                : `/market/${rj.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${rj.id}`;
+              const rjUrl = rj.slug ? `/market/${rj.slug}` : `/market/${rj.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${rj.id}`;
               const rjExpired = rj.active === false || (rj.expiresAt && new Date(rj.expiresAt) < new Date());
               return (
                 <Link key={rj.id} to={rjUrl} className={`p-4 rounded-xl border transition-all group ${rjExpired ? 'border-white/5 bg-white/[0.005] opacity-60' : 'border-white/5 bg-white/[0.01] hover:bg-white/[0.03] hover:border-blue-500/30'}`}>
@@ -408,10 +307,10 @@ export default function JobDetailPage() {
         </div>
       )}
 
-      {/* ========== AD #3 ========== */}
+      {/* AD #3 */}
       <AdBanner key={`ad3-${jobId}`} slot="5466053430" />
 
-      {/* ========== SHARE ========== */}
+      {/* SHARE */}
       <div className="px-4 py-6">
         <button onClick={() => { if (navigator.share) { navigator.share({ title: job.title, url: window.location.href }); } else { navigator.clipboard.writeText(window.location.href); } }} className="w-full py-3 bg-white/[0.02] hover:bg-white/[0.04] text-gray-400 hover:text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-2">
           <Share2 size={14} /> Share This Job
@@ -420,7 +319,7 @@ export default function JobDetailPage() {
 
       <div className="h-20" />
 
-      {/* ========== FULLSCREEN VIEWER ========== */}
+      {/* FULLSCREEN VIEWER */}
       {viewerOpen && viewerFiles.length > 0 && (
         <div className="fixed inset-0 z-50 bg-black flex flex-col">
           <div className="flex items-center justify-between px-4 h-14 bg-black/90 shrink-0">
