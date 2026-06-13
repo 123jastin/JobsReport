@@ -748,6 +748,7 @@ const handleEditJob = (job: RawJob) => {
     setJobFiles([]);
     setIsCreatingNewCompanyInline(false);
   };
+  
 const handleIngestJob = async (e: FormEvent) => {
     e.preventDefault();
     
@@ -884,6 +885,17 @@ const handleIngestJob = async (e: FormEvent) => {
         } else {
           setJobs(prev => [addedJob, ...prev]);
           showFeedback('success', isDraft ? `Draft saved!` : `Published successfully.`);
+          
+          // 🔥 NOTIFY GOOGLE - Only for new published jobs (not drafts)
+          if (!isDraft) {
+            const jobUrl = `https://jobsreport.online/market/${addedJob.slug || addedJob.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${addedJob.id}`;
+            fetch('/api/test-indexing', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url: jobUrl })
+            }).catch(err => console.log('Google notification failed:', err));
+            console.log(`📢 Auto-notified Google: ${jobUrl}`);
+          }
         }
         if (!isDraft || editingJobId) {
           setJobForm({ title: '', roleSelected: 'Software Developer', companySelected: '', companyNewName: '', companyNewUrl: '', companyNewLogo: '', location: '', url: '', salary: '', expiresAt: '' });
@@ -914,7 +926,8 @@ const handleIngestJob = async (e: FormEvent) => {
     }
   };
 
-  
+
+
 
 
 
