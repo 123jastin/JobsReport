@@ -45,7 +45,7 @@ export default function MarketPage() {
         const response = await fetch('/api/market');
         if (response.ok) {
           const data = await response.json();
-          setJobs(Array.isArray(data.jobs) ? data.jobs : []);
+          setJobs(Array.isArray(data.activeJobs) ? data.activeJobs : (Array.isArray(data.jobs) ? data.jobs : []));
           setCompanies(Array.isArray(data.companies) ? data.companies : []);
           setRoles(['All', ...(Array.isArray(data.roles) ? data.roles : [])]);
         }
@@ -150,8 +150,8 @@ export default function MarketPage() {
     ]
   };
 
-  // 🔥 Native In-Feed Ad - Clean, no fake elements
-  const InFeedAd = ({ index }: { index: number }) => (
+  // 🔥 In-Feed Ad #1
+  const InFeedAd1 = ({ index }: { index: number }) => (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0, transition: { delay: Math.min(index * 0.04, 0.4) } }}
@@ -164,6 +164,23 @@ export default function MarketPage() {
         data-ad-layout-key="-h0-1a+31-4t+7z"
         data-ad-client="ca-pub-8155064094205693"
         data-ad-slot="1805968460" />
+    </motion.div>
+  );
+
+  // 🔥 In-Feed Ad #2
+  const InFeedAd2 = ({ index }: { index: number }) => (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0, transition: { delay: Math.min(index * 0.04, 0.4) } }}
+      className="p-4 rounded-3xl border border-white/5 transition-all duration-300"
+      style={{ background: 'transparent' }}
+    >
+      <ins className="adsbygoogle"
+        style={{ display: 'block', background: 'transparent' }}
+        data-ad-format="fluid"
+        data-ad-layout-key="-gh-1o+14-67+ka"
+        data-ad-client="ca-pub-8155064094205693"
+        data-ad-slot="9872160747" />
     </motion.div>
   );
 
@@ -333,7 +350,7 @@ export default function MarketPage() {
           </div>
         </div>
 
-        {/* Job Cards with In-Feed Ads every 3 jobs */}
+        {/* 🔥 ALL Job Cards with In-Feed Ads */}
         <div className="space-y-3">
           <div className="flex items-center justify-between text-xs text-gray-500 px-1">
             <span className="flex items-center gap-2">
@@ -368,11 +385,19 @@ export default function MarketPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {filteredJobs.map((job, idx) => {
                   const elements = [];
+                  
+                  // Add job card
                   elements.push(<JobCard key={job.id || idx} job={job} idx={idx} />);
                   
-                  // 🔥 Add in-feed ad after every 3 jobs
+                  // 🔥 Add alternating in-feed ads every 3 jobs
                   if ((idx + 1) % 3 === 0 && idx < filteredJobs.length - 1) {
-                    elements.push(<InFeedAd key={`ad-${idx}`} index={idx + 1} />);
+                    const adNumber = Math.floor((idx + 1) / 3);
+                    // Alternate between Ad #1 and Ad #2
+                    elements.push(
+                      adNumber % 2 === 1 
+                        ? <InFeedAd1 key={`ad1-${idx}`} index={idx + 1} />
+                        : <InFeedAd2 key={`ad2-${idx}`} index={idx + 1} />
+                    );
                   }
                   
                   return elements;
