@@ -20,7 +20,6 @@ export default function JobDetailPage() {
   const [viewerIndex, setViewerIndex] = useState(0);
   const [viewerFiles, setViewerFiles] = useState<any[]>([]);
 
-  // 🔥 Single source of truth for expired detection
   const isExpired = job ? (
     job.active === false || 
     (job.expiresAt && new Date(job.expiresAt) < new Date())
@@ -68,7 +67,6 @@ export default function JobDetailPage() {
     window.scrollTo(0, 0);
   }, [jobId]);
 
-  // 🔥 Generate related jobs (6 minimum)
   const getRelatedJobs = () => {
     if (!job || allJobs.length === 0) return [];
     
@@ -129,6 +127,10 @@ export default function JobDetailPage() {
         }
         description={`${job.title} at ${job.company} in ${job.location || 'Remote'}. ${isExpired ? 'This job listing has expired.' : 'Apply now!'} ${job.role || ''} ${job.salary ? '• ' + job.salary : ''}`}
         canonicalUrl={`https://jobsreport.online/market/${job.slug || job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${job.id}`}
+        ogTitle={`${job.title} - ${job.company}`}
+        ogDescription={`${job.title} at ${job.company} in ${job.location || 'Remote'}. ${job.salary || ''} Apply now on JobsReport.`}
+        ogUrl={`https://jobsreport.online/market/${job.slug || job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${job.id}`}
+        ogImage={job.logoUrl || undefined}
       />
 
       {/* ========== SCHEMA: Active=JobPosting, Expired=WebPage ========== */}
@@ -305,15 +307,18 @@ export default function JobDetailPage() {
           )}
         </div>
 
+        {/* 🔥 Single category badge - show job_category if different from role, otherwise just role */}
         <div className="flex items-center gap-2 mt-3">
           <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
             isExpired ? 'bg-red-500/10 text-red-400' : 'bg-blue-500/10 text-blue-400'
           }`}>
-            {job.role || 'General'}
+            {job.job_category && job.job_category !== 'Other' && job.job_category !== job.role 
+              ? job.job_category 
+              : job.role || 'General'}
           </span>
-          {job.job_category && (
+          {job.job_category && job.job_category !== 'Other' && job.job_category !== job.role && (
             <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-violet-500/10 text-violet-400 uppercase tracking-wider">
-              {job.job_category}
+              {job.role}
             </span>
           )}
         </div>
