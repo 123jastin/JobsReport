@@ -1853,6 +1853,63 @@ const handleDeleteRole = async (id: string) => {
 
           </div>
 
+
+{/* 🧪 Google Indexing API Test */}
+<div className="p-5 rounded-2xl bg-white/[0.01] border border-white/5 space-y-3">
+  <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+    <Globe size={14} className="text-green-400" />
+    🧪 Google Indexing API Test
+  </h4>
+  <div className="flex gap-2">
+    <input 
+      type="text" 
+      id="test-indexing-url"
+      placeholder="Job URL to notify Google..."
+      defaultValue="https://jobsreport.online/"
+      className="flex-1 bg-black/40 border border-white/10 px-3 py-2 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-green-500/50"
+    />
+    <button
+      onClick={async () => {
+        const url = (document.getElementById('test-indexing-url') as HTMLInputElement).value;
+        if (!url) { showFeedback('error', 'Please enter a URL'); return; }
+        setActionLoading(true);
+        try {
+          const res = await fetch('/api/test-indexing', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url })
+          });
+          const data = await res.json();
+          if (data.success) {
+            showFeedback('success', `✅ Google notified: ${url}`);
+          } else {
+            showFeedback('error', `❌ Failed: ${JSON.stringify(data.error || data)}`);
+          }
+        } catch (err) {
+          showFeedback('error', 'Network error');
+        } finally {
+          setActionLoading(false);
+        }
+      }}
+      disabled={actionLoading}
+      className="px-4 py-2 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all whitespace-nowrap"
+    >
+      {actionLoading ? 'Testing...' : '🚀 Notify Google'}
+    </button>
+  </div>
+  <p className="text-[9px] text-gray-500 font-mono">
+    Sends URL to Google Indexing API for instant crawling
+  </p>
+</div>
+
+<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  
+  <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
+    <p className="text-xs font-bold text-white uppercase tracking-widest font-mono flex items-center gap-2">
+      <Flame size={14} className="text-amber-500" /> Active Trending roles (Automatic priority Matrix)
+    </p>
+
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             
             <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
