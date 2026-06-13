@@ -1,5 +1,5 @@
-import { ReactNode, useState, FormEvent } from 'react';
-import { NavLink, Link } from 'react-router-dom';
+import { ReactNode, useState, FormEvent, useEffect, useRef } from 'react';
+import { NavLink, Link, useLocation } from 'react-router-dom';
 import { 
   Home, 
   TrendingUp, 
@@ -37,6 +37,10 @@ export default function Layout({ children }: LayoutProps) {
   const [passcode, setPasscode] = useState('');
   const [loginError, setLoginError] = useState('');
 
+  // 🔥 Route tracking for ad refresh
+  const location = useLocation();
+  const isFirstLoad = useRef(true);
+
   const handleLoginSubmit = (e: FormEvent) => {
     e.preventDefault();
     setLoginError('');
@@ -50,13 +54,53 @@ export default function Layout({ children }: LayoutProps) {
     }
   };
 
+  // 🔥 Refresh Clever + Google Auto Ads on every SPA navigation
+  useEffect(() => {
+    if (isFirstLoad.current) {
+      isFirstLoad.current = false;
+      return; // Skip first load
+    }
+
+    setTimeout(() => {
+      // 1. Remove old Clever ad elements
+      const cleverAds = document.querySelectorAll('[id*="clever"]:not(#clever-ad-space):not(#clever-core)');
+      cleverAds.forEach(el => el.remove());
+
+      // Clear ad space
+      const adSpace = document.getElementById('clever-ad-space');
+      if (adSpace) adSpace.innerHTML = '';
+
+      // Reload Clever script
+      const oldCleverScript = document.getElementById('clever-core');
+      if (oldCleverScript && oldCleverScript.parentNode) {
+        const newCleverScript = document.createElement('script');
+        newCleverScript.setAttribute('data-cfasync', 'false');
+        newCleverScript.type = 'text/javascript';
+        newCleverScript.innerHTML = oldCleverScript.innerHTML;
+        oldCleverScript.parentNode.replaceChild(newCleverScript, oldCleverScript);
+      }
+
+      // 2. Refresh Google Auto Ads
+      if ((window as any).adsbygoogle) {
+        try {
+          (window as any).adsbygoogle.push({});
+          console.log('✅ Google Auto Ads refreshed');
+        } catch (e) {
+          console.log('⚠️ Google ads refresh error:', e);
+        }
+      }
+
+      console.log('🔄 All ads refreshed');
+    }, 300);
+  }, [location.pathname]);
+
   return (
     <div className="min-h-screen bg-bg-deep flex flex-col overflow-x-hidden pt-16">
       
       {/* 🔥 Organization Schema - Appears on ALL pages */}
       <SEO
         title="JobsReport - Real-Time Jobs platform for Employers and Job Seekers"
-        description="Find the latest jobs, vacancies, and career opportunities worldwide in a real-time job market intelligence platfoam with verified listings from top employers."
+        description="Find the latest jobs, vacancies, and career opportunities worldwide in a real-time job market intelligence platform with verified listings from top employers."
         structuredData={{
           "@context": "https://schema.org",
           "@type": "Organization",
@@ -69,7 +113,7 @@ export default function Layout({ children }: LayoutProps) {
             "width": 112,
             "height": 112
           },
-          "description": "JobsReport aggregates real-time job market data that provider that can you find the best career opportunities. Our system track hiring trends across industries and locations worldwide.",
+          "description": "JobsReport aggregates real-time job market data to help you find the best career opportunities. We track hiring trends across industries and locations worldwide.",
           "foundingDate": "2025",
           "areaServed": "Worldwide",
           "sameAs": [
