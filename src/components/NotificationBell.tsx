@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Bell, BellOff, Globe } from 'lucide-react';
+import { Bell, BellOff, Globe, Check } from 'lucide-react';
 import { requestNotificationPermission, onForegroundMessage } from '../lib/firebase';
-import { useCountry } from '../context/CountryContext';
 
 const COUNTRIES = [
   'Worldwide',
@@ -25,7 +24,7 @@ export default function NotificationBell() {
   const [subscribed, setSubscribed] = useState(false);
   const [showPrompt, setShowPrompt] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState('Worldwide');
-  const { selectedCountry: currentCountry } = useCountry();
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('fcm_token');
@@ -49,20 +48,26 @@ export default function NotificationBell() {
     return () => unsubscribe?.();
   }, []);
 
-  const handleSubscribe = async () => {
+  const handleCountrySelect = async (country: string) => {
+    setSelectedCountry(country);
+    setLoading(true);
+
     const token = await requestNotificationPermission();
+    
     if (token) {
       localStorage.setItem('fcm_token', token);
-      localStorage.setItem('fcm_country', selectedCountry);
+      localStorage.setItem('fcm_country', country);
       setSubscribed(true);
       setShowPrompt(false);
 
       await fetch('/api/notifications/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, country: selectedCountry })
+        body: JSON.stringify({ token, country })
       });
     }
+    
+    setLoading(false);
   };
 
   const handleUnsubscribe = async () => {
@@ -86,7 +91,7 @@ export default function NotificationBell() {
       <button
         onClick={() => subscribed ? handleUnsubscribe() : setShowPrompt(true)}
         className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all relative"
-        title={subscribed ? `Notifications: ${selectedCountry} (click to unsubscribe)` : 'Enable notifications'}
+        title={subscribed ? `Alerts: ${selectedCountry} (click to unsubscribe)` : 'Enable job alerts'}
       >
         {subscribed ? (
           <Bell size={18} className="text-green-400" />
@@ -100,47 +105,46 @@ export default function NotificationBell() {
 
       {showPrompt && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-stone-900 border border-white/10 rounded-2xl p-6 max-w-sm w-full space-y-4 text-center">
-            <Bell size={32} className="text-blue-500 mx-auto" />
-            <h3 className="text-lg font-bold text-white">Get Job Alerts</h3>
-            <p className="text-xs text-gray-400">
-              Receive notifications for new jobs in your selected country.
-            </p>
+          <div className="bg-stone-900 border border-white/10 rounded-2xl p-5 max-w-xs w-full space-y-3">
+            <div className="text-center">
+              <Bell size={28} className="text-blue-500 mx-auto mb-2" />
+              <h3 className="text-sm font-bold text-white">Job Alerts</h3>
+              <p className="text-[10px] text-gray-400 mt-1">Tap a country to enable alerts</p>
+            </div>
             
-            {/* Country Selector */}
-            <div className="space-y-2">
-              <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">
-                <Globe size={12} className="inline mr-1" />
-                Select Country
-              </label>
-              <select
-                value={selectedCountry}
-                onChange={(e) => setSelectedCountry(e.target.value)}
-                className="w-full bg-black/40 border border-white/10 px-3 py-2.5 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
-              >
-                {COUNTRIES.map(country => (
-                  <option key={country} value={country}>{country}</option>
-                ))}
-              </select>
-              <p className="text-[9px] text-gray-500">
-                You'll receive notifications for jobs in {selectedCountry === 'Worldwide' ? 'all countries' : selectedCountry}
-              </p>
+            {/* Country List - One tap enables */}
+            <div className="space-y-1 max-h-[220px] overflow-y-auto">
+              {COUNTRIES.map(country => (
+                <button
+                  key={country}
+                  onClick={() => handleCountrySelect(country)}
+                  disabled={loading}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-all ${
+                    selectedCountry === country 
+                      ? 'bg-blue-600/20 text-blue-400 border border-blue-500/20' 
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                  } ${loading ? 'opacity-50 cursor-wait' : ''}`}
+                >
+                  <span className="flex items-center gap-2">
+                    <Globe size={12} />
+                    {country}
+                  </span>
+                  {selectedCountry === country && subscribed && (
+                    <Check size={14} className="text-green-400" />
+                  )}
+                  {loading && selectedCountry === country && (
+                    <span className="text-[9px] text-blue-400">Enabling...</span>
+                  )}
+                </button>
+              ))}
             </div>
 
-            <div className="flex gap-2">
-              <button
-                onClick={handleSubscribe}
-                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all"
-              >
-                Enable Alerts
-              </button>
-              <button
-                onClick={() => setShowPrompt(false)}
-                className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 text-gray-400 text-xs font-bold uppercase tracking-wider rounded-xl transition-all"
-              >
-                Cancel
-              </button>
-            </div>
+            <button
+              onClick={() => setShowPrompt(false)}
+              className="w-full py-2 bg-white/5 hover:bg-white/10 text-gray-500 text-[10px] font-bold uppercase tracking-wider rounded-xl transition-all"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}
