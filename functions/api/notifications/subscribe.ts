@@ -8,7 +8,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
 
   try {
-    const { token } = await context.request.json();
+    const { token, country } = await context.request.json();
 
     if (!token) {
       return new Response(JSON.stringify({ error: 'Token required' }), {
@@ -17,18 +17,15 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       });
     }
 
-    // Check if token already exists
-    const existing = await DB.prepare(
-      'SELECT id FROM push_subscribers WHERE token = ?'
-    ).bind(token).first();
+    // Delete existing token if present (to update country)
+    await DB.prepare('DELETE FROM push_subscribers WHERE token = ?').bind(token).run();
 
-    if (!existing) {
-      await DB.prepare(
-        'INSERT INTO push_subscribers (token) VALUES (?)'
-      ).bind(token).run();
-    }
+    // Insert with country
+    await DB.prepare(
+      'INSERT INTO push_subscribers (token, country) VALUES (?, ?)'
+    ).bind(token, country || 'Worldwide').run();
 
-    return new Response(JSON.stringify({ success: true, message: 'Subscribed to notifications' }), {
+    return new Response(JSON.stringify({ success: true, message: `Subscribed to ${country || 'Worldwide'} notifications` }), {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
   } catch (err: any) {
