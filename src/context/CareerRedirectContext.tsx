@@ -36,22 +36,24 @@ export function CareerRedirectProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // 🔥 FIX: Use <a> click for URLs, location.href for mailto
+  // 🔥 FIX: Use form submission for URLs (works in ALL browsers), location.href for mailto
   const openUrl = (url: string) => {
     if (url.startsWith('mailto:')) {
-      // Mailto links need location.href
+      // Email links work with location.href
       window.location.href = url;
-    } else {
-      // Regular URLs: create a real <a> element and click it
-      // This bypasses popup blockers and works in Facebook/Instagram in-app browsers
-      const link = document.createElement('a');
-      link.href = url;
-      link.target = '_blank';
-      link.rel = 'noopener,noreferrer';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      return;
     }
+
+    // Create a hidden form and submit it - never blocked as popup
+    const form = document.createElement('form');
+    form.method = 'GET';
+    form.action = url;
+    form.target = '_blank';
+    form.style.display = 'none';
+    
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
   };
 
   const handleSkip = () => {
@@ -73,7 +75,6 @@ export function CareerRedirectProvider({ children }: { children: ReactNode }) {
               clearInterval(timerRef.current);
               timerRef.current = null;
             }
-            // Auto-redirect using the new method
             openUrl(destinationUrl);
             setIsOpen(false);
             return 0;
@@ -110,6 +111,8 @@ export function CareerRedirectProvider({ children }: { children: ReactNode }) {
     }
   }, [isOpen, animationKey]);
 
+  const isEmail = destinationUrl.startsWith('mailto:');
+
   return (
     <CareerRedirectContext.Provider value={{ triggerRedirect }}>
       {children}
@@ -117,7 +120,6 @@ export function CareerRedirectProvider({ children }: { children: ReactNode }) {
       <AnimatePresence>
         {isOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -126,7 +128,6 @@ export function CareerRedirectProvider({ children }: { children: ReactNode }) {
               className="absolute inset-0 bg-black/85 backdrop-blur-xl"
             />
             
-            {/* Modal */}
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -149,7 +150,7 @@ export function CareerRedirectProvider({ children }: { children: ReactNode }) {
               {/* Company Info */}
               <div className="space-y-2">
                 <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold font-mono">
-                  {destinationUrl.startsWith('mailto:') ? 'Opening Email Application' : 'Opening External Career Page'}
+                  {isEmail ? 'Opening Email Application' : 'Opening External Career Page'}
                 </p>
                 <h3 className="text-2xl md:text-3xl font-black text-white tracking-tight">{company}</h3>
                 {title && (
@@ -207,7 +208,7 @@ export function CareerRedirectProvider({ children }: { children: ReactNode }) {
                   onClick={handleSkip}
                   className="w-full sm:flex-1 py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-blue-600/25 border border-blue-500"
                 >
-                  <span>{destinationUrl.startsWith('mailto:') ? '📧 Open Email App' : 'Open Now'}</span>
+                  <span>{isEmail ? '📧 Open Email App' : 'Open Now'}</span>
                   <ArrowRight size={12} />
                 </button>
                 <button
