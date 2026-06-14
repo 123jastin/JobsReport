@@ -10,6 +10,12 @@ export const onRequestPost = async (context: any) => {
       });
     }
     
+    // 🔍 Debug: Check what's in context.env
+    console.log('🔍 test-indexing - context.env keys:', Object.keys(context.env || {}));
+    console.log('🔍 Has GOOGLE_SERVICE_ACCOUNT?', !!context.env?.GOOGLE_SERVICE_ACCOUNT);
+    console.log('🔍 Has GOOGLE_SERVICE_ACCOUNT_KEY?', !!context.env?.GOOGLE_SERVICE_ACCOUNT_KEY);
+    
+    // 🔥 Pass context.env to the function
     const result = await notifyGoogleIndexing(url, 'URL_UPDATED');
     
     return new Response(JSON.stringify(result), {
