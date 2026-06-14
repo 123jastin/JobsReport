@@ -41,41 +41,24 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       companyResult = { id: companyId };
     }
 
-    // ✅ SAVE FULL LOCATION TO LOCATIONS TABLE (street, city, region, country, postcode)
-    if (body.city && body.city.trim()) {
-      const existingLocation = await DB.prepare(
-        'SELECT id FROM locations WHERE LOWER(name) = LOWER(?)'
-      ).bind(body.city.trim()).first();
+    // 🔥 SAVE LOCATION FOR THIS JOB (every job gets its own location record)
+    const locationName = body.city?.trim() || body.location?.trim() || '';
+    if (locationName && locationName !== 'Remote') {
+      const locationId = 'loc-' + id; // Uses job ID as basis for location ID
       
-      if (!existingLocation) {
-        const locId = 'loc-' + Date.now().toString(36);
-        await DB.prepare(
-          'INSERT INTO locations (id, street_address, name, region, country, postcode) VALUES (?, ?, ?, ?, ?, ?)'
-        ).bind(
-          locId,
-          body.street_address?.trim() || '',
-          body.city.trim(),
-          body.region?.trim() || '',
-          body.country?.trim() || 'Tanzania',
-          body.postcode?.trim() || ''
-        ).run();
-        console.log('Added new location:', body.city, body.street_address);
-      } else {
-        await DB.prepare(
-          `UPDATE locations SET 
-            street_address = CASE WHEN ? != '' THEN ? ELSE street_address END,
-            region = CASE WHEN ? != '' THEN ? ELSE region END,
-            country = CASE WHEN ? != '' THEN ? ELSE country END,
-            postcode = CASE WHEN ? != '' THEN ? ELSE postcode END
-          WHERE LOWER(name) = LOWER(?)`
-        ).bind(
-          body.street_address?.trim() || '', body.street_address?.trim() || '',
-          body.region?.trim() || '', body.region?.trim() || '',
-          body.country?.trim() || '', body.country?.trim() || '',
-          body.postcode?.trim() || '', body.postcode?.trim() || '',
-          body.city.trim()
-        ).run();
-      }
+      await DB.prepare(
+        `INSERT OR REPLACE INTO locations (id, name, region, country, postcode, street_address) 
+         VALUES (?, ?, ?, ?, ?, ?)`
+      ).bind(
+        locationId,
+        locationName,
+        body.region?.trim() || '',
+        body.country?.trim() || 'Tanzania',
+        body.postcode?.trim() || '',
+        body.street_address?.trim() || ''
+      ).run();
+      
+      console.log(`📍 Location saved for job ${id}: ${locationName}`);
     }
 
     const canonicalUrl = body.canonical_url || 
@@ -177,14 +160,24 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       companyResult = { id: companyId };
     }
 
-    // Save location
-    if (body.city && body.city.trim()) {
-      const existingLocation = await DB.prepare('SELECT id FROM locations WHERE LOWER(name) = LOWER(?)').bind(body.city.trim()).first();
-      if (!existingLocation) {
-        const locId = 'loc-' + Date.now().toString(36);
-        await DB.prepare('INSERT INTO locations (id, street_address, name, region, country, postcode) VALUES (?, ?, ?, ?, ?, ?)')
-          .bind(locId, body.street_address?.trim() || '', body.city.trim(), body.region?.trim() || '', body.country?.trim() || 'Tanzania', body.postcode?.trim() || '').run();
-      }
+    // 🔥 SAVE/UPDATE LOCATION FOR THIS JOB (every job gets its own location record)
+    const locationName = body.city?.trim() || body.location?.trim() || '';
+    if (locationName && locationName !== 'Remote') {
+      const locationId = 'loc-' + id;
+      
+      await DB.prepare(
+        `INSERT OR REPLACE INTO locations (id, name, region, country, postcode, street_address) 
+         VALUES (?, ?, ?, ?, ?, ?)`
+      ).bind(
+        locationId,
+        locationName,
+        body.region?.trim() || '',
+        body.country?.trim() || 'Tanzania',
+        body.postcode?.trim() || '',
+        body.street_address?.trim() || ''
+      ).run();
+      
+      console.log(`📍 Location updated for job ${id}: ${locationName}`);
     }
 
     await DB.prepare(`
@@ -255,6 +248,8 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
   const pathParts = url.pathname.split('/');
   const id = pathParts[pathParts.length - 1];
   try {
+    // Delete associated location
+    await DB.prepare('DELETE FROM locations WHERE id = ?').bind('loc-' + id).run();
     await DB.prepare('DELETE FROM job_images WHERE job_id = ?').bind(id).run();
     await DB.prepare('DELETE FROM jobs WHERE id = ?').bind(id).run();
     return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
