@@ -1,13 +1,43 @@
 export async function notifyGoogleIndexing(jobUrl: string, actionType: 'URL_UPDATED' | 'URL_DELETED' = 'URL_UPDATED') {
   try {
-    const keyString = (typeof process !== 'undefined' && (process as any).env?.GOOGLE_SERVICE_ACCOUNT) 
-      || (globalThis as any).GOOGLE_SERVICE_ACCOUNT
-      || (globalThis as any).env?.GOOGLE_SERVICE_ACCOUNT;
+    // 🔍 DEBUG: Check what's available
+    console.log('🔍 DEBUG - Checking for keys...');
+    
+    // Log all relevant keys from globalThis
+    const allKeys = Object.keys(globalThis as any);
+    const googleKeys = allKeys.filter(k => k.toUpperCase().includes('GOOGLE'));
+    const accountKeys = allKeys.filter(k => k.toUpperCase().includes('ACCOUNT'));
+    const keyKeys = allKeys.filter(k => k.toUpperCase().includes('KEY'));
+    const serviceKeys = allKeys.filter(k => k.toUpperCase().includes('SERVICE'));
+    
+    console.log('GOOGLE keys:', googleKeys);
+    console.log('ACCOUNT keys:', accountKeys);
+    console.log('KEY keys:', keyKeys);
+    console.log('SERVICE keys:', serviceKeys);
+    
+    // Log env keys if available
+    if ((globalThis as any).env) {
+      const envKeys = Object.keys((globalThis as any).env);
+      console.log('Available env keys:', envKeys);
+      console.log('GOOGLE env keys:', envKeys.filter(k => k.toUpperCase().includes('GOOGLE')));
+      console.log('ACCOUNT env keys:', envKeys.filter(k => k.toUpperCase().includes('ACCOUNT')));
+    }
+    
+    // Try ALL possible variable names
+    let keyString = 
+      (globalThis as any).GOOGLE_SERVICE_ACCOUNT ||
+      (globalThis as any).GOOGLE_SERVICE_ACCOUNT_KEY ||
+      (globalThis as any).env?.GOOGLE_SERVICE_ACCOUNT ||
+      (globalThis as any).env?.GOOGLE_SERVICE_ACCOUNT_KEY ||
+      (typeof process !== 'undefined' && (process as any).env?.GOOGLE_SERVICE_ACCOUNT) ||
+      (typeof process !== 'undefined' && (process as any).env?.GOOGLE_SERVICE_ACCOUNT_KEY);
     
     if (!keyString) {
-      console.log('⚠️ GOOGLE_SERVICE_ACCOUNT not found');
-      return { success: false, error: 'Key not configured' };
+      console.log('⚠️ Key not found in any location');
+      return { success: false, error: 'Key not configured. Check Cloudflare environment variables.' };
     }
+    
+    console.log('✅ Key found! Length:', keyString.length);
     
     const key = JSON.parse(keyString);
     
@@ -68,7 +98,6 @@ export async function notifyGoogleIndexing(jobUrl: string, actionType: 'URL_UPDA
     
     const result: any = await response.json();
     
-    // 🔍 Log full response for debugging
     console.log(`📢 Google Indexing API Response [${response.status}]:`, JSON.stringify(result));
     
     if (response.ok && result.urlNotificationMetadata) {
