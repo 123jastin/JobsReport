@@ -1,11 +1,11 @@
 export async function notifyGoogleIndexing(jobUrl: string, actionType: 'URL_UPDATED' | 'URL_DELETED' = 'URL_UPDATED') {
   try {
     const keyString = (typeof process !== 'undefined' && (process as any).env?.GOOGLE_SERVICE_ACCOUNT_KEY) 
-      || (globalThis as any).GOOGLE_SERVICE_ACCOUNT_KEY
-      || (globalThis as any).env?.GOOGLE_SERVICE_ACCOUNT_KEY;
+      || (globalThis as any).GOOGLE_SERVICE_ACCOUNT
+      || (globalThis as any).env?.GOOGLE_SERVICE_ACCOUNT;
     
     if (!keyString) {
-      console.log('⚠️ GOOGLE_SERVICE_ACCOUNT_KEY not found');
+      console.log('⚠️ GOOGLE_SERVICE_ACCOUNT not found');
       return { success: false, error: 'Key not configured' };
     }
     
