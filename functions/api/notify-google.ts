@@ -1,6 +1,6 @@
 export async function notifyGoogleIndexing(jobUrl: string, actionType: 'URL_UPDATED' | 'URL_DELETED' = 'URL_UPDATED') {
   try {
-    const keyString = (typeof process !== 'undefined' && (process as any).env?.GOOGLE_SERVICE_ACCOUNT_KEY) 
+    const keyString = (typeof process !== 'undefined' && (process as any).env?.GOOGLE_SERVICE_ACCOUNT) 
       || (globalThis as any).GOOGLE_SERVICE_ACCOUNT
       || (globalThis as any).env?.GOOGLE_SERVICE_ACCOUNT;
     
