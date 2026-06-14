@@ -11,6 +11,13 @@ export const onRequestGet = async (context: any) => {
   urls.push(`<url><loc>${baseUrl}/companies</loc><changefreq>daily</changefreq><priority>0.8</priority></url>`);
   urls.push(`<url><loc>${baseUrl}/regions</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>`);
 
+  // ========== LEGAL & INFO PAGES ==========
+  urls.push(`<url><loc>${baseUrl}/about-us</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>`);
+  urls.push(`<url><loc>${baseUrl}/contact-us</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>`);
+  urls.push(`<url><loc>${baseUrl}/privacy-policy</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>`);
+  urls.push(`<url><loc>${baseUrl}/terms-of-service</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>`);
+  urls.push(`<url><loc>${baseUrl}/disclaimer</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>`);
+
   // ========== COUNTRY PAGES ==========
   try {
     const { results } = await DB.prepare(`SELECT DISTINCT country FROM jobs WHERE country IS NOT NULL AND country != ''`).all();
