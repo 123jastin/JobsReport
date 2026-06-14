@@ -1,12 +1,11 @@
 export async function notifyGoogleIndexing(jobUrl: string, actionType: 'URL_UPDATED' | 'URL_DELETED' = 'URL_UPDATED') {
   try {
-    // Read from Cloudflare environment variable
     const keyString = (typeof process !== 'undefined' && (process as any).env?.GOOGLE_SERVICE_ACCOUNT_KEY) 
       || (globalThis as any).GOOGLE_SERVICE_ACCOUNT_KEY
       || (globalThis as any).env?.GOOGLE_SERVICE_ACCOUNT_KEY;
     
     if (!keyString) {
-      console.log('⚠️ GOOGLE_SERVICE_ACCOUNT_KEY not found in environment');
+      console.log('⚠️ GOOGLE_SERVICE_ACCOUNT_KEY not found');
       return { success: false, error: 'Key not configured' };
     }
     
@@ -56,6 +55,8 @@ export async function notifyGoogleIndexing(jobUrl: string, actionType: 'URL_UPDA
       return { success: false, error: tokenData };
     }
     
+    console.log('✅ Access token obtained');
+    
     const response = await fetch('https://indexing.googleapis.com/v3/urlNotifications:publish', {
       method: 'POST',
       headers: {
@@ -67,8 +68,31 @@ export async function notifyGoogleIndexing(jobUrl: string, actionType: 'URL_UPDA
     
     const result: any = await response.json();
     
-    console.log(`📢 Google indexing result:`, JSON.stringify(result));
-    return { success: response.ok, result };
+    // 🔍 Log full response for debugging
+    console.log(`📢 Google Indexing API Response [${response.status}]:`, JSON.stringify(result));
+    
+    if (response.ok && result.urlNotificationMetadata) {
+      console.log(`✅ Google confirmed: ${jobUrl}`);
+      console.log(`   Type: ${result.urlNotificationMetadata.latestUpdate?.type}`);
+      console.log(`   Time: ${result.urlNotificationMetadata.latestUpdate?.notifyTime}`);
+      return { 
+        success: true, 
+        message: 'Google confirmed receipt',
+        metadata: result.urlNotificationMetadata 
+      };
+    } else if (result.error) {
+      console.error(`❌ Google rejected [${result.error.code}]: ${result.error.message}`);
+      console.error(`   Status: ${result.error.status}`);
+      return { 
+        success: false, 
+        error: result.error.message,
+        code: result.error.code,
+        status: result.error.status
+      };
+    }
+    
+    console.log('⚠️ Unexpected response:', JSON.stringify(result));
+    return { success: false, error: 'Unexpected response', raw: result };
   } catch (error: any) {
     console.error('❌ Error:', error.message);
     return { success: false, error: error.message };
