@@ -2,66 +2,29 @@ export async function notifyGoogleIndexing(jobUrl: string, actionType: 'URL_UPDA
   try {
     let keyString = '';
     
-    // 🔥 Get from context.env (Pages Functions way)
     if (contextEnv?.GOOGLE_SERVICE_ACCOUNT) {
       keyString = contextEnv.GOOGLE_SERVICE_ACCOUNT;
-      console.log('✅ Key found in context.env.GOOGLE_SERVICE_ACCOUNT');
-    }
-    // Fallback to globalThis
-    else if ((globalThis as any).GOOGLE_SERVICE_ACCOUNT) {
+    } else if ((globalThis as any).GOOGLE_SERVICE_ACCOUNT) {
       keyString = (globalThis as any).GOOGLE_SERVICE_ACCOUNT;
-      console.log('✅ Key found in globalThis.GOOGLE_SERVICE_ACCOUNT');
-    }
-    // Fallback to GOOGLE_SERVICE_ACCOUNT_KEY
-    else if (contextEnv?.GOOGLE_SERVICE_ACCOUNT_KEY) {
-      keyString = contextEnv.GOOGLE_SERVICE_ACCOUNT_KEY;
-      console.log('✅ Key found in context.env.GOOGLE_SERVICE_ACCOUNT_KEY');
     }
     
     if (!keyString) {
-      console.log('⚠️ Key not found. Available env keys:', contextEnv ? Object.keys(contextEnv).filter(k => k.includes('GOOGLE') || k.includes('ACCOUNT') || k.includes('KEY')) : 'No contextEnv');
-      return { success: false, error: 'Key not configured. Check Cloudflare environment variables.' };
+      return { success: false, error: 'Key not configured' };
     }
-    
-    console.log('✅ Key loaded, length:', keyString.length);
     
     const key = JSON.parse(keyString);
     
-    const header = { alg: 'RS256', typ: 'JWT', kid: key.private_key_id };
-    const now = Math.floor(Date.now() / 1000);
-    const claim = {
-      iss: key.client_email,
-      scope: 'https://www.googleapis.com/auth/indexing',
-      aud: 'https://oauth2.googleapis.com/token',
-      exp: now + 3600,
-      iat: now
-    };
+    // 🔥 Use JWT creation helper
+    const jwt = await createGoogleJWT(key);
     
-    const base64url = (obj: any) => 
-      btoa(JSON.stringify(obj)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    
-    const unsignedJwt = `${base64url(header)}.${base64url(claim)}`;
-    
-    const privateKey = await crypto.subtle.importKey(
-      'pkcs8',
-      pemToArrayBuffer(key.private_key),
-      { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-      false,
-      ['sign']
-    );
-    
-    const signature = await crypto.subtle.sign(
-      'RSASSA-PKCS1-v1_5',
-      privateKey,
-      new TextEncoder().encode(unsignedJwt)
-    );
-    
-    const signedJwt = `${unsignedJwt}.${base64url(String.fromCharCode(...new Uint8Array(signature)))}`;
+    if (!jwt) {
+      return { success: false, error: 'Failed to create JWT' };
+    }
     
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${signedJwt}`
+      body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`
     });
     
     const tokenData: any = await tokenResponse.json();
@@ -83,34 +46,77 @@ export async function notifyGoogleIndexing(jobUrl: string, actionType: 'URL_UPDA
     });
     
     const result: any = await response.json();
-    
-    console.log(`📢 Google Indexing API Response [${response.status}]:`, JSON.stringify(result));
+    console.log(`📢 Response:`, JSON.stringify(result));
     
     if (response.ok && result.urlNotificationMetadata) {
-      console.log(`✅ Google confirmed: ${jobUrl}`);
-      console.log(`   Type: ${result.urlNotificationMetadata.latestUpdate?.type}`);
-      console.log(`   Time: ${result.urlNotificationMetadata.latestUpdate?.notifyTime}`);
-      return { 
-        success: true, 
-        message: 'Google confirmed receipt',
-        metadata: result.urlNotificationMetadata 
-      };
-    } else if (result.error) {
-      console.error(`❌ Google rejected [${result.error.code}]: ${result.error.message}`);
-      console.error(`   Status: ${result.error.status}`);
-      return { 
-        success: false, 
-        error: result.error.message,
-        code: result.error.code,
-        status: result.error.status
-      };
+      return { success: true, message: 'Google confirmed', metadata: result.urlNotificationMetadata };
     }
     
-    console.log('⚠️ Unexpected response:', JSON.stringify(result));
-    return { success: false, error: 'Unexpected response', raw: result };
+    return { success: false, error: result.error || result };
   } catch (error: any) {
     console.error('❌ Error:', error.message);
     return { success: false, error: error.message };
+  }
+}
+
+// 🔥 Helper to create Google JWT
+async function createGoogleJWT(key: any): Promise<string | null> {
+  try {
+    const header = {
+      alg: 'RS256',
+      typ: 'JWT'
+    };
+    
+    const now = Math.floor(Date.now() / 1000);
+    const claim = {
+      iss: key.client_email,
+      scope: 'https://www.googleapis.com/auth/indexing',
+      aud: 'https://oauth2.googleapis.com/token',
+      exp: now + 3600,
+      iat: now
+    };
+    
+    const base64url = (str: string) => 
+      btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    
+    const input = `${base64url(JSON.stringify(header))}.${base64url(JSON.stringify(claim))}`;
+    
+    // Clean private key
+    const privateKeyPem = key.private_key
+      .replace('-----BEGIN PRIVATE KEY-----\n', '')
+      .replace('\n-----END PRIVATE KEY-----', '')
+      .replace(/\n/g, '');
+    
+    // Decode base64 to binary
+    const binaryKey = Uint8Array.from(atob(privateKeyPem), c => c.charCodeAt(0));
+    
+    // Import key
+    const cryptoKey = await crypto.subtle.importKey(
+      'pkcs8',
+      binaryKey.buffer,
+      { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+    
+    // Sign
+    const signature = await crypto.subtle.sign(
+      'RSASSA-PKCS1-v1_5',
+      cryptoKey,
+      new TextEncoder().encode(input)
+    );
+    
+    // Convert signature to base64url
+    const signatureBytes = new Uint8Array(signature);
+    let signatureBinary = '';
+    for (let i = 0; i < signatureBytes.length; i++) {
+      signatureBinary += String.fromCharCode(signatureBytes[i]);
+    }
+    
+    return `${input}.${base64url(signatureBinary)}`;
+  } catch (error: any) {
+    console.error('JWT creation error:', error.message);
+    return null;
   }
 }
 
