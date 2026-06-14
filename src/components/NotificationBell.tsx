@@ -54,16 +54,13 @@ export default function NotificationBell() {
     setSelectedCountry(country);
     setLoading(true);
     setErrorMessage('');
-    
-    // 🔥 STEP 1: Close panel immediately
-    setShowPanel(false);
 
-    // 🔥 STEP 2: Wait for panel animation + any ads/overlays to close
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    // 🔥 STEP 3: Now ask for permission (panel is fully closed, no overlays)
+    // 🔥 Ask for permission IMMEDIATELY while click context is active
     try {
       const token = await requestNotificationPermission();
+
+      // Close panel after permission prompt
+      setShowPanel(false);
 
       if (token) {
         localStorage.setItem('fcm_token', token);
@@ -79,26 +76,26 @@ export default function NotificationBell() {
 
         setTimeout(() => setSuccessMessage(''), 3000);
       } else {
-        // Permission denied or dismissed
-        setErrorMessage('Permission denied. Allow notifications in browser settings.');
-        setTimeout(() => setErrorMessage(''), 4000);
+        setErrorMessage('Allow notifications in browser settings to enable alerts');
+        setTimeout(() => setErrorMessage(''), 5000);
       }
     } catch (err: any) {
-      console.log('Permission error:', err.message);
-      setErrorMessage('Close any popups and try again');
+      setShowPanel(false);
+      setErrorMessage('Could not request permission. Try again.');
       setTimeout(() => setErrorMessage(''), 4000);
     }
-    
+
     setLoading(false);
   };
 
   const handleRetry = async () => {
-    setShowPanel(false);
     setErrorMessage('');
-    await new Promise(resolve => setTimeout(resolve, 800));
+    setLoading(true);
 
     try {
       const token = await requestNotificationPermission();
+      setShowPanel(false);
+
       if (token) {
         localStorage.setItem('fcm_token', token);
         localStorage.setItem('fcm_country', selectedCountry);
@@ -112,10 +109,17 @@ export default function NotificationBell() {
         });
 
         setTimeout(() => setSuccessMessage(''), 3000);
+      } else {
+        setErrorMessage('Allow notifications in browser settings');
+        setTimeout(() => setErrorMessage(''), 5000);
       }
     } catch (err: any) {
-      console.log('Retry error:', err.message);
+      setShowPanel(false);
+      setErrorMessage('Could not request permission. Try again.');
+      setTimeout(() => setErrorMessage(''), 4000);
     }
+
+    setLoading(false);
   };
 
   const handleUnsubscribe = async () => {
@@ -163,30 +167,28 @@ export default function NotificationBell() {
         )}
       </button>
 
-      {/* Success Message Toast */}
+      {/* Success Toast */}
       {successMessage && (
         <div className="absolute top-full right-0 mt-2 px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-[10px] font-bold whitespace-nowrap z-50">
           {successMessage}
         </div>
       )}
 
-      {/* Error Message Toast */}
+      {/* Error Toast */}
       {errorMessage && (
-        <div className="absolute top-full right-0 mt-2 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-bold whitespace-nowrap z-50">
+        <div className="absolute top-full right-0 mt-2 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-bold whitespace-nowrap z-50 max-w-[200px]">
           {errorMessage}
         </div>
       )}
 
-      {/* Country Panel - Below Header */}
+      {/* Country Panel */}
       {showPanel && !subscribed && (
         <>
-          {/* Backdrop */}
           <div 
             className="fixed inset-0 z-40 bg-transparent"
             onClick={() => setShowPanel(false)}
           />
           
-          {/* Panel */}
           <div className="absolute top-full right-0 mt-2 w-60 bg-black border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
@@ -234,7 +236,7 @@ export default function NotificationBell() {
               ))}
             </div>
 
-            {/* Manual Retry */}
+            {/* Retry Button */}
             <div className="px-4 py-2.5 border-t border-white/5">
               <p className="text-[9px] text-gray-600 mb-2">Permission popup not appearing?</p>
               <button
