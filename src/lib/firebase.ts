@@ -2,12 +2,12 @@ import { initializeApp } from 'firebase/app';
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
+  apiKey: "AIzaSyChcgu2yOmsugrh2rjc9KhZWe6sD2yZqqI",
+  authDomain: "unera-50aae.firebaseapp.com",
+  projectId: "unera-50aae",
+  storageBucket: "unera-50aae.firebasestorage.app",
+  messagingSenderId: "649631105841",
+  appId: "1:649631105841:web:23c6ecfdb4de6ad52ca610"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -19,7 +19,7 @@ export async function requestNotificationPermission(): Promise<string | null> {
     if (permission !== 'granted') return null;
 
     const token = await getToken(messaging, {
-      vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY
+      vapidKey: 'BKjdfhksdfhksdjfhksjdf...' // ← REPLACE WITH YOUR VAPID KEY
     });
 
     return token;
