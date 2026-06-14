@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Bell, BellOff, Globe, Check, X } from 'lucide-react';
+import { Bell, BellOff, Globe, Check, X, RefreshCw } from 'lucide-react';
 import { requestNotificationPermission, onForegroundMessage } from '../lib/firebase';
 
 const COUNTRIES = [
@@ -26,6 +26,7 @@ export default function NotificationBell() {
   const [selectedCountry, setSelectedCountry] = useState('Worldwide');
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     const token = localStorage.getItem('fcm_token');
@@ -52,31 +53,69 @@ export default function NotificationBell() {
   const handleCountrySelect = async (country: string) => {
     setSelectedCountry(country);
     setLoading(true);
+    setErrorMessage('');
     
-    // Close panel first to clear any overlays
+    // 🔥 STEP 1: Close panel immediately
     setShowPanel(false);
 
-    // Wait for panel to close
-    await new Promise(resolve => setTimeout(resolve, 300));
+    // 🔥 STEP 2: Wait for panel animation + any ads/overlays to close
+    await new Promise(resolve => setTimeout(resolve, 800));
 
-    const token = await requestNotificationPermission();
+    // 🔥 STEP 3: Now ask for permission (panel is fully closed, no overlays)
+    try {
+      const token = await requestNotificationPermission();
 
-    if (token) {
-      localStorage.setItem('fcm_token', token);
-      localStorage.setItem('fcm_country', country);
-      setSubscribed(true);
-      setSuccessMessage(`✅ Alerts enabled for ${country}`);
+      if (token) {
+        localStorage.setItem('fcm_token', token);
+        localStorage.setItem('fcm_country', country);
+        setSubscribed(true);
+        setSuccessMessage(`✅ Alerts enabled for ${country}`);
 
-      await fetch('/api/notifications/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, country })
-      });
+        await fetch('/api/notifications/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, country })
+        });
 
-      setTimeout(() => setSuccessMessage(''), 3000);
+        setTimeout(() => setSuccessMessage(''), 3000);
+      } else {
+        // Permission denied or dismissed
+        setErrorMessage('Permission denied. Allow notifications in browser settings.');
+        setTimeout(() => setErrorMessage(''), 4000);
+      }
+    } catch (err: any) {
+      console.log('Permission error:', err.message);
+      setErrorMessage('Close any popups and try again');
+      setTimeout(() => setErrorMessage(''), 4000);
     }
     
     setLoading(false);
+  };
+
+  const handleRetry = async () => {
+    setShowPanel(false);
+    setErrorMessage('');
+    await new Promise(resolve => setTimeout(resolve, 800));
+
+    try {
+      const token = await requestNotificationPermission();
+      if (token) {
+        localStorage.setItem('fcm_token', token);
+        localStorage.setItem('fcm_country', selectedCountry);
+        setSubscribed(true);
+        setSuccessMessage(`✅ Alerts enabled for ${selectedCountry}`);
+
+        await fetch('/api/notifications/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, country: selectedCountry })
+        });
+
+        setTimeout(() => setSuccessMessage(''), 3000);
+      }
+    } catch (err: any) {
+      console.log('Retry error:', err.message);
+    }
   };
 
   const handleUnsubscribe = async () => {
@@ -102,6 +141,7 @@ export default function NotificationBell() {
       handleUnsubscribe();
     } else {
       setShowPanel(!showPanel);
+      setErrorMessage('');
     }
   };
 
@@ -130,6 +170,13 @@ export default function NotificationBell() {
         </div>
       )}
 
+      {/* Error Message Toast */}
+      {errorMessage && (
+        <div className="absolute top-full right-0 mt-2 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-bold whitespace-nowrap z-50">
+          {errorMessage}
+        </div>
+      )}
+
       {/* Country Panel - Below Header */}
       {showPanel && !subscribed && (
         <>
@@ -140,7 +187,7 @@ export default function NotificationBell() {
           />
           
           {/* Panel */}
-          <div className="absolute top-full right-0 mt-2 w-56 bg-black border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden">
+          <div className="absolute top-full right-0 mt-2 w-60 bg-black border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
               <div className="flex items-center gap-2">
@@ -163,7 +210,7 @@ export default function NotificationBell() {
             </div>
 
             {/* Country List */}
-            <div className="max-h-[240px] overflow-y-auto py-1">
+            <div className="max-h-[220px] overflow-y-auto py-1">
               {COUNTRIES.map(country => (
                 <button
                   key={country.name}
@@ -185,6 +232,18 @@ export default function NotificationBell() {
                   )}
                 </button>
               ))}
+            </div>
+
+            {/* Manual Retry */}
+            <div className="px-4 py-2.5 border-t border-white/5">
+              <p className="text-[9px] text-gray-600 mb-2">Permission popup not appearing?</p>
+              <button
+                onClick={handleRetry}
+                className="w-full py-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white text-[10px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5"
+              >
+                <RefreshCw size={10} />
+                Try Again
+              </button>
             </div>
           </div>
         </>
