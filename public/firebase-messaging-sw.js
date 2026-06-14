@@ -13,25 +13,16 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
-  self.registration.showNotification(
-    payload.notification.title,
-    {
-      body: payload.notification.body,
-      icon: '/logo-192.png',
-      badge: '/favicon-32x32.png',
-      data: payload.data || {},
-      vibrate: [200, 100, 200],
-      actions: [
-        { action: 'open', title: 'View Job' },
-        { action: 'close', title: 'Dismiss' }
-      ]
-    }
-  );
+  self.registration.showNotification(payload.notification.title, {
+    body: payload.notification.body,
+    icon: '/logo-192.png',
+    data: payload.data || {}
+  });
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  if (event.action === 'open' && event.notification.data?.url) {
+  if (event.notification.data?.url) {
     clients.openWindow(event.notification.data.url);
   } else {
     clients.openWindow('https://jobsreport.online/market');
