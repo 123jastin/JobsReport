@@ -16,6 +16,11 @@ import ReportsPage from './pages/ReportsPage';
 import MarketPage from './pages/MarketPage';
 import JobDetailPage from './pages/JobDetailPage';
 import AdminPage from './pages/AdminPage';
+import AboutUsPage from './pages/AboutUsPage';
+import ContactUsPage from './pages/ContactUsPage';
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
+import TermsOfServicePage from './pages/TermsOfServicePage';
+import DisclaimerPage from './pages/DisclaimerPage';
 
 import { AuthProvider } from './context/AuthContext';
 import { CountryProvider } from './context/CountryContext';
@@ -55,6 +60,13 @@ export default function App() {
                 <Route path="/reports/:country" element={<ReportsPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
                 <Route path="/report/:slug" element={<ReportDetailPage />} />
+
+                {/* 📄 Legal & Info Pages */}
+                <Route path="/about-us" element={<AboutUsPage />} />
+                <Route path="/contact-us" element={<ContactUsPage />} />
+                <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+                <Route path="/terms-of-service" element={<TermsOfServicePage />} />
+                <Route path="/disclaimer" element={<DisclaimerPage />} />
 
                 {/* 🔐 Admin */}
                 <Route path="/admin" element={<AdminPage />} />
