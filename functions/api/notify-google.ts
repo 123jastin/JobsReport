@@ -1,43 +1,29 @@
-export async function notifyGoogleIndexing(jobUrl: string, actionType: 'URL_UPDATED' | 'URL_DELETED' = 'URL_UPDATED') {
+export async function notifyGoogleIndexing(jobUrl: string, actionType: 'URL_UPDATED' | 'URL_DELETED' = 'URL_UPDATED', contextEnv?: any) {
   try {
-    // 🔍 DEBUG: Check what's available
-    console.log('🔍 DEBUG - Checking for keys...');
+    let keyString = '';
     
-    // Log all relevant keys from globalThis
-    const allKeys = Object.keys(globalThis as any);
-    const googleKeys = allKeys.filter(k => k.toUpperCase().includes('GOOGLE'));
-    const accountKeys = allKeys.filter(k => k.toUpperCase().includes('ACCOUNT'));
-    const keyKeys = allKeys.filter(k => k.toUpperCase().includes('KEY'));
-    const serviceKeys = allKeys.filter(k => k.toUpperCase().includes('SERVICE'));
-    
-    console.log('GOOGLE keys:', googleKeys);
-    console.log('ACCOUNT keys:', accountKeys);
-    console.log('KEY keys:', keyKeys);
-    console.log('SERVICE keys:', serviceKeys);
-    
-    // Log env keys if available
-    if ((globalThis as any).env) {
-      const envKeys = Object.keys((globalThis as any).env);
-      console.log('Available env keys:', envKeys);
-      console.log('GOOGLE env keys:', envKeys.filter(k => k.toUpperCase().includes('GOOGLE')));
-      console.log('ACCOUNT env keys:', envKeys.filter(k => k.toUpperCase().includes('ACCOUNT')));
+    // 🔥 Get from context.env (Pages Functions way)
+    if (contextEnv?.GOOGLE_SERVICE_ACCOUNT) {
+      keyString = contextEnv.GOOGLE_SERVICE_ACCOUNT;
+      console.log('✅ Key found in context.env.GOOGLE_SERVICE_ACCOUNT');
+    }
+    // Fallback to globalThis
+    else if ((globalThis as any).GOOGLE_SERVICE_ACCOUNT) {
+      keyString = (globalThis as any).GOOGLE_SERVICE_ACCOUNT;
+      console.log('✅ Key found in globalThis.GOOGLE_SERVICE_ACCOUNT');
+    }
+    // Fallback to GOOGLE_SERVICE_ACCOUNT_KEY
+    else if (contextEnv?.GOOGLE_SERVICE_ACCOUNT_KEY) {
+      keyString = contextEnv.GOOGLE_SERVICE_ACCOUNT_KEY;
+      console.log('✅ Key found in context.env.GOOGLE_SERVICE_ACCOUNT_KEY');
     }
     
-    // Try ALL possible variable names
-    let keyString = 
-      (globalThis as any).GOOGLE_SERVICE_ACCOUNT ||
-      (globalThis as any).GOOGLE_SERVICE_ACCOUNT_KEY ||
-      (globalThis as any).env?.GOOGLE_SERVICE_ACCOUNT ||
-      (globalThis as any).env?.GOOGLE_SERVICE_ACCOUNT_KEY ||
-      (typeof process !== 'undefined' && (process as any).env?.GOOGLE_SERVICE_ACCOUNT) ||
-      (typeof process !== 'undefined' && (process as any).env?.GOOGLE_SERVICE_ACCOUNT_KEY);
-    
     if (!keyString) {
-      console.log('⚠️ Key not found in any location');
+      console.log('⚠️ Key not found. Available env keys:', contextEnv ? Object.keys(contextEnv).filter(k => k.includes('GOOGLE') || k.includes('ACCOUNT') || k.includes('KEY')) : 'No contextEnv');
       return { success: false, error: 'Key not configured. Check Cloudflare environment variables.' };
     }
     
-    console.log('✅ Key found! Length:', keyString.length);
+    console.log('✅ Key loaded, length:', keyString.length);
     
     const key = JSON.parse(keyString);
     
