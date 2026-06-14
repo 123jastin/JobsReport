@@ -12,7 +12,7 @@ export const onRequestPost = async (context: any) => {
     
     const result = await notifyGoogleIndexing(url, 'URL_UPDATED');
     
-    return new Response(JSON.stringify({ success: true, result }), {
+    return new Response(JSON.stringify(result), {
       headers: { 'Content-Type': 'application/json' }
     });
   } catch (error: any) {
