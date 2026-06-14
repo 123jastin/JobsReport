@@ -194,7 +194,7 @@ export default function JobDetailPage() {
         </button>
       </div>
 
-      {/* 🔴 FRAUD WARNING - Compact professional design */}
+      {/* 🔴 FRAUD WARNING */}
       <div className="mx-4 mt-3 px-4 py-3 rounded-xl border border-red-500/15 bg-red-500/[0.03] flex items-center gap-3">
         <AlertCircle size={14} className="text-red-400 flex-shrink-0" />
         <p className="text-[11px] text-red-300/70 leading-relaxed flex-1">
@@ -209,24 +209,7 @@ export default function JobDetailPage() {
         </a>
       </div>
 
-      {/* JOB DESCRIPTION */}
-      {hasDescription && (
-        <div className="px-4 py-6 border-b border-white/5">
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2"><FileText size={16} className="text-blue-400" /> Job Description</h3>
-          <div className="text-stone-300 text-sm leading-relaxed space-y-4 job-description-content" dangerouslySetInnerHTML={{ __html: job.description }} />
-        </div>
-      )}
-      {!hasDescription && (
-        <div className="px-4 py-6 border-b border-white/5 text-center">
-          <FileText size={32} className="text-gray-600 mx-auto mb-3" />
-          <p className="text-gray-500 text-sm">No detailed description available for this listing.</p>
-        </div>
-      )}
-
-      {/* AD #1 */}
-      <AdBanner key={`ad1-${jobId}`} slot="4550717155" />
-
-      {/* ATTACHMENTS */}
+      {/* ATTACHMENTS - Moved above Job Description */}
       {hasFiles && (
         <div className="px-4 py-6 border-b border-white/5">
           <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2"><Eye size={16} className="text-blue-400" /> Attachments ({job.images.length})</h3>
@@ -245,6 +228,23 @@ export default function JobDetailPage() {
           </div>
         </div>
       )}
+
+      {/* JOB DESCRIPTION */}
+      {hasDescription && (
+        <div className="px-4 py-6 border-b border-white/5">
+          <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2"><FileText size={16} className="text-blue-400" /> Job Description</h3>
+          <div className="text-stone-300 text-sm leading-relaxed space-y-4 job-description-content" dangerouslySetInnerHTML={{ __html: job.description }} />
+        </div>
+      )}
+      {!hasDescription && (
+        <div className="px-4 py-6 border-b border-white/5 text-center">
+          <FileText size={32} className="text-gray-600 mx-auto mb-3" />
+          <p className="text-gray-500 text-sm">No detailed description available for this listing.</p>
+        </div>
+      )}
+
+      {/* AD #1 */}
+      <AdBanner key={`ad1-${jobId}`} slot="4550717155" />
 
       {/* JOB DETAILS */}
       <div className="px-4 py-6 border-b border-white/5">
