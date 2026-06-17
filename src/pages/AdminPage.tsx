@@ -159,7 +159,8 @@ export default function AdminPage() {
   
   // ✅ Draft and Application Type States
   const [isDraft, setIsDraft] = useState(false);
-  const [applicationType, setApplicationType] = useState<'url' | 'email'>('url');
+  const [applicationType, setApplicationType] = useState<'url' | 'email' | 'whatsapp' | 'instructions'>('url');
+  
 
   // ✅ Schema data state
 const [schemaData, setSchemaData] = useState({
