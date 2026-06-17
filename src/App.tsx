@@ -45,7 +45,8 @@ export default function App() {
                 <Route path="/regions" element={<RegionsPage />} />
                 <Route path="/country/:countrySlug/region/:regionSlug" element={<RegionPage />} />
 
-                {/* 🏢 Companies Page */}
+                {/* 🏢 Companies Routes */}
+                <Route path="/companies/:companyName" element={<CompaniesPage />} />
                 <Route path="/companies" element={<CompaniesPage />} />
 
                 {/* 🎯 Role/Category Pages - SEO Indexable */}
