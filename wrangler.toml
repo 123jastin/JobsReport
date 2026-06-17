@@ -17,6 +17,11 @@ binding = "MEDIA_BUCKET"
 bucket_name = "jobsreport"
 
 # =========================
+# Pages Configuration
+# =========================
+pages_build_output_dir = "dist"
+
+# =========================
 # Pages Functions compatibility
 # =========================
 [compatibility_flags]
