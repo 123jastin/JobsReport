@@ -36,7 +36,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       currenciesList.push({ code: c.code, symbol: c.symbol, name: c.name, flag: c.flag || '' });
     }
 
-    // 🔥 Get ALL jobs (active + expired) for job detail pages and related jobs
+    // 🔥 Get ALL jobs (active + expired) - Added whatsapp_number + application_instructions
     const jobsResult = await DB.prepare(`
       SELECT 
         j.id, j.title, j.description,
@@ -44,6 +44,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         j.education_level, j.experience_months, j.skills, j.benefits,
         j.salary_min, j.salary_max, j.salary_currency,
         j.street_address, j.city, j.region, j.postcode, j.canonical_url,
+        j.whatsapp_number, j.application_instructions,
         r.name as role,
         c.name as company, c.logo_url, c.website,
         j.location, j.apply_url, j.salary,
@@ -110,13 +111,15 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           slug: `${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${job.id}`,
           postedAt: job.posted_at,
           expiresAt: job.expires_at,
-          active: job.is_active === 1, // 🔥 Keep this for expired detection
+          active: job.is_active === 1,
+          whatsapp_number: job.whatsapp_number || '',
+          application_instructions: job.application_instructions || '',
           images: images
         };
       })
     );
 
-    // 🔥 Separate active jobs for listings (homepage, market page)
+    // 🔥 Separate active jobs for listings
     const activeJobs = jobs.filter(j => j.active);
 
     // Get roles, companies, activity
@@ -148,9 +151,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     const workplaceTypes = workplaceResult.results.map((w: any) => w.workplace_type);
 
     return new Response(JSON.stringify({
-      // 🔥 Return ALL jobs (active + expired) for job detail pages
       jobs: jobs,
-      // 🔥 Also return active-only for listings
       activeJobs: activeJobs,
       roles, companies, recentActivity, jobCategories, workplaceTypes,
       currencies: currenciesList,
