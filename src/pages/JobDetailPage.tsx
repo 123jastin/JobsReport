@@ -95,6 +95,9 @@ export default function JobDetailPage() {
   const salaryDisplay = job.salary || null;
   const currencyFlag = job.salary_currency_flag || '🇹🇿';
   const jobUrl = job.slug ? `https://jobsreport.online/market/${job.slug}` : `https://jobsreport.online/market/${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${job.id}`;
+  const hasWhatsApp = job.whatsapp_number && job.whatsapp_number.trim().length > 6;
+  const hasInstructions = job.application_instructions && job.application_instructions.trim().length > 0;
+  const hasUrl = job.url && !hasWhatsApp;
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -159,9 +162,8 @@ export default function JobDetailPage() {
             {job.logoUrl ? <img src={job.logoUrl} alt={job.company} className="w-full h-full object-cover rounded-xl" referrerPolicy="no-referrer" /> : <div className="w-full h-full bg-gradient-to-br from-blue-600 to-violet-600 flex items-center justify-center text-white font-bold text-lg">{job.company?.charAt(0)?.toUpperCase()||'?'}</div>}
           </div>
           <div className="min-w-0">
-            {/* 🔥 CLICKABLE COMPANY NAME - Links to company page with all jobs */}
             <button
-           onClick={() => navigate(`/companies/${job.company.toLowerCase().replace(/\s+/g, '-')}`)}
+              onClick={() => navigate(`/companies/${job.company.toLowerCase().replace(/\s+/g, '-')}`)}
               className="text-sm font-bold text-white hover:text-blue-400 transition-colors text-left"
               title={`View all ${job.company} jobs`}
             >
@@ -189,17 +191,52 @@ export default function JobDetailPage() {
         </div>
       </div>
 
-      {/* APPLY BUTTON */}
-      <div className="sticky bottom-0 z-40 bg-black/95 backdrop-blur border-t border-white/5 px-4 py-3">
-        {job.url && !isExpired && (
-          <p className="text-[10px] text-gray-500 text-center mb-2 truncate px-4">
-            {isEmailLink?'📧 ':'🔗 '}{isEmailLink?job.url.replace('mailto:',''):(()=>{try{return new URL(job.url).hostname.replace('www.','')+new URL(job.url).pathname}catch{return job.url}})()}
+      {/* 🔥 APPLY BUTTON AREA */}
+      <div className="sticky bottom-0 z-40 bg-black/95 backdrop-blur border-t border-white/5 px-4 py-3 space-y-2">
+        {/* Application Instructions */}
+        {hasInstructions && !isExpired && (
+          <div className="px-3 py-2.5 rounded-xl bg-blue-500/5 border border-blue-500/10">
+            <p className="text-[10px] text-blue-300/80 leading-relaxed">
+              📋 <span className="font-semibold">How to Apply:</span> {job.application_instructions}
+            </p>
+          </div>
+        )}
+
+        {/* URL preview (only for non-WhatsApp URL applications) */}
+        {job.url && !isExpired && !hasWhatsApp && (
+          <p className="text-[10px] text-gray-500 text-center truncate px-4">
+            {isEmailLink?'📧 ':'🔗 '}
+            {isEmailLink?job.url.replace('mailto:',''):(()=>{try{return new URL(job.url).hostname.replace('www.','')+new URL(job.url).pathname}catch{return job.url}})()}
           </p>
         )}
-        <button onClick={()=>{if(!isExpired&&job.url){triggerRedirect(job.url,job.company,job.title)}}} disabled={isExpired||!job.url} className={`w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${isExpired?'bg-red-500/10 text-red-400 cursor-not-allowed':job.url?'bg-blue-600 hover:bg-blue-500 text-white active:scale-[0.98]':'bg-white/5 text-gray-600 cursor-not-allowed'}`}>
-          {isExpired?'🚫 Application Closed':isEmailLink?'✉️ Send Application':'Apply Now'}
-          {!isExpired && <ExternalLink size={16} />}
-        </button>
+
+        {/* WhatsApp Apply Button */}
+        {hasWhatsApp && !isExpired ? (
+          <a
+            href={`https://wa.me/${job.whatsapp_number.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hello, I am interested in the ${job.title} position at ${job.company}. Please share more details.`)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all bg-green-600 hover:bg-green-500 text-white active:scale-[0.98]"
+          >
+            💬 Apply via WhatsApp
+          </a>
+        ) : isExpired ? (
+          <button disabled className="w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 bg-red-500/10 text-red-400 cursor-not-allowed">
+            🚫 Application Closed
+          </button>
+        ) : job.url ? (
+          <button 
+            onClick={()=>{if(!isExpired&&job.url){triggerRedirect(job.url,job.company,job.title)}}} 
+            className={`w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all bg-blue-600 hover:bg-blue-500 text-white active:scale-[0.98]`}
+          >
+            {isEmailLink?'✉️ Send Application':'Apply Now'}
+            <ExternalLink size={16} />
+          </button>
+        ) : (
+          <button disabled className="w-full py-3.5 rounded-xl font-bold text-sm bg-white/5 text-gray-600 cursor-not-allowed">
+            No application link available
+          </button>
+        )}
       </div>
 
       {/* 🔴 FRAUD WARNING */}
