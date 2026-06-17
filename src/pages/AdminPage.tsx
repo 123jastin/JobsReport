@@ -2221,70 +2221,126 @@ const handleDeleteRole = async (id: string) => {
                   </div>
                 </div>
 
-                {/* Apply Method Selection */}
-                <div className="space-y-2 border-t border-white/5 pt-4">
-                  <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">
-                    Application Method
-                  </label>
-                  
-                  {/* Toggle URL/Email */}
-                  <div className="flex bg-black/40 p-1 rounded-xl border border-white/5 w-fit">
-                    <button
-                      type="button"
-                      onClick={() => setApplicationType('url')}
-                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
-                        applicationType === 'url' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'
-                      }`}
-                    >
-                      🔗 URL
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setApplicationType('email')}
-                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
-                        applicationType === 'email' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'
-                      }`}
-                    >
-                      ✉️ Email
-                    </button>
-                  </div>
 
-                  {applicationType === 'url' ? (
-                    <div className="space-y-1">
-                      <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Application URL</label>
-                      <input 
-                        type="url" 
-                        value={jobForm.url}
-                        onChange={(e) => setJobForm(prev => ({ ...prev, url: e.target.value }))}
-                        placeholder="https://company.com/careers/apply"
-                        className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
-                      />
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="space-y-1">
-                        <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Application Email</label>
-                        <input 
-                          type="email" 
-                          value={jobForm.url}
-                          onChange={(e) => setJobForm(prev => ({ ...prev, url: e.target.value }))}
-                          placeholder="careers@company.com"
-                          className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Email Subject (Optional)</label>
-                        <input 
-                          type="text" 
-                          value={jobForm.companyNewUrl}
-                          onChange={(e) => setJobForm(prev => ({ ...prev, companyNewUrl: e.target.value }))}
-                          placeholder={`Application for ${jobForm.title || 'Position'}`}
-                          className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
+
+                                                  
+{/* Apply Method Selection */}
+<div className="space-y-3 border-t border-white/5 pt-4">
+  <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">
+    Application Method
+  </label>
+  
+  {/* 4-Option Toggle */}
+  <div className="flex flex-wrap bg-black/40 p-1 rounded-xl border border-white/5 gap-1">
+    <button
+      type="button"
+      onClick={() => setApplicationType('url')}
+      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
+        applicationType === 'url' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'
+      }`}
+    >
+      🔗 URL
+    </button>
+    <button
+      type="button"
+      onClick={() => setApplicationType('email')}
+      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
+        applicationType === 'email' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'
+      }`}
+    >
+      ✉️ Email
+    </button>
+    <button
+      type="button"
+      onClick={() => setApplicationType('whatsapp')}
+      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
+        applicationType === 'whatsapp' ? 'bg-green-600 text-white' : 'text-gray-500 hover:text-white'
+      }`}
+    >
+      💬 WhatsApp
+    </button>
+    <button
+      type="button"
+      onClick={() => setApplicationType('instructions')}
+      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
+        applicationType === 'instructions' ? 'bg-violet-600 text-white' : 'text-gray-500 hover:text-white'
+      }`}
+    >
+      📋 Instructions
+    </button>
+  </div>
+
+  {/* URL Input */}
+  {applicationType === 'url' && (
+    <div className="space-y-1">
+      <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Application URL</label>
+      <input 
+        type="url" 
+        value={jobForm.url}
+        onChange={(e) => setJobForm(prev => ({ ...prev, url: e.target.value }))}
+        placeholder="https://company.com/careers/apply"
+        className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+      />
+    </div>
+  )}
+
+  {/* Email Input */}
+  {applicationType === 'email' && (
+    <div className="space-y-3">
+      <div className="space-y-1">
+        <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Application Email</label>
+        <input 
+          type="email" 
+          value={jobForm.url}
+          onChange={(e) => setJobForm(prev => ({ ...prev, url: e.target.value }))}
+          placeholder="careers@company.com"
+          className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+        />
+      </div>
+      <div className="space-y-1">
+        <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Email Subject (Optional)</label>
+        <input 
+          type="text" 
+          value={jobForm.companyNewUrl}
+          onChange={(e) => setJobForm(prev => ({ ...prev, companyNewUrl: e.target.value }))}
+          placeholder={`Application for ${jobForm.title || 'Position'}`}
+          className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+        />
+      </div>
+    </div>
+  )}
+
+  {/* WhatsApp Input */}
+  {applicationType === 'whatsapp' && (
+    <div className="space-y-1">
+      <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">WhatsApp Number</label>
+      <input 
+        type="text" 
+        value={jobForm.url}
+        onChange={(e) => setJobForm(prev => ({ ...prev, url: e.target.value }))}
+        placeholder="+255 612 345 678"
+        className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-green-500 transition-colors"
+      />
+      <p className="text-[8px] text-gray-500 font-mono mt-1">Applicants will open WhatsApp to contact you</p>
+    </div>
+  )}
+
+  {/* Instructions Input */}
+  {applicationType === 'instructions' && (
+    <div className="space-y-1">
+      <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Application Instructions</label>
+      <textarea
+        value={jobForm.url}
+        onChange={(e) => setJobForm(prev => ({ ...prev, url: e.target.value }))}
+        placeholder="Submit your application to the Secretary's Office at Morning Star School, P.O. Box 123, Dar es Salaam..."
+        className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-violet-500 transition-colors h-20 resize-none"
+      />
+      <p className="text-[8px] text-gray-500 font-mono mt-1">These instructions will be shown to applicants</p>
+    </div>
+  )}
+</div>
+
+
 
                 <div className="space-y-1">
                   <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Job Expiry Date</label>
