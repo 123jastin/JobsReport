@@ -749,7 +749,7 @@ const handleEditJob = (job: RawJob) => {
     setJobFiles([]);
     setIsCreatingNewCompanyInline(false);
   };
-  
+
 const handleIngestJob = async (e: FormEvent) => {
     e.preventDefault();
     
@@ -831,11 +831,26 @@ const handleIngestJob = async (e: FormEvent) => {
         uploadedFiles.push(fileData);
       }
 
-      // Build application URL
-      let applyUrl = jobForm.url;
-      if (applicationType === 'email' && applyUrl && !applyUrl.startsWith('mailto:')) {
-        applyUrl = `mailto:${applyUrl}`;
-        if (jobForm.companyNewUrl) applyUrl += `?subject=${encodeURIComponent(jobForm.companyNewUrl)}`;
+      // 🔥 Build application URL based on type
+      let applyUrl = '';
+      let whatsapp_number = '';
+      let application_instructions = '';
+
+      if (applicationType === 'url') {
+        applyUrl = jobForm.url;
+      } else if (applicationType === 'email') {
+        applyUrl = jobForm.url && !jobForm.url.startsWith('mailto:') 
+          ? `mailto:${jobForm.url}` 
+          : jobForm.url;
+        if (jobForm.companyNewUrl) {
+          applyUrl += `?subject=${encodeURIComponent(jobForm.companyNewUrl)}`;
+        }
+      } else if (applicationType === 'whatsapp') {
+        whatsapp_number = jobForm.url; // Store WhatsApp number
+        applyUrl = ''; // No URL for WhatsApp
+      } else if (applicationType === 'instructions') {
+        application_instructions = jobForm.url; // Store instructions text
+        applyUrl = ''; // No URL for instructions-only
       }
 
       const apiUrl = editingJobId ? `/api/admin/jobs/${editingJobId}` : '/api/admin/jobs';
@@ -874,6 +889,9 @@ const handleIngestJob = async (e: FormEvent) => {
           country: schemaData.country || 'Tanzania',
           postcode: schemaData.postcode || '',
           canonical_url: schemaData.canonical_url || '',
+          // 🔥 New application fields
+          whatsapp_number: whatsapp_number,
+          application_instructions: application_instructions,
           images: uploadedFiles
         })
       });
@@ -907,7 +925,8 @@ const handleIngestJob = async (e: FormEvent) => {
             education_level: 'Any', experience_months: 0, skills: [], benefits: [],
             salary_min: null, salary_max: null, salary_currency: 'TZS',
             street_address: '', city: '', region: '', country: 'Tanzania', postcode: '',
-            slug: '', canonical_url: ''
+            slug: '', canonical_url: '',
+            whatsapp_number: '', application_instructions: ''
           });
           setIsCreatingNewCompanyInline(false);
           setJobFiles([]);
@@ -926,6 +945,8 @@ const handleIngestJob = async (e: FormEvent) => {
       setIsDraft(false);
     }
   };
+
+
 
 
 
