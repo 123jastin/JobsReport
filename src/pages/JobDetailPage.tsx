@@ -161,7 +161,7 @@ export default function JobDetailPage() {
           <div className="min-w-0">
             {/* 🔥 CLICKABLE COMPANY NAME - Links to company page with all jobs */}
             <button
-              onClick={() => navigate(`/companies?company=${encodeURIComponent(job.company)}`)}
+           onClick={() => navigate(`/companies/${job.company.toLowerCase().replace(/\s+/g, '-')}`)}
               className="text-sm font-bold text-white hover:text-blue-400 transition-colors text-left"
               title={`View all ${job.company} jobs`}
             >
