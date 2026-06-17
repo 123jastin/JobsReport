@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import SEO from '../components/SEO';
 import AdBanner from '../components/AdBanner';
 import {
@@ -15,6 +15,7 @@ export default function JobDetailPage() {
   const [allJobs, setAllJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { triggerRedirect } = useCareerRedirect();
+  const navigate = useNavigate();
   
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerIndex, setViewerIndex] = useState(0);
@@ -158,7 +159,14 @@ export default function JobDetailPage() {
             {job.logoUrl ? <img src={job.logoUrl} alt={job.company} className="w-full h-full object-cover rounded-xl" referrerPolicy="no-referrer" /> : <div className="w-full h-full bg-gradient-to-br from-blue-600 to-violet-600 flex items-center justify-center text-white font-bold text-lg">{job.company?.charAt(0)?.toUpperCase()||'?'}</div>}
           </div>
           <div className="min-w-0">
-            <h2 className="text-sm font-bold text-white">{job.company}</h2>
+            {/* 🔥 CLICKABLE COMPANY NAME - Links to company page with all jobs */}
+            <button
+              onClick={() => navigate(`/companies?company=${encodeURIComponent(job.company)}`)}
+              className="text-sm font-bold text-white hover:text-blue-400 transition-colors text-left"
+              title={`View all ${job.company} jobs`}
+            >
+              {job.company}
+            </button>
             {job.companyWebsite ? <a href={job.companyWebsite} target="_blank" rel="noopener noreferrer" className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors"><Globe size={11} />{(()=>{try{return new URL(job.companyWebsite).hostname.replace('www.','')}catch{return'Company Website'}})()}<ExternalLink size={10} /></a> : <span className="text-[11px] text-gray-600">No website listed</span>}
           </div>
         </div>
@@ -209,7 +217,7 @@ export default function JobDetailPage() {
         </a>
       </div>
 
-      {/* ATTACHMENTS - Moved above Job Description */}
+      {/* ATTACHMENTS */}
       {hasFiles && (
         <div className="px-4 py-6 border-b border-white/5">
           <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2"><Eye size={16} className="text-blue-400" /> Attachments ({job.images.length})</h3>
