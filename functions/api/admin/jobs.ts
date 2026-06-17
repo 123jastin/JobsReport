@@ -41,30 +41,21 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       companyResult = { id: companyId };
     }
 
-    // 🔥 SAVE LOCATION FOR THIS JOB (every job gets its own location record)
+    // Save location
     const locationName = body.city?.trim() || body.location?.trim() || '';
     if (locationName && locationName !== 'Remote') {
-      const locationId = 'loc-' + id; // Uses job ID as basis for location ID
-      
+      const locationId = 'loc-' + id;
       await DB.prepare(
         `INSERT OR REPLACE INTO locations (id, name, region, country, postcode, street_address) 
          VALUES (?, ?, ?, ?, ?, ?)`
-      ).bind(
-        locationId,
-        locationName,
-        body.region?.trim() || '',
-        body.country?.trim() || 'Tanzania',
-        body.postcode?.trim() || '',
-        body.street_address?.trim() || ''
-      ).run();
-      
+      ).bind(locationId, locationName, body.region?.trim() || '', body.country?.trim() || 'Tanzania', body.postcode?.trim() || '', body.street_address?.trim() || '').run();
       console.log(`📍 Location saved for job ${id}: ${locationName}`);
     }
 
     const canonicalUrl = body.canonical_url || 
       `https://jobsreport.online/market/${body.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${id}`;
 
-    // Insert job (27 columns)
+    // Insert job (29 columns - added whatsapp_number + application_instructions)
     await DB.prepare(`
       INSERT INTO jobs (
         id, title, role_id, company_id, location, apply_url, salary,
@@ -72,9 +63,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         job_category, industry, employment_type, workplace_type,
         education_level, experience_months, skills, benefits,
         salary_min, salary_max, salary_currency,
-        street_address, city, region, postcode, canonical_url
+        street_address, city, region, postcode, canonical_url,
+        whatsapp_number, application_instructions
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       id, body.title?.trim(), roleResult.id, companyResult.id,
       body.location || 'Remote', body.url || '', body.salary || '',
@@ -89,7 +81,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       body.salary_min || null, body.salary_max || null,
       body.salary_currency || 'TZS',
       body.street_address || '', body.city || '', body.region || '',
-      body.postcode || '', canonicalUrl
+      body.postcode || '', canonicalUrl,
+      body.whatsapp_number || '', body.application_instructions || ''
     ).run();
 
     // Save files
@@ -123,6 +116,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       city: body.city || '', region: body.region || '',
       country: body.country || 'Tanzania', postcode: body.postcode || '',
       canonical_url: canonicalUrl,
+      whatsapp_number: body.whatsapp_number || '',
+      application_instructions: body.application_instructions || '',
       postedAt: new Date().toISOString().split('T')[0], expiresAt: body.expiresAt || '',
       active: body.is_active !== undefined ? body.is_active === 1 : true,
       images: savedFiles
@@ -160,23 +155,13 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       companyResult = { id: companyId };
     }
 
-    // 🔥 SAVE/UPDATE LOCATION FOR THIS JOB (every job gets its own location record)
     const locationName = body.city?.trim() || body.location?.trim() || '';
     if (locationName && locationName !== 'Remote') {
       const locationId = 'loc-' + id;
-      
       await DB.prepare(
         `INSERT OR REPLACE INTO locations (id, name, region, country, postcode, street_address) 
          VALUES (?, ?, ?, ?, ?, ?)`
-      ).bind(
-        locationId,
-        locationName,
-        body.region?.trim() || '',
-        body.country?.trim() || 'Tanzania',
-        body.postcode?.trim() || '',
-        body.street_address?.trim() || ''
-      ).run();
-      
+      ).bind(locationId, locationName, body.region?.trim() || '', body.country?.trim() || 'Tanzania', body.postcode?.trim() || '', body.street_address?.trim() || '').run();
       console.log(`📍 Location updated for job ${id}: ${locationName}`);
     }
 
@@ -187,7 +172,8 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         job_category = ?, industry = ?, employment_type = ?, workplace_type = ?,
         education_level = ?, experience_months = ?, skills = ?, benefits = ?,
         salary_min = ?, salary_max = ?, salary_currency = ?,
-        street_address = ?, city = ?, region = ?, postcode = ?, canonical_url = ?
+        street_address = ?, city = ?, region = ?, postcode = ?, canonical_url = ?,
+        whatsapp_number = ?, application_instructions = ?
       WHERE id = ?
     `).bind(
       body.title?.trim(), roleResult.id, companyResult.id,
@@ -201,7 +187,9 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       body.salary_min || null, body.salary_max || null,
       body.salary_currency || 'TZS',
       body.street_address || '', body.city || '', body.region || '',
-      body.postcode || '', body.canonical_url || '', id
+      body.postcode || '', body.canonical_url || '',
+      body.whatsapp_number || '', body.application_instructions || '',
+      id
     ).run();
 
     await DB.prepare('DELETE FROM job_images WHERE job_id = ?').bind(id).run();
@@ -229,6 +217,8 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       street_address: body.street_address || '',
       city: body.city || '', region: body.region || '',
       postcode: body.postcode || '', canonical_url: body.canonical_url || '',
+      whatsapp_number: body.whatsapp_number || '',
+      application_instructions: body.application_instructions || '',
       postedAt: new Date().toISOString().split('T')[0], expiresAt: body.expiresAt || '',
       active: body.is_active !== undefined ? body.is_active === 1 : true, images: savedFiles
     }), { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
@@ -248,7 +238,6 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
   const pathParts = url.pathname.split('/');
   const id = pathParts[pathParts.length - 1];
   try {
-    // Delete associated location
     await DB.prepare('DELETE FROM locations WHERE id = ?').bind('loc-' + id).run();
     await DB.prepare('DELETE FROM job_images WHERE job_id = ?').bind(id).run();
     await DB.prepare('DELETE FROM jobs WHERE id = ?').bind(id).run();
