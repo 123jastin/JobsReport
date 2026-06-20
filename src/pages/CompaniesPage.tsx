@@ -33,6 +33,7 @@ interface Job {
   salary: string;
   active: boolean;
   expiresAt?: string;
+  postedAt?: string;
 }
 
 export default function CompaniesPage() {
@@ -113,61 +114,92 @@ export default function CompaniesPage() {
     ? `https://jobsreport.online/companies/${getCompanySlug(selectedCompany.name)}`
     : 'https://jobsreport.online/companies';
 
-  // ✅ Enhanced structured data
+  // ✅ Proper Organization Schema
   const structuredData = selectedCompany ? {
     "@context": "https://schema.org",
-    "@type": "CollectionPage",
-    "name": pageTitle,
-    "description": selectedCompany.description || pageDescription,
-    "url": canonicalUrl,
-    "isPartOf": { "@type": "WebSite", "name": "JobsReport", "url": "https://jobsreport.online" },
-    "about": {
-      "@type": "Organization",
-      "name": selectedCompany.name,
-      "url": selectedCompany.url || canonicalUrl,
-      "logo": selectedCompany.logoUrl || undefined,
-      "description": selectedCompany.description || undefined,
-      "address": (selectedCompany.streetAddress || selectedCompany.locality) ? {
-        "@type": "PostalAddress",
-        "streetAddress": selectedCompany.streetAddress || undefined,
-        "addressLocality": selectedCompany.locality || undefined,
-        "addressRegion": selectedCompany.district || undefined,
-        "postalCode": selectedCompany.postalCode || undefined,
-        "addressCountry": selectedCompany.country || undefined
-      } : undefined,
-      "numberOfEmployees": selectedCompany.employeeCount || undefined,
-      "foundingDate": selectedCompany.foundedYear || undefined
+    "@type": "Organization",
+    "name": selectedCompany.name,
+    "url": selectedCompany.url || canonicalUrl,
+    "logo": selectedCompany.logoUrl || undefined,
+    "description": selectedCompany.description || undefined,
+    "foundingDate": selectedCompany.foundedYear || undefined,
+    "numberOfEmployees": selectedCompany.employeeCount ? {
+      "@type": "QuantitativeValue",
+      "value": selectedCompany.employeeCount
+    } : undefined,
+    "address": (selectedCompany.streetAddress || selectedCompany.locality) ? {
+      "@type": "PostalAddress",
+      "streetAddress": selectedCompany.streetAddress || undefined,
+      "addressLocality": selectedCompany.locality || undefined,
+      "addressRegion": selectedCompany.district || undefined,
+      "postalCode": selectedCompany.postalCode || undefined,
+      "addressCountry": selectedCompany.country || undefined
+    } : undefined,
+    "areaServed": selectedCompany.country ? {
+      "@type": "Country",
+      "name": selectedCompany.country === 'TZ' ? 'Tanzania' : 
+             selectedCompany.country === 'KE' ? 'Kenya' :
+             selectedCompany.country === 'UG' ? 'Uganda' :
+             selectedCompany.country === 'RW' ? 'Rwanda' :
+             selectedCompany.country
+    } : undefined,
+    "knowsAbout": selectedCompany.industry || undefined,
+    "mainEntityOfPage": {
+      "@type": "WebPage",
+      "@id": canonicalUrl
     },
-    "mainEntity": {
-      "@type": "ItemList",
-      "numberOfItems": getCompanyJobs(selectedCompany.name).length,
-      "itemListElement": getCompanyJobs(selectedCompany.name).slice(0, 20).map((job, index) => ({
-        "@type": "ListItem",
-        "position": index + 1,
-        "url": `https://jobsreport.online/market/${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${job.id}`,
-        "name": job.title
-      }))
-    }
+    "potentialAction": getCompanyJobs(selectedCompany.name).filter(j => j.active).length > 0 ? {
+      "@type": "ViewAction",
+      "target": {
+        "@type": "EntryPoint",
+        "urlTemplate": `${canonicalUrl}#jobs`,
+        "actionPlatform": [
+          "http://schema.org/DesktopWebPlatform",
+          "http://schema.org/MobileWebPlatform"
+        ]
+      },
+      "name": `View ${getCompanyJobs(selectedCompany.name).filter(j => j.active).length} active jobs at ${selectedCompany.name}`
+    } : undefined,
+    "makesOffer": getCompanyJobs(selectedCompany.name).filter(j => j.active).length > 0 ? 
+      getCompanyJobs(selectedCompany.name).filter(j => j.active).slice(0, 10).map((job) => ({
+        "@type": "JobPosting",
+        "title": job.title,
+        "datePosted": job.postedAt || undefined,
+        "validThrough": job.expiresAt || undefined,
+        "url": `https://jobsreport.online/market/${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${job.id}`,
+        "employmentType": "FULL_TIME",
+        "hiringOrganization": {
+          "@type": "Organization",
+          "name": selectedCompany.name,
+          "sameAs": selectedCompany.url || canonicalUrl
+        },
+        "jobLocation": {
+          "@type": "Place",
+          "address": {
+            "@type": "PostalAddress",
+            "addressLocality": job.location || selectedCompany.locality || undefined,
+            "addressCountry": selectedCompany.country || undefined
+          }
+        }
+      })) : undefined
   } : {
     "@context": "https://schema.org",
-    "@type": "CollectionPage",
+    "@type": "ItemList",
     "name": pageTitle,
     "description": pageDescription,
     "url": canonicalUrl,
-    "isPartOf": { "@type": "WebSite", "name": "JobsReport", "url": "https://jobsreport.online" },
-    "mainEntity": {
-      "@type": "ItemList",
-      "numberOfItems": companies.length,
-      "itemListElement": companies.map((company, index) => ({
-        "@type": "ListItem", "position": index + 1,
-        "item": {
-          "@type": "Organization", "name": company.name,
-          "url": company.url || `https://jobsreport.online/companies/${getCompanySlug(company.name)}`,
-          "logo": company.logoUrl || undefined,
-          "description": `${company.name} - Hiring ${getCompanyJobs(company.name).filter(j => j.active).length} active job(s).`
-        }
-      }))
-    }
+    "numberOfItems": companies.length,
+    "itemListElement": companies.map((company, index) => ({
+      "@type": "ListItem",
+      "position": index + 1,
+      "item": {
+        "@type": "Organization",
+        "name": company.name,
+        "url": company.url || `https://jobsreport.online/companies/${getCompanySlug(company.name)}`,
+        "logo": company.logoUrl || undefined,
+        "description": `${company.name} - ${getCompanyJobs(company.name).filter(j => j.active).length} active job(s) in ${company.industry || 'various industries'}.`
+      }
+    }))
   };
 
   // In-Feed Ads
@@ -283,7 +315,7 @@ export default function CompaniesPage() {
           </div>
         )}
 
-        {/* ✅ Selected Company Detail View - ENHANCED */}
+        {/* Selected Company Detail View */}
         {selectedCompany ? (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
             <button 
@@ -337,7 +369,7 @@ export default function CompaniesPage() {
               </div>
             </div>
 
-            {/* ✅ Company Details Grid */}
+            {/* Company Details Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Location Details */}
               {(selectedCompany.streetAddress || selectedCompany.area || selectedCompany.locality || 
@@ -385,7 +417,13 @@ export default function CompaniesPage() {
                     {selectedCompany.country && (
                       <div className="flex items-center gap-2 text-sm">
                         <span className="text-gray-500 text-xs font-mono uppercase w-16 shrink-0">Country</span>
-                        <span className="text-emerald-400 font-bold">{selectedCompany.country}</span>
+                        <span className="text-emerald-400 font-bold">
+                          {selectedCompany.country === 'TZ' ? '🇹🇿 Tanzania' :
+                           selectedCompany.country === 'KE' ? '🇰🇪 Kenya' :
+                           selectedCompany.country === 'UG' ? '🇺🇬 Uganda' :
+                           selectedCompany.country === 'RW' ? '🇷🇼 Rwanda' :
+                           selectedCompany.country}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -438,15 +476,15 @@ export default function CompaniesPage() {
               )}
             </div>
 
-            {/* ✅ Company Description */}
+            {/* Company Description */}
             {selectedCompany.description && (
               <div className="p-6 bg-white/[0.01] border border-white/10 rounded-3xl">
                 <h3 className="text-xs font-extrabold text-amber-400 uppercase tracking-widest flex items-center gap-2 mb-3">
                   About {selectedCompany.name}
                 </h3>
-                <p className="text-gray-400 leading-relaxed text-sm whitespace-pre-line">
+                <div className="text-gray-400 leading-relaxed text-sm whitespace-pre-line">
                   {selectedCompany.description}
-                </p>
+                </div>
               </div>
             )}
 
@@ -454,7 +492,7 @@ export default function CompaniesPage() {
             <AdBanner key={`company-${selectedCompany.id}`} slot="1373889473" />
 
             {/* Company Jobs */}
-            <div>
+            <div id="jobs">
               <h3 className="text-lg font-bold text-white uppercase tracking-widest mb-4 flex items-center gap-3">
                 <div className="w-1.5 h-6 bg-blue-500"></div>
                 Job Openings ({getCompanyJobs(selectedCompany.name).length})
@@ -502,7 +540,7 @@ export default function CompaniesPage() {
             </div>
           </motion.div>
         ) : (
-          /* Companies Grid (unchanged) */
+          /* Companies Grid */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredCompanies.map((company, idx: number) => {
               const elements = [];
