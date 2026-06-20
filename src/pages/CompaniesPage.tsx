@@ -1,15 +1,27 @@
 import { useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Building2, Globe, MapPin, Briefcase, ExternalLink, ArrowRight, Search } from 'lucide-react';
+import { Building2, Globe, MapPin, Briefcase, ExternalLink, ArrowRight, Search, Clock, Users } from 'lucide-react';
 import SEO from '../components/SEO';
 import AdBanner from '../components/AdBanner';
 
+// ✅ Updated Company interface
 interface Company {
   id: string;
   name: string;
   url: string;
-  logoUrl: string;
+  logoUrl?: string;
+  description?: string;
+  streetAddress?: string;
+  area?: string;
+  locality?: string;
+  district?: string;
+  postalCode?: string;
+  postalArea?: string;
+  country?: string;
+  industry?: string;
+  foundedYear?: string;
+  employeeCount?: string;
 }
 
 interface Job {
@@ -30,7 +42,6 @@ export default function CompaniesPage() {
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   
-  // 🔥 Read company from URL: /companies/simba-cement
   const { companyName } = useParams<{ companyName?: string }>();
 
   useEffect(() => {
@@ -60,7 +71,6 @@ export default function CompaniesPage() {
     fetchData();
   }, []);
 
-  // 🔥 Auto-select company from URL parameter
   useEffect(() => {
     if (companyName && companies.length > 0) {
       const found = companies.find(c => 
@@ -89,10 +99,8 @@ export default function CompaniesPage() {
     company.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Generate company slug for URLs
   const getCompanySlug = (name: string) => name.toLowerCase().replace(/\s+/g, '-');
 
-  // SEO title for company detail page
   const pageTitle = selectedCompany 
     ? `${selectedCompany.name} Jobs & Careers | Browse ${selectedCompany.name} Vacancies | JobsReport`
     : 'Companies & Employers | Browse Top Hiring Companies | JobsReport';
@@ -105,18 +113,30 @@ export default function CompaniesPage() {
     ? `https://jobsreport.online/companies/${getCompanySlug(selectedCompany.name)}`
     : 'https://jobsreport.online/companies';
 
+  // ✅ Enhanced structured data
   const structuredData = selectedCompany ? {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
     "name": pageTitle,
-    "description": pageDescription,
+    "description": selectedCompany.description || pageDescription,
     "url": canonicalUrl,
     "isPartOf": { "@type": "WebSite", "name": "JobsReport", "url": "https://jobsreport.online" },
     "about": {
       "@type": "Organization",
       "name": selectedCompany.name,
       "url": selectedCompany.url || canonicalUrl,
-      "logo": selectedCompany.logoUrl || undefined
+      "logo": selectedCompany.logoUrl || undefined,
+      "description": selectedCompany.description || undefined,
+      "address": (selectedCompany.streetAddress || selectedCompany.locality) ? {
+        "@type": "PostalAddress",
+        "streetAddress": selectedCompany.streetAddress || undefined,
+        "addressLocality": selectedCompany.locality || undefined,
+        "addressRegion": selectedCompany.district || undefined,
+        "postalCode": selectedCompany.postalCode || undefined,
+        "addressCountry": selectedCompany.country || undefined
+      } : undefined,
+      "numberOfEmployees": selectedCompany.employeeCount || undefined,
+      "foundingDate": selectedCompany.foundedYear || undefined
     },
     "mainEntity": {
       "@type": "ItemList",
@@ -150,7 +170,7 @@ export default function CompaniesPage() {
     }
   };
 
-  // 🔥 In-Feed Ads
+  // In-Feed Ads
   const InFeedAd1 = () => (
     <div className="p-4 rounded-3xl border border-white/5" style={{ background: 'transparent' }}>
       <ins className="adsbygoogle"
@@ -247,7 +267,7 @@ export default function CompaniesPage() {
           </div>
         </div>
 
-        {/* 🔥 Top Display Ad */}
+        {/* Top Display Ad */}
         <AdBanner key="companies-top" slot="4550717155" />
 
         {/* Search (only show when not viewing a specific company) */}
@@ -263,7 +283,7 @@ export default function CompaniesPage() {
           </div>
         )}
 
-        {/* Selected Company Detail View */}
+        {/* ✅ Selected Company Detail View - ENHANCED */}
         {selectedCompany ? (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
             <button 
@@ -276,8 +296,9 @@ export default function CompaniesPage() {
               ← Back to All Companies
             </button>
 
+            {/* Company Header Card */}
             <div className="p-8 bg-white/[0.01] border border-white/10 rounded-3xl">
-              <div className="flex items-start gap-6">
+              <div className="flex flex-col md:flex-row items-start gap-6">
                 <div className="w-20 h-20 rounded-2xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
                   {selectedCompany.logoUrl ? (
                     <img src={selectedCompany.logoUrl} alt={selectedCompany.name} className="w-full h-full object-cover rounded-2xl" referrerPolicy="no-referrer" />
@@ -285,28 +306,151 @@ export default function CompaniesPage() {
                     <div className="w-full h-full bg-gradient-to-br from-blue-600 to-violet-600 flex items-center justify-center text-white font-bold text-2xl">{selectedCompany.name.charAt(0)?.toUpperCase()}</div>
                   )}
                 </div>
-                <div className="flex-1">
-                  <h2 className="text-2xl font-bold text-white mb-2">{selectedCompany.name}</h2>
-                  {selectedCompany.url && (
-                    <a href={selectedCompany.url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1.5 transition-colors">
-                      <Globe size={14} />
-                      {(() => { try { return new URL(selectedCompany.url).hostname.replace('www.', ''); } catch { return 'Company Website'; } })()}
-                      <ExternalLink size={12} />
-                    </a>
-                  )}
-                  <div className="flex gap-4 mt-3">
-                    <span className="text-[10px] text-gray-400">
+                <div className="flex-1 space-y-3">
+                  <div>
+                    <h2 className="text-2xl font-bold text-white mb-1">{selectedCompany.name}</h2>
+                    {selectedCompany.industry && (
+                      <span className="text-sm text-violet-400 font-bold">{selectedCompany.industry}</span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-4 text-xs text-gray-400">
+                    <span>
                       <span className="text-white font-bold">{getCompanyJobs(selectedCompany.name).filter(j => j.active).length}</span> active jobs
                     </span>
-                    <span className="text-[10px] text-gray-400">
+                    <span>
                       <span className="text-white font-bold">{getCompanyJobs(selectedCompany.name).length}</span> total listings
                     </span>
+                    {selectedCompany.foundedYear && (
+                      <span className="flex items-center gap-1">
+                        <Clock size={12} className="text-gray-500" />
+                        Founded <span className="text-white font-bold">{selectedCompany.foundedYear}</span>
+                      </span>
+                    )}
+                    {selectedCompany.employeeCount && (
+                      <span className="flex items-center gap-1">
+                        <Users size={12} className="text-gray-500" />
+                        <span className="text-white font-bold">{selectedCompany.employeeCount}</span> employees
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* 🔥 Ad inside company view */}
+            {/* ✅ Company Details Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Location Details */}
+              {(selectedCompany.streetAddress || selectedCompany.area || selectedCompany.locality || 
+                selectedCompany.district || selectedCompany.postalCode || selectedCompany.country) && (
+                <div className="p-6 bg-white/[0.01] border border-white/10 rounded-3xl">
+                  <h3 className="text-xs font-extrabold text-emerald-400 uppercase tracking-widest flex items-center gap-2 mb-4">
+                    <MapPin size={14} /> Location
+                  </h3>
+                  <div className="space-y-2.5">
+                    {selectedCompany.streetAddress && (
+                      <div className="flex items-start gap-2 text-sm">
+                        <span className="text-gray-500 text-xs font-mono uppercase w-16 shrink-0 mt-0.5">Street</span>
+                        <span className="text-stone-300">{selectedCompany.streetAddress}</span>
+                      </div>
+                    )}
+                    {selectedCompany.area && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-gray-500 text-xs font-mono uppercase w-16 shrink-0">Area</span>
+                        <span className="text-stone-300">{selectedCompany.area}</span>
+                      </div>
+                    )}
+                    {selectedCompany.locality && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-gray-500 text-xs font-mono uppercase w-16 shrink-0">City</span>
+                        <span className="text-stone-300">{selectedCompany.locality}</span>
+                      </div>
+                    )}
+                    {selectedCompany.district && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-gray-500 text-xs font-mono uppercase w-16 shrink-0">District</span>
+                        <span className="text-stone-300">{selectedCompany.district}</span>
+                      </div>
+                    )}
+                    {selectedCompany.postalCode && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-gray-500 text-xs font-mono uppercase w-16 shrink-0">Postal</span>
+                        <span className="text-stone-300">
+                          {selectedCompany.postalCode}
+                          {selectedCompany.postalArea && (
+                            <span className="text-gray-500 text-xs"> ({selectedCompany.postalArea})</span>
+                          )}
+                        </span>
+                      </div>
+                    )}
+                    {selectedCompany.country && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-gray-500 text-xs font-mono uppercase w-16 shrink-0">Country</span>
+                        <span className="text-emerald-400 font-bold">{selectedCompany.country}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Business Info */}
+              {(selectedCompany.url || selectedCompany.industry || selectedCompany.foundedYear || 
+                selectedCompany.employeeCount) && (
+                <div className="p-6 bg-white/[0.01] border border-white/10 rounded-3xl">
+                  <h3 className="text-xs font-extrabold text-blue-400 uppercase tracking-widest flex items-center gap-2 mb-4">
+                    <Briefcase size={14} /> Business Info
+                  </h3>
+                  <div className="space-y-2.5">
+                    {selectedCompany.url && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-gray-500 text-xs font-mono uppercase w-16 shrink-0">Website</span>
+                        <a 
+                          href={selectedCompany.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="text-blue-400 hover:text-blue-300 flex items-center gap-1.5 transition-colors"
+                        >
+                          <Globe size={14} />
+                          {(() => { try { return new URL(selectedCompany.url).hostname.replace('www.', ''); } catch { return 'Company Website'; } })()}
+                          <ExternalLink size={12} />
+                        </a>
+                      </div>
+                    )}
+                    {selectedCompany.industry && (
+                      <div className="flex items-start gap-2 text-sm">
+                        <span className="text-gray-500 text-xs font-mono uppercase w-16 shrink-0 mt-0.5">Industry</span>
+                        <span className="text-violet-400 font-bold">{selectedCompany.industry}</span>
+                      </div>
+                    )}
+                    {selectedCompany.foundedYear && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-gray-500 text-xs font-mono uppercase w-16 shrink-0">Founded</span>
+                        <span className="text-stone-300">{selectedCompany.foundedYear}</span>
+                      </div>
+                    )}
+                    {selectedCompany.employeeCount && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-gray-500 text-xs font-mono uppercase w-16 shrink-0">Employees</span>
+                        <span className="text-stone-300">{selectedCompany.employeeCount}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ✅ Company Description */}
+            {selectedCompany.description && (
+              <div className="p-6 bg-white/[0.01] border border-white/10 rounded-3xl">
+                <h3 className="text-xs font-extrabold text-amber-400 uppercase tracking-widest flex items-center gap-2 mb-3">
+                  About {selectedCompany.name}
+                </h3>
+                <p className="text-gray-400 leading-relaxed text-sm whitespace-pre-line">
+                  {selectedCompany.description}
+                </p>
+              </div>
+            )}
+
+            {/* Ad inside company view */}
             <AdBanner key={`company-${selectedCompany.id}`} slot="1373889473" />
 
             {/* Company Jobs */}
@@ -358,7 +502,7 @@ export default function CompaniesPage() {
             </div>
           </motion.div>
         ) : (
-          /* Companies Grid */
+          /* Companies Grid (unchanged) */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredCompanies.map((company, idx: number) => {
               const elements = [];
