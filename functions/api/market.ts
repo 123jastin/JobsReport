@@ -47,6 +47,17 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         j.whatsapp_number, j.application_instructions,
         r.name as role,
         c.name as company, c.logo_url, c.website,
+        c.description as company_description,
+        c.street_address as company_street_address,
+        c.area as company_area,
+        c.locality as company_locality,
+        c.district as company_district,
+        c.postal_code as company_postal_code,
+        c.postal_area as company_postal_area,
+        c.country as company_country,
+        c.industry as company_industry,
+        c.founded_year as company_founded_year,
+        c.employee_count as company_employee_count,
         j.location, j.apply_url, j.salary,
         j.posted_at, j.expires_at, j.is_active
       FROM jobs j
@@ -85,6 +96,19 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           company: job.company,
           logoUrl: job.logo_url || '',
           companyWebsite: job.website || '',
+          // ✅ Company detail fields
+          companyDescription: job.company_description || '',
+          companyStreetAddress: job.company_street_address || '',
+          companyArea: job.company_area || '',
+          companyLocality: job.company_locality || '',
+          companyDistrict: job.company_district || '',
+          companyPostalCode: job.company_postal_code || '',
+          companyPostalArea: job.company_postal_area || '',
+          companyCountry: job.company_country || 'TZ',
+          companyIndustry: job.company_industry || '',
+          companyFoundedYear: job.company_founded_year || '',
+          companyEmployeeCount: job.company_employee_count || '',
+          // Job location fields
           street_address: job.street_address || '',
           city: job.city || '',
           region: job.region || '',
@@ -122,15 +146,40 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     // 🔥 Separate active jobs for listings
     const activeJobs = jobs.filter(j => j.active);
 
-    // Get roles, companies, activity
+    // Get roles
     const rolesResult = await DB.prepare('SELECT name FROM roles ORDER BY name').all();
     const roles = rolesResult.results.map((r: any) => r.name);
 
-    const companiesResult = await DB.prepare('SELECT id, name, logo_url, website FROM companies ORDER BY name').all();
+    // ✅ Get companies with ALL new fields
+    const companiesResult = await DB.prepare(`
+      SELECT 
+        id, name, logo_url, website,
+        description, street_address, area, locality, district,
+        postal_code, postal_area, country, industry,
+        founded_year, employee_count
+      FROM companies 
+      ORDER BY name
+    `).all();
+    
     const companies = companiesResult.results.map((c: any) => ({
-      id: c.id, name: c.name, logoUrl: c.logo_url || '', url: c.website || ''
+      id: c.id,
+      name: c.name,
+      logoUrl: c.logo_url || '',
+      url: c.website || '',
+      description: c.description || '',
+      streetAddress: c.street_address || '',
+      area: c.area || '',
+      locality: c.locality || '',
+      district: c.district || '',
+      postalCode: c.postal_code || '',
+      postalArea: c.postal_area || '',
+      country: c.country || 'TZ',
+      industry: c.industry || '',
+      foundedYear: c.founded_year || '',
+      employeeCount: c.employee_count || ''
     }));
 
+    // Get recent activity
     const activityResult = await DB.prepare(`
       SELECT j.id, j.title, c.name as company, j.posted_at
       FROM jobs j JOIN companies c ON j.company_id = c.id
@@ -140,11 +189,13 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       id: a.id, action: 'Job Ingested', details: `${a.title} at ${a.company}`, timestamp: a.posted_at
     }));
 
+    // Get categories
     const categoriesResult = await DB.prepare(
       "SELECT DISTINCT job_category FROM jobs WHERE job_category != '' AND job_category != 'Other' AND is_active = 1"
     ).all();
     const jobCategories = categoriesResult.results.map((c: any) => c.job_category);
 
+    // Get workplace types
     const workplaceResult = await DB.prepare(
       "SELECT DISTINCT workplace_type FROM jobs WHERE workplace_type != '' AND is_active = 1"
     ).all();
@@ -162,15 +213,26 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         totalRoles: roles.length
       }
     }), {
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-cache' }
+      headers: { 
+        'Content-Type': 'application/json', 
+        'Access-Control-Allow-Origin': '*', 
+        'Cache-Control': 'no-cache' 
+      }
     });
 
   } catch (err) {
     console.error('Market API Error:', err);
     return new Response(JSON.stringify({
-      jobs: [], activeJobs: [], roles: [], companies: [], recentActivity: [], jobCategories: [], workplaceTypes: [], currencies: [],
+      jobs: [], activeJobs: [], roles: [], companies: [], recentActivity: [], 
+      jobCategories: [], workplaceTypes: [], currencies: [],
       stats: { totalJobs: 0, activeJobs: 0, totalCompanies: 0, totalRoles: 0 },
       error: err instanceof Error ? err.message : 'Failed to load market data'
-    }), { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+    }), { 
+      status: 200, 
+      headers: { 
+        'Content-Type': 'application/json', 
+        'Access-Control-Allow-Origin': '*' 
+      } 
+    });
   }
 };
