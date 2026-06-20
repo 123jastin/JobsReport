@@ -25,6 +25,17 @@ export interface Company {
   name: string;
   url: string;
   logoUrl?: string;
+  description?: string;
+  streetAddress?: string;
+  area?: string;
+  locality?: string;
+  district?: string;
+  postalCode?: string;
+  postalArea?: string;
+  country?: string;
+  industry?: string;
+  foundedYear?: string;
+  employeeCount?: string;
 }
 
 export interface Report {
