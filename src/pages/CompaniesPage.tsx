@@ -5,7 +5,6 @@ import { Building2, Globe, MapPin, Briefcase, ExternalLink, ArrowRight, Search, 
 import SEO from '../components/SEO';
 import AdBanner from '../components/AdBanner';
 
-// ✅ Updated Company interface
 interface Company {
   id: string;
   name: string;
@@ -33,7 +32,6 @@ interface Job {
   salary: string;
   active: boolean;
   expiresAt?: string;
-  postedAt?: string;
 }
 
 export default function CompaniesPage() {
@@ -114,13 +112,14 @@ export default function CompaniesPage() {
     ? `https://jobsreport.online/companies/${getCompanySlug(selectedCompany.name)}`
     : 'https://jobsreport.online/companies';
 
-  // ✅ Proper Organization Schema
+  // ✅ Clean Organization Schema (no JobPosting duplication, no invalid integers)
   const structuredData = selectedCompany ? {
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": selectedCompany.name,
     "url": selectedCompany.url || canonicalUrl,
     "logo": selectedCompany.logoUrl || undefined,
+    "image": selectedCompany.logoUrl || undefined,
     "description": selectedCompany.description || undefined,
     "foundingDate": selectedCompany.foundedYear || undefined,
     "numberOfEmployees": selectedCompany.employeeCount ? {
@@ -147,41 +146,7 @@ export default function CompaniesPage() {
     "mainEntityOfPage": {
       "@type": "WebPage",
       "@id": canonicalUrl
-    },
-    "potentialAction": getCompanyJobs(selectedCompany.name).filter(j => j.active).length > 0 ? {
-      "@type": "ViewAction",
-      "target": {
-        "@type": "EntryPoint",
-        "urlTemplate": `${canonicalUrl}#jobs`,
-        "actionPlatform": [
-          "http://schema.org/DesktopWebPlatform",
-          "http://schema.org/MobileWebPlatform"
-        ]
-      },
-      "name": `View ${getCompanyJobs(selectedCompany.name).filter(j => j.active).length} active jobs at ${selectedCompany.name}`
-    } : undefined,
-    "makesOffer": getCompanyJobs(selectedCompany.name).filter(j => j.active).length > 0 ? 
-      getCompanyJobs(selectedCompany.name).filter(j => j.active).slice(0, 10).map((job) => ({
-        "@type": "JobPosting",
-        "title": job.title,
-        "datePosted": job.postedAt || undefined,
-        "validThrough": job.expiresAt || undefined,
-        "url": `https://jobsreport.online/market/${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${job.id}`,
-        "employmentType": "FULL_TIME",
-        "hiringOrganization": {
-          "@type": "Organization",
-          "name": selectedCompany.name,
-          "sameAs": selectedCompany.url || canonicalUrl
-        },
-        "jobLocation": {
-          "@type": "Place",
-          "address": {
-            "@type": "PostalAddress",
-            "addressLocality": job.location || selectedCompany.locality || undefined,
-            "addressCountry": selectedCompany.country || undefined
-          }
-        }
-      })) : undefined
+    }
   } : {
     "@context": "https://schema.org",
     "@type": "ItemList",
@@ -197,6 +162,7 @@ export default function CompaniesPage() {
         "name": company.name,
         "url": company.url || `https://jobsreport.online/companies/${getCompanySlug(company.name)}`,
         "logo": company.logoUrl || undefined,
+        "image": company.logoUrl || undefined,
         "description": `${company.name} - ${getCompanyJobs(company.name).filter(j => j.active).length} active job(s) in ${company.industry || 'various industries'}.`
       }
     }))
@@ -302,7 +268,7 @@ export default function CompaniesPage() {
         {/* Top Display Ad */}
         <AdBanner key="companies-top" slot="4550717155" />
 
-        {/* Search (only show when not viewing a specific company) */}
+        {/* Search */}
         {!selectedCompany && (
           <div className="relative">
             <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
@@ -328,7 +294,7 @@ export default function CompaniesPage() {
               ← Back to All Companies
             </button>
 
-            {/* Company Header Card */}
+            {/* Company Header */}
             <div className="p-8 bg-white/[0.01] border border-white/10 rounded-3xl">
               <div className="flex flex-col md:flex-row items-start gap-6">
                 <div className="w-20 h-20 rounded-2xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
@@ -371,7 +337,7 @@ export default function CompaniesPage() {
 
             {/* Company Details Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Location Details */}
+              {/* Location */}
               {(selectedCompany.streetAddress || selectedCompany.area || selectedCompany.locality || 
                 selectedCompany.district || selectedCompany.postalCode || selectedCompany.country) && (
                 <div className="p-6 bg-white/[0.01] border border-white/10 rounded-3xl">
@@ -488,11 +454,11 @@ export default function CompaniesPage() {
               </div>
             )}
 
-            {/* Ad inside company view */}
+            {/* Ad */}
             <AdBanner key={`company-${selectedCompany.id}`} slot="1373889473" />
 
             {/* Company Jobs */}
-            <div id="jobs">
+            <div>
               <h3 className="text-lg font-bold text-white uppercase tracking-widest mb-4 flex items-center gap-3">
                 <div className="w-1.5 h-6 bg-blue-500"></div>
                 Job Openings ({getCompanyJobs(selectedCompany.name).length})
@@ -549,11 +515,7 @@ export default function CompaniesPage() {
               const companySlug = getCompanySlug(company.name);
               
               elements.push(
-                <motion.div
-                  key={company.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                >
+                <motion.div key={company.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
                   <Link
                     to={`/companies/${companySlug}`}
                     className="p-6 bg-white/[0.01] border border-white/5 hover:border-blue-500/30 hover:bg-white/[0.02] rounded-3xl transition-all text-left group block"
