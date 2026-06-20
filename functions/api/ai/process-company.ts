@@ -55,7 +55,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   "services": ["Products or services mentioned"],
   "specialties": ["Areas of expertise"],
   "industriesServed": ["Industries they serve"],
-  "entities": ["Brands, subsidiaries, technologies, locations mentioned"],
+  "nearbyLocations": ["Nearby landmarks, cities, or regions mentioned"],
+  "keyEntities": ["Important people, brands, subsidiaries, technologies mentioned"],
   "ownership": "Public, Private, Government, or Subsidiary"
 }
 
@@ -81,19 +82,25 @@ Extract ONLY what is explicitly stated. Never invent facts.`
       facts.name = rawText.substring(0, 80).split(/[.,\n]/)[0].replace(/Company Name[:|\s]*/i, '').trim();
     }
 
-    // ========== STEP 2: Random style selection for uniqueness ==========
+    // Build location context for richer writing
+    const locationContext = [
+      facts.locality,
+      facts.district,
+      facts.area,
+      facts.country,
+      ...(facts.nearbyLocations || [])
+    ].filter(Boolean).join(', ');
+
+    // ========== STEP 2: Random encyclopedia style ==========
     const styles = [
-      "business journalism style - concise and factual",
-      "industry overview style - focusing on what the company does",
-      "corporate snapshot style - brief but comprehensive",
-      "professional directory style - clear and informative"
+      "Wikipedia-style encyclopedia entry",
+      "Britannica-style reference article",
+      "business directory factual summary",
+      "industry publication company overview"
     ];
     const randomStyle = styles[Math.floor(Math.random() * styles.length)];
 
-    // Random paragraph count (3-4)
-    const targetParagraphs = Math.floor(Math.random() * 2) + 3;
-
-    // ========== STEP 3: Generate concise narrative description ==========
+    // ========== STEP 3: Generate encyclopedia-style description ==========
     let descriptionData: any = {};
     
     const descResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -103,52 +110,55 @@ Extract ONLY what is explicitly stated. Never invent facts.`
         model: 'llama-3.3-70b-versatile',
         messages: [{
           role: 'system',
-          content: `You write company profiles for JobsReport.online, a job board serving Tanzania and East Africa.
+          content: `Write an "About" section for ${facts.name || 'a company'} in ${randomStyle}. 
 
-Write a concise company profile in ${randomStyle}. Write ${targetParagraphs} paragraphs. Keep the entire profile between 150-300 words. Be informative but brief. Avoid filler content. Every sentence should add value.
+Length: 150-300 words. Write naturally without headings.
 
-CONTENT GUIDELINES:
-- Explain what the company does, its industry, and core services
-- Mention location, scale, and who they serve
-- Describe their role in the industry or economy
-- Write like a journalist explaining to someone unfamiliar with the company
+STRUCTURE (vary naturally, do not label sections):
+- Begin by explaining what the company is and where it is located
+- Describe its services, customers, and role within its industry
+- Explain why its location matters to its operations, mentioning nearby places naturally
+- End with its significance or impact within its sector
 
 WRITING RULES:
-- Alternate between the company name and: "the company," "the organization," "the firm"
-- Do NOT repeat the company name more than 3 times total
-- Vary sentence length naturally
-- Write smooth transitions between paragraphs
-- Do NOT include website URLs (displayed elsewhere on page)
-- Do NOT include address or contact details (shown in company header)
+- Write as if for Wikipedia or Britannica
+- Vary sentence length and structure throughout
+- Do NOT use "the company," "the organization," "the firm" repeatedly
+- Do NOT repeat the company name more than 3 times
+- Do NOT summarize facts mechanically like a checklist
+- Do NOT mention employee count unless central to understanding the business
+- Do NOT include website URLs
+- Do NOT use marketing or promotional language
+- Mention locations, landmarks, regions, and entities naturally
 
 FORBIDDEN PHRASES (never use):
-leading, best, top, trusted, world-class, premier, renowned, well-known, major player, key player, leading provider, innovative solutions, committed to excellence, cutting-edge, state-of-the-art, unparalleled, unmatched, foremost, industry-leading, market-leading
+the company, the firm, the organization, the business (use sparingly or not at all)
+leading, best, top, trusted, world-class, premier, renowned, well-known
+major player, key player, leading provider, innovative solutions
+committed to excellence, cutting-edge, state-of-the-art, unparalleled
 
 PLAIN TEXT ONLY. No HTML. No markdown. No headings. No URLs.
 
 Return ONLY valid JSON:
 {
-  "description": "The full profile (150-300 words)",
+  "description": "The encyclopedia-style description (150-300 words)",
   "shortDescription": "One sentence under 20 words",
   "metaTitle": "Company Name - Industry | JobsReport Company Profile",
   "metaDescription": "140-160 characters with company name, industry, location, and what they do"
 }`
         }, { 
           role: 'user', 
-          content: `Write a concise company profile using these facts:
+          content: `Write an encyclopedia-style "About" section for:
 
 Company: ${facts.name || ''}
 Industry: ${facts.industry || ''}
-Headquarters: ${[facts.locality, facts.district, facts.country].filter(Boolean).join(', ')}
+Location context: ${locationContext}
 Founded: ${facts.foundedYear || ''}
-Employees: ${facts.employeeCount || ''}
-Ownership: ${facts.ownership || ''}
 Services: ${(facts.services || []).join(', ')}
 Specialties: ${(facts.specialties || []).join(', ')}
 Industries Served: ${(facts.industriesServed || []).join(', ')}
-Entities: ${(facts.entities || []).join(', ')}
-
-IMPORTANT: Keep the profile between 150-300 words. Do NOT mention website URL.
+Nearby Locations: ${(facts.nearbyLocations || []).join(', ')}
+Key Entities: ${(facts.keyEntities || []).join(', ')}
 
 Reference information:
 ${rawText.substring(0, 3000)}`
@@ -165,7 +175,6 @@ ${rawText.substring(0, 3000)}`
     if (descRaw.choices?.[0]) {
       let descContent = descRaw.choices[0].message.content || '';
       
-      // Aggressive cleaning - remove JSON wrappers, HTML entities
       descContent = descContent
         .replace(/```json\s*/g, '')
         .replace(/```\s*/g, '')
@@ -180,7 +189,6 @@ ${rawText.substring(0, 3000)}`
       try {
         descriptionData = JSON.parse(descContent);
       } catch {
-        // If JSON parse fails, extract what we can
         descriptionData = {
           description: descContent.replace(/[{}"]/g, '').substring(0, 800),
           shortDescription: '',
@@ -190,12 +198,10 @@ ${rawText.substring(0, 3000)}`
       }
     }
 
-    // Fallback if no description generated or too short
     if (!descriptionData.description || descriptionData.description.length < 50) {
       descriptionData.description = rawText.substring(0, 500);
     }
 
-    // Final cleanup function
     const cleanField = (str: string) => {
       if (!str) return '';
       return str
@@ -229,15 +235,13 @@ ${rawText.substring(0, 3000)}`
         services: facts.services || [],
         specialties: facts.specialties || [],
         industriesServed: facts.industriesServed || [],
-        entities: facts.entities || [],
+        nearbyLocations: facts.nearbyLocations || [],
+        keyEntities: facts.keyEntities || [],
         // Generated content
         description: cleanField(descriptionData.description),
         shortDescription: cleanField(descriptionData.shortDescription) || '',
         metaTitle: cleanField(descriptionData.metaTitle) || `${facts.name} - ${facts.industry} | JobsReport`,
         metaDescription: cleanField(descriptionData.metaDescription) || '',
-        // Metadata for debugging
-        style: randomStyle,
-        targetParagraphs: targetParagraphs,
       }
     }), {
       status: 200,
