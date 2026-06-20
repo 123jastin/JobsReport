@@ -4,7 +4,6 @@ type Env = {
   GROQ_API_KEY: string;
 };
 
-// ========== IMPROVED COMPANY PROCESSOR ==========
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { GROQ_API_KEY } = context.env;
 
@@ -25,7 +24,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       });
     }
 
-    // ========== STEP 1: Extract structured facts from raw text ==========
+    // ========== STEP 1: Extract structured facts ==========
     let extractedFacts = '';
     let attempts = 0;
     
@@ -38,33 +37,26 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
           model: 'llama-3.3-70b-versatile',
           messages: [{
             role: 'system',
-            content: `You are a fact extractor. Extract ONLY what is explicitly stated in the text. Never invent information.
+            content: `Extract company facts from text. Return ONLY valid JSON. Use empty string "" for missing info, empty array [] for missing lists.
 
-Return valid JSON:
 {
   "name": "Official company name",
-  "industry": "Primary industry (e.g., Telecommunications, Banking, Agriculture)",
-  "website": "Company website URL if mentioned",
-  "streetAddress": "Full street address with plot/building number",
-  "area": "Area or neighborhood",
+  "industry": "Primary industry",
+  "website": "Company website URL",
+  "streetAddress": "Full street address",
+  "area": "Area/neighborhood",
   "locality": "City",
   "district": "District",
   "postalCode": "Postal code",
   "postalArea": "Postal area name",
-  "country": "Country code (TZ, KE, UG, RW, ZA, NG, GH)",
+  "country": "Country code (TZ, KE, UG, RW)",
   "foundedYear": "Year founded",
-  "employeeCount": "Number of employees or range",
-  "services": ["List of products or services mentioned"],
-  "specialties": ["Specific areas of expertise mentioned"]
+  "employeeCount": "Number of employees"
 }
 
-Rules:
-- Use empty string "" for missing information
-- Empty array [] for missing lists
-- Extract ONLY from the provided text
-- Keep original names, numbers, and details as written`
+Extract ONLY from the text. Never invent.`
           }, { role: 'user', content: rawText.substring(0, 4000) }],
-          temperature: 0.1, max_tokens: 1000,
+          temperature: 0.1, max_tokens: 800,
         }),
       });
 
@@ -74,13 +66,17 @@ Rules:
 
     let facts: any = {};
     try {
-      const cleanJson = extractedFacts.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+      const cleanJson = extractedFacts
+        .replace(/```json\s*/g, '')
+        .replace(/```\s*/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .trim();
       facts = JSON.parse(cleanJson);
     } catch {
-      facts.name = rawText.substring(0, 100).split(/[.,\n]/)[0].trim();
+      facts.name = rawText.substring(0, 80).split(/[.,\n]/)[0].replace(/Company Name[:|\s]*/i, '').trim();
     }
 
-    // ========== STEP 2: Generate structured, factual company description ==========
+    // ========== STEP 2: Generate clean company description ==========
     let descriptionData: any = {};
     
     const descResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -90,76 +86,80 @@ Rules:
         model: 'llama-3.3-70b-versatile',
         messages: [{
           role: 'system',
-          content: `You are a business journalist writing for JobsReport.online, a job board in Tanzania.
+          content: `Write a factual company profile. 
 
-Write a factual, informative company profile. Follow this exact structure:
+Follow this EXACT structure and return ONLY valid JSON:
 
-PARAGRAPH 1 (What the company does):
-- Describe the company's core business, products, and services
-- Mention the industry and sector
-
-PARAGRAPH 2 (Operations and presence):
-- Describe scale of operations, locations served, market presence
-- Include workforce information if available
-
-PARAGRAPH 3 (Impact and context):
-- Describe the company's role in the industry or economy
-- Mention business impact or mission if supported by facts
+{
+  "description": "Three paragraphs. Paragraph 1: What the company does and its industry. Paragraph 2: Services, operations, and scale. Paragraph 3: Impact and market presence. Use ONLY facts from the source. Write in clear English. Do NOT use &nbsp; or HTML entities. Just plain text with spaces.",
+  "shortDescription": "One sentence summary under 25 words",
+  "metaTitle": "Company Name - Industry | JobsReport",
+  "metaDescription": "Under 160 characters. Include company name, what they do, and location."
+}
 
 RULES:
-- Write for users, not search engines
-- NEVER use marketing claims: "leading employer," "best company," "top company," "trusted company," "world-class," "industry leader"
-- Only include claims supported by the source text
-- Use naturally occurring industry and location terms
-- Keep language professional and factual
-- Length: 250-500 words total across 3 paragraphs
-- Write in clear, readable English
-
-Return ONLY valid JSON:
-{
-  "description": "Full 3-paragraph company description",
-  "shortDescription": "One-sentence summary (15-25 words)",
-  "metaTitle": "Company Name - Industry | JobsReport Company Profile",
-  "metaDescription": "SEO meta description (140-160 characters). Include company name, industry, location, and what they do."
-}`
+- NO HTML tags or entities
+- NO marketing fluff (leading, best, top, trusted)
+- PLAIN TEXT only
+- Use ONLY facts from the source
+- 250-400 words for description`
         }, { 
           role: 'user', 
-          content: `Write a company profile based on these facts:
-
-Company: ${facts.name || 'Company'}
-Industry: ${facts.industry || ''}
-Location: ${[facts.locality, facts.area, facts.district, facts.country].filter(Boolean).join(', ')}
-Founded: ${facts.foundedYear || ''}
-Employees: ${facts.employeeCount || ''}
-Website: ${facts.website || ''}
-Services: ${(facts.services || []).join(', ')}
-Specialties: ${(facts.specialties || []).join(', ')}
-
-Source information:
-${rawText.substring(0, 3000)}`
+          content: `Source information:\n${rawText.substring(0, 3000)}`
         }],
-        temperature: 0.4, max_tokens: 1200,
+        temperature: 0.3, max_tokens: 1200,
       }),
     });
 
-    const descData: any = await descResponse.json();
-    if (descData.choices?.[0]) {
+    const descRaw: any = await descResponse.json();
+    if (descRaw.choices?.[0]) {
+      let descContent = descRaw.choices[0].message.content || '';
+      
+      // ✅ Aggressive cleaning
+      descContent = descContent
+        .replace(/```json\s*/g, '')
+        .replace(/```\s*/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .trim();
+      
       try {
-        const cleanDescJson = descData.choices[0].message.content
-          .replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-        descriptionData = JSON.parse(cleanDescJson);
+        descriptionData = JSON.parse(descContent);
       } catch {
-        descriptionData.description = descData.choices[0].message.content?.trim() || '';
+        // If JSON parse fails, use raw text as description
+        descriptionData = {
+          description: descContent.replace(/[{}"]/g, '').substring(0, 1000),
+          shortDescription: '',
+          metaTitle: `${facts.name || 'Company'} - ${facts.industry || 'Company'} | JobsReport`,
+          metaDescription: ''
+        };
       }
     }
 
-    // ========== RETURN COMPLETE DATA ==========
+    // ✅ Final cleanup - remove any remaining HTML entities
+    const cleanField = (str: string) => {
+      if (!str) return '';
+      return str
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/\s+/g, ' ')
+        .trim();
+    };
+
     return new Response(JSON.stringify({
       success: true,
       data: {
-        // Extracted facts
         name: facts.name?.trim() || '',
         industry: facts.industry?.trim() || '',
+        description: cleanField(descriptionData.description) || rawText.substring(0, 500),
         website: facts.website?.trim() || '',
         streetAddress: facts.streetAddress?.trim() || '',
         area: facts.area?.trim() || '',
@@ -170,13 +170,6 @@ ${rawText.substring(0, 3000)}`
         country: facts.country?.trim() || 'TZ',
         foundedYear: facts.foundedYear?.trim() || '',
         employeeCount: facts.employeeCount?.trim() || '',
-        services: facts.services || [],
-        specialties: facts.specialties || [],
-        // Generated content
-        description: descriptionData.description || facts.description || rawText.substring(0, 500),
-        shortDescription: descriptionData.shortDescription || '',
-        metaTitle: descriptionData.metaTitle || `${facts.name} - ${facts.industry || 'Company'} | JobsReport`,
-        metaDescription: descriptionData.metaDescription || `Learn about ${facts.name}, ${facts.industry || 'a company'} based in ${facts.locality || 'Tanzania'}. Company profile, services, and career information.`,
       }
     }), {
       status: 200,
