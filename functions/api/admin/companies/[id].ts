@@ -29,15 +29,39 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       });
     }
 
-    // Update company
+    // ✅ Update company with all new fields
     await DB.prepare(`
-      UPDATE companies 
-      SET name = ?, logo_url = ?, website = ?
+      UPDATE companies SET
+        name = ?,
+        logo_url = ?,
+        website = ?,
+        description = ?,
+        street_address = ?,
+        area = ?,
+        locality = ?,
+        district = ?,
+        postal_code = ?,
+        postal_area = ?,
+        country = ?,
+        industry = ?,
+        founded_year = ?,
+        employee_count = ?
       WHERE id = ?
     `).bind(
       name,
       body.logoUrl || '',
       body.url || '',
+      body.description || '',
+      body.streetAddress || '',
+      body.area || '',
+      body.locality || '',
+      body.district || '',
+      body.postalCode || '',
+      body.postalArea || '',
+      body.country || 'TZ',
+      body.industry || '',
+      body.foundedYear || '',
+      body.employeeCount || '',
       id
     ).run();
 
@@ -45,7 +69,18 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       id,
       name,
       logoUrl: body.logoUrl || '',
-      url: body.url || ''
+      url: body.url || '',
+      description: body.description || '',
+      streetAddress: body.streetAddress || '',
+      area: body.area || '',
+      locality: body.locality || '',
+      district: body.district || '',
+      postalCode: body.postalCode || '',
+      postalArea: body.postalArea || '',
+      country: body.country || 'TZ',
+      industry: body.industry || '',
+      foundedYear: body.foundedYear || '',
+      employeeCount: body.employeeCount || ''
     }), {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
@@ -77,9 +112,29 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
   }
 
   try {
+    // ✅ Check for associated jobs before deleting
+    const jobsResult = await DB.prepare(
+      'SELECT COUNT(*) as count FROM jobs WHERE company_id = ?'
+    ).bind(id).first();
+
+    if (jobsResult && (jobsResult as any).count > 0) {
+      return new Response(JSON.stringify({ 
+        error: 'Cannot delete company with existing jobs',
+        details: `This company has ${(jobsResult as any).count} job(s) associated with it. Delete or reassign the jobs first.`
+      }), {
+        status: 409,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      });
+    }
+
+    // ✅ Delete company
     await DB.prepare('DELETE FROM companies WHERE id = ?').bind(id).run();
     
-    return new Response(JSON.stringify({ success: true, deleted: id }), {
+    return new Response(JSON.stringify({ 
+      success: true, 
+      deleted: id,
+      message: 'Company deleted successfully'
+    }), {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
   } catch (err) {
