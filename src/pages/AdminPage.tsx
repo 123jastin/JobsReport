@@ -151,6 +151,11 @@ export default function AdminPage() {
   const [rawJobText, setRawJobText] = useState('');
   const [aiProcessing, setAiProcessing] = useState(false);
   
+  // ✅ AI Company Parser States
+  const [showAICompanyPaste, setShowAICompanyPaste] = useState(false);
+  const [rawCompanyText, setRawCompanyText] = useState('');
+  const [aiCompanyProcessing, setAiCompanyProcessing] = useState(false);
+  
   const [isCreatingNewCompanyInline, setIsCreatingNewCompanyInline] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   
@@ -186,19 +191,19 @@ export default function AdminPage() {
   // --- COMPANY FORM STATES (UPDATED) ---
   const [companyForm, setCompanyForm] = useState({
     name: '',
-    url: '',
-    logoUrl: '',
+    website: '',
+    logo_url: '',
     description: '',
-    streetAddress: '',
+    street_address: '',
     area: '',
     locality: '',
     district: '',
-    postalCode: '',
-    postalArea: '',
+    postal_code: '',
+    postal_area: '',
     country: 'TZ',
     industry: '',
-    foundedYear: '',
-    employeeCount: ''
+    founded_year: '',
+    employee_count: ''
   });
 
   // --- ROLE FORM STATES ---
@@ -475,6 +480,64 @@ export default function AdminPage() {
     }
   };
 
+  // ✅ AI Company Parser - Extract facts + generate description
+  const handleAIProcessCompany = async () => {
+    if (!rawCompanyText.trim() || rawCompanyText.trim().length < 20) {
+      showFeedback('error', 'Please paste company information (at least 20 characters).');
+      return;
+    }
+
+    setAiCompanyProcessing(true);
+    try {
+      const res = await fetch('/api/ai/process-company', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: rawCompanyText })
+      });
+
+      const result = await res.json();
+
+      if (result.success && result.data) {
+        // Auto-fill company form with extracted data
+        setCompanyForm(prev => ({
+          ...prev,
+          name: result.data.name || prev.name,
+          industry: result.data.industry || prev.industry,
+          description: result.data.description || prev.description,
+          website: result.data.website || prev.website,
+          street_address: result.data.streetAddress || prev.street_address,
+          area: result.data.area || prev.area,
+          locality: result.data.locality || prev.locality,
+          district: result.data.district || prev.district,
+          postal_code: result.data.postalCode || prev.postal_code,
+          postal_area: result.data.postalArea || prev.postal_area,
+          country: result.data.country || prev.country,
+          founded_year: result.data.foundedYear || prev.founded_year,
+          employee_count: result.data.employeeCount || prev.employee_count,
+        }));
+
+        showFeedback('success', 'Company parsed! Form auto-filled with AI-enhanced description.');
+        setShowAICompanyPaste(false);
+        setRawCompanyText('');
+      } else {
+        showFeedback('error', result.error || 'AI processing failed');
+        // If partial data available, fill what we can
+        if (result.data?.name) {
+          setCompanyForm(prev => ({
+            ...prev,
+            name: result.data.name || prev.name,
+            industry: result.data.industry || prev.industry,
+          }));
+        }
+      }
+    } catch (err) {
+      showFeedback('error', 'AI service unavailable. Please fill manually.');
+      console.error('AI company error:', err);
+    } finally {
+      setAiCompanyProcessing(false);
+    }
+  };
+
   // ✅ Generate thumbnail from image file
   const generateThumbnail = (file: File, maxWidth: number = 400): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -632,7 +695,7 @@ export default function AdminPage() {
         setMediaForm(prev => ({ ...prev, name: file.name }));
       } else if (target === 'company') {
         setJobForm(prev => ({ ...prev, companyNewLogo: base64String }));
-        setCompanyForm(prev => ({ ...prev, logoUrl: base64String }));
+        setCompanyForm(prev => ({ ...prev, logo_url: base64String }));
         showFeedback('success', `Logo "${file.name}" cached.`);
       } else if (target === 'article') {
         setNewRichMediaUrl(base64String);
@@ -996,19 +1059,19 @@ export default function AdminPage() {
     setEditingCompanyId(co.id);
     setCompanyForm({
       name: co.name,
-      url: co.url || '',
-      logoUrl: co.logoUrl || '',
+      website: co.website || '',
+      logo_url: co.logo_url || '',
       description: (co as any).description || '',
-      streetAddress: (co as any).streetAddress || '',
+      street_address: (co as any).street_address || '',
       area: (co as any).area || '',
       locality: (co as any).locality || '',
       district: (co as any).district || '',
-      postalCode: (co as any).postalCode || '',
-      postalArea: (co as any).postalArea || '',
+      postal_code: (co as any).postal_code || '',
+      postal_area: (co as any).postal_area || '',
       country: (co as any).country || 'TZ',
       industry: (co as any).industry || '',
-      foundedYear: (co as any).foundedYear || '',
-      employeeCount: (co as any).employeeCount || ''
+      founded_year: (co as any).founded_year || '',
+      employee_count: (co as any).employee_count || ''
     });
     window.scrollTo({ top: 300, behavior: 'smooth' });
   };
@@ -1017,10 +1080,10 @@ export default function AdminPage() {
   const handleCancelEditCompany = () => {
     setEditingCompanyId(null);
     setCompanyForm({ 
-      name: '', url: '', logoUrl: '', description: '',
-      streetAddress: '', area: '', locality: '', district: '',
-      postalCode: '', postalArea: '', country: 'TZ', industry: '',
-      foundedYear: '', employeeCount: ''
+      name: '', website: '', logo_url: '', description: '',
+      street_address: '', area: '', locality: '', district: '',
+      postal_code: '', postal_area: '', country: 'TZ', industry: '',
+      founded_year: '', employee_count: ''
     });
   };
 
@@ -1071,7 +1134,7 @@ export default function AdminPage() {
 
     setActionLoading(true);
     try {
-      let logoUrl = companyForm.logoUrl;
+      let logoUrl = companyForm.logo_url;
       
       // Upload logo to R2 if it's a base64 image
       if (logoUrl && logoUrl.startsWith('data:image')) {
@@ -1108,19 +1171,19 @@ export default function AdminPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: companyForm.name.trim(),
-          url: companyForm.url,
-          logoUrl: logoUrl,
+          website: companyForm.website,
+          logo_url: logoUrl,
           description: companyForm.description,
-          streetAddress: companyForm.streetAddress,
+          street_address: companyForm.street_address,
           area: companyForm.area,
           locality: companyForm.locality,
           district: companyForm.district,
-          postalCode: companyForm.postalCode,
-          postalArea: companyForm.postalArea,
+          postal_code: companyForm.postal_code,
+          postal_area: companyForm.postal_area,
           country: companyForm.country,
           industry: companyForm.industry,
-          foundedYear: companyForm.foundedYear,
-          employeeCount: companyForm.employeeCount
+          founded_year: companyForm.founded_year,
+          employee_count: companyForm.employee_count
         })
       });
       
@@ -1128,17 +1191,17 @@ export default function AdminPage() {
       
       if (res.ok) {
         if (editingCompanyId) {
-          setCompaniesState(prev => prev.map(c => c.id === editingCompanyId ? { ...c, ...data, logoUrl: data.logoUrl || c.logoUrl } : c));
+          setCompaniesState(prev => prev.map(c => c.id === editingCompanyId ? { ...c, ...data, logo_url: data.logo_url || c.logo_url } : c));
           showFeedback('success', `Updated ${companyForm.name}.`);
         } else {
-          setCompaniesState(prev => [...prev, { ...data, logoUrl: data.logoUrl || '' }]);
+          setCompaniesState(prev => [...prev, { ...data, logo_url: data.logo_url || '' }]);
           showFeedback('success', `Created ${companyForm.name}.`);
         }
         setCompanyForm({ 
-          name: '', url: '', logoUrl: '', description: '',
-          streetAddress: '', area: '', locality: '', district: '',
-          postalCode: '', postalArea: '', country: 'TZ', industry: '',
-          foundedYear: '', employeeCount: ''
+          name: '', website: '', logo_url: '', description: '',
+          street_address: '', area: '', locality: '', district: '',
+          postal_code: '', postal_area: '', country: 'TZ', industry: '',
+          founded_year: '', employee_count: ''
         });
         setEditingCompanyId(null);
         fetchSystemData();
@@ -2954,7 +3017,7 @@ export default function AdminPage() {
         </motion.div>
       )}
 
-      {/* TAB 3: COMPANY MANAGEMENT - UPDATED WITH ENHANCED FORM */}
+      {/* TAB 3: COMPANY MANAGEMENT - WITH AI PARSER AND ENHANCED FORM */}
       {activeTab === 'companies' && (
         <motion.div 
           initial={{ opacity: 0 }}
@@ -2972,6 +3035,75 @@ export default function AdminPage() {
 
               <form onSubmit={handleCreateCompany} className="space-y-5">
                 
+                {/* AI Company Parser - Smart Paste */}
+                <div className="pb-4 border-b border-white/5">
+                  <button
+                    type="button"
+                    onClick={() => setShowAICompanyPaste(!showAICompanyPaste)}
+                    className="w-full px-4 py-3 rounded-2xl bg-gradient-to-r from-violet-600/10 to-blue-600/10 border border-violet-500/20 hover:border-violet-500/40 text-violet-400 hover:text-violet-300 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all group"
+                  >
+                    <Sparkles size={14} className="group-hover:scale-110 transition-transform" />
+                    {showAICompanyPaste ? '✕ Close AI Parser' : '⚡ AI Auto-Fill Company Profile'}
+                  </button>
+
+                  {showAICompanyPaste && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      className="mt-3 space-y-3 p-4 bg-violet-950/10 border border-violet-500/10 rounded-2xl"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Sparkles size={12} className="text-violet-400" />
+                        <p className="text-[9px] text-gray-400 font-mono leading-relaxed">
+                          Paste any company information below. AI will extract: <span className="text-violet-400">name, industry, location, description, website, and more</span>.
+                        </p>
+                      </div>
+                      
+                      <textarea
+                        value={rawCompanyText}
+                        onChange={(e) => setRawCompanyText(e.target.value)}
+                        placeholder={`Paste company information here...\n\nExample:\n"Selcom Tanzania is a fintech company based in Dar es Salaam, founded in 2005. We provide digital payment solutions and mobile money services across East Africa. Our office is at Street Plot 1520, Mwai Kibaki Road, Mikocheni, Kinondoni district..."`}
+                        className="w-full h-40 bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-white resize-none focus:outline-none focus:border-violet-500/50 font-mono placeholder:text-gray-600"
+                        style={{ fontSize: '13px', lineHeight: '1.6' }}
+                        disabled={aiCompanyProcessing}
+                      />
+                      
+                      <div className="flex items-center justify-between">
+                        <span className="text-[8px] text-gray-500 font-mono">
+                          {rawCompanyText.length} characters • AI extracts facts + writes professional description
+                        </span>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => { setRawCompanyText(''); setShowAICompanyPaste(false); }}
+                            className="px-3 py-2 bg-white/5 hover:bg-white/10 text-gray-400 text-[10px] font-bold uppercase rounded-xl transition-all"
+                          >
+                            Clear
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleAIProcessCompany}
+                            disabled={aiCompanyProcessing || rawCompanyText.trim().length < 20}
+                            className="px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:bg-gray-800 disabled:text-gray-500 text-white font-bold text-[10px] uppercase tracking-wider rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-violet-500/10"
+                          >
+                            {aiCompanyProcessing ? (
+                              <>
+                                <RefreshCw size={12} className="animate-spin" />
+                                Processing...
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles size={12} />
+                                Parse Company
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </div>
+
                 {/* === BASIC INFORMATION === */}
                 <div className="border-b border-white/5 pb-4">
                   <h4 className="text-[11px] font-extrabold text-blue-400 uppercase tracking-widest flex items-center gap-2 mb-4">
@@ -3007,8 +3139,8 @@ export default function AdminPage() {
                     <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Website URL</label>
                     <input 
                       type="url" 
-                      value={companyForm.url}
-                      onChange={(e) => setCompanyForm(prev => ({ ...prev, url: e.target.value }))}
+                      value={companyForm.website}
+                      onChange={(e) => setCompanyForm(prev => ({ ...prev, website: e.target.value }))}
                       placeholder="https://www.selcom.net"
                       className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
                     />
@@ -3026,8 +3158,8 @@ export default function AdminPage() {
                       <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Street Address</label>
                       <input 
                         type="text" 
-                        value={companyForm.streetAddress}
-                        onChange={(e) => setCompanyForm(prev => ({ ...prev, streetAddress: e.target.value }))}
+                        value={companyForm.street_address}
+                        onChange={(e) => setCompanyForm(prev => ({ ...prev, street_address: e.target.value }))}
                         placeholder="e.g. Street Plot 1520, Mwai Kibaki Road, Mikocheni"
                         className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
                       />
@@ -3073,8 +3205,8 @@ export default function AdminPage() {
                         <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Postal Code</label>
                         <input 
                           type="text" 
-                          value={companyForm.postalCode}
-                          onChange={(e) => setCompanyForm(prev => ({ ...prev, postalCode: e.target.value }))}
+                          value={companyForm.postal_code}
+                          onChange={(e) => setCompanyForm(prev => ({ ...prev, postal_code: e.target.value }))}
                           placeholder="e.g. 14111"
                           className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
                         />
@@ -3084,8 +3216,8 @@ export default function AdminPage() {
                         <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Postal Area</label>
                         <input 
                           type="text" 
-                          value={companyForm.postalArea}
-                          onChange={(e) => setCompanyForm(prev => ({ ...prev, postalArea: e.target.value }))}
+                          value={companyForm.postal_area}
+                          onChange={(e) => setCompanyForm(prev => ({ ...prev, postal_area: e.target.value }))}
                           placeholder="e.g. Mikocheni area"
                           className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
                         />
@@ -3126,8 +3258,8 @@ export default function AdminPage() {
                       <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Founded Year</label>
                       <input 
                         type="text" 
-                        value={companyForm.foundedYear}
-                        onChange={(e) => setCompanyForm(prev => ({ ...prev, foundedYear: e.target.value }))}
+                        value={companyForm.founded_year}
+                        onChange={(e) => setCompanyForm(prev => ({ ...prev, founded_year: e.target.value }))}
                         placeholder="e.g. 2005"
                         className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
                       />
@@ -3137,8 +3269,8 @@ export default function AdminPage() {
                       <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Employee Count</label>
                       <input 
                         type="text" 
-                        value={companyForm.employeeCount}
-                        onChange={(e) => setCompanyForm(prev => ({ ...prev, employeeCount: e.target.value }))}
+                        value={companyForm.employee_count}
+                        onChange={(e) => setCompanyForm(prev => ({ ...prev, employee_count: e.target.value }))}
                         placeholder="e.g. 500 - 1000"
                         className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
                       />
@@ -3155,7 +3287,7 @@ export default function AdminPage() {
                   <textarea
                     value={companyForm.description}
                     onChange={(e) => setCompanyForm(prev => ({ ...prev, description: e.target.value }))}
-                    placeholder="Write a comprehensive company description..."
+                    placeholder="Write a comprehensive company description... (AI will auto-generate from pasted text)"
                     className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors h-32 resize-none"
                     rows={4}
                   />
@@ -3173,7 +3305,7 @@ export default function AdminPage() {
                     />
                     <Upload size={16} className="mx-auto text-gray-500 group-hover:text-white transition-colors mb-2" />
                     <span className="block text-[11px] text-gray-400">
-                      {companyForm.logoUrl ? "✓ LOGO LOADED IN MEMORY" : "Drag & drop company logo"}
+                      {companyForm.logo_url ? "✓ LOGO LOADED IN MEMORY" : "Drag & drop company logo"}
                     </span>
                   </div>
                 </div>
@@ -3214,8 +3346,8 @@ export default function AdminPage() {
                   className="p-4 bg-white/[0.01] border hover:bg-white/[0.02] border-white/5 rounded-3xl transition-all flex items-center justify-between gap-4"
                 >
                   <div className="flex items-center gap-3">
-                    {co.logoUrl ? (
-                      <img src={co.logoUrl} alt={co.name} referrerPolicy="no-referrer" className="w-10 h-10 object-cover rounded-xl border border-white/10" />
+                    {co.logo_url ? (
+                      <img src={co.logo_url} alt={co.name} referrerPolicy="no-referrer" className="w-10 h-10 object-cover rounded-xl border border-white/10" />
                     ) : (
                       <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-violet-600 rounded-xl flex items-center justify-center font-bold font-mono text-white">
                         {co.name.slice(0, 2).toUpperCase()}
@@ -3225,7 +3357,7 @@ export default function AdminPage() {
                     <div className="space-y-0.5">
                       <span className="text-xs font-bold text-stone-100 block">{co.name}</span>
                       <button 
-                        onClick={() => triggerRedirect(co.url, co.name, 'Admin Verified Directory')}
+                        onClick={() => triggerRedirect(co.website, co.name, 'Admin Verified Directory')}
                         className="text-[10px] text-blue-400 hover:underline flex items-center gap-1 font-mono cursor-pointer"
                       >
                         <Globe size={10} /> Domain portal <ExternalLink size={8} />
