@@ -37,7 +37,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
           model: 'llama-3.3-70b-versatile',
           messages: [{
             role: 'system',
-            content: `Extract company facts from text. Return ONLY valid JSON. Use empty string "" for missing info, empty array [] for missing lists.
+            content: `Extract company facts from text. Return ONLY valid JSON. Use empty string "" for missing info.
 
 {
   "name": "Official company name",
@@ -51,7 +51,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   "postalArea": "Postal area name",
   "country": "Country code (TZ, KE, UG, RW)",
   "foundedYear": "Year founded",
-  "employeeCount": "Number of employees"
+  "employeeCount": "Number of employees",
+  "services": ["List of products/services"],
+  "specialties": ["Areas of expertise"],
+  "industriesServed": ["Industries they serve"]
 }
 
 Extract ONLY from the text. Never invent.`
@@ -76,7 +79,16 @@ Extract ONLY from the text. Never invent.`
       facts.name = rawText.substring(0, 80).split(/[.,\n]/)[0].replace(/Company Name[:|\s]*/i, '').trim();
     }
 
-    // ========== STEP 2: Generate clean company description ==========
+    // Build semantic keyword variations
+    const nameVariations = facts.name 
+      ? [
+          facts.name,
+          facts.name.replace(/Limited|Ltd|Inc|LLC|PLC|Corp|Corporation/gi, '').trim(),
+          facts.name.split(' ')[0], // First word only
+        ].filter((v, i, a) => v && a.indexOf(v) === i)
+      : [];
+
+    // ========== STEP 2: Generate unique, high-quality company profile ==========
     let descriptionData: any = {};
     
     const descResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -86,28 +98,72 @@ Extract ONLY from the text. Never invent.`
         model: 'llama-3.3-70b-versatile',
         messages: [{
           role: 'system',
-          content: `Write a factual company profile. 
+          content: `You are a business journalist writing for JobsReport.online, a job board serving Tanzania and East Africa.
 
-Follow this EXACT structure and return ONLY valid JSON:
+Write a unique, comprehensive company profile using ONLY the provided facts. This content must be original and pass as human-written.
 
+STRUCTURE (4 sections, 500-800 words total):
+
+SECTION 1 - Company Overview (2 paragraphs):
+- What the company does, its industry, and core business
+- Where it operates and its headquarters location
+- Use varied sentence structures
+- Mix company name with semantic variations (e.g., "the company," "the firm," "the organization")
+
+SECTION 2 - Products, Services & Operations (2 paragraphs):
+- Detail their products and services
+- Explain how they operate
+- Industries they serve
+- Scale of operations, workforce
+
+SECTION 3 - Industry Role & Market Presence (1-2 paragraphs):
+- The company's position in its industry
+- Economic impact or contribution
+- Geographic coverage
+- Role in the local/national economy
+
+SECTION 4 - Company Facts Summary:
+- Quick reference facts listed clearly
+
+WRITING RULES:
+- ❌ NEVER use: "leading," "best," "top," "trusted," "world-class," "industry leader," "premier," "foremost"
+- ❌ NEVER copy phrasing from company websites
+- ❌ NEVER use HTML tags or entities (&nbsp; &amp; etc.)
+- ✅ Vary sentence length (short, medium, long mixed together)
+- ✅ Use active and passive voice naturally
+- ✅ Use natural transitions between paragraphs
+- ✅ Write like a journalist, not a marketer
+- ✅ Include specific facts when available (numbers, years, locations)
+- ✅ PLAIN TEXT only - no markdown, no HTML
+
+Return ONLY valid JSON:
 {
-  "description": "Three paragraphs. Paragraph 1: What the company does and its industry. Paragraph 2: Services, operations, and scale. Paragraph 3: Impact and market presence. Use ONLY facts from the source. Write in clear English. Do NOT use &nbsp; or HTML entities. Just plain text with spaces.",
-  "shortDescription": "One sentence summary under 25 words",
-  "metaTitle": "Company Name - Industry | JobsReport",
-  "metaDescription": "Under 160 characters. Include company name, what they do, and location."
-}
-
-RULES:
-- NO HTML tags or entities
-- NO marketing fluff (leading, best, top, trusted)
-- PLAIN TEXT only
-- Use ONLY facts from the source
-- 250-400 words for description`
+  "description": "Full company profile with all 4 sections",
+  "shortDescription": "One sentence summary under 20 words",
+  "metaTitle": "Company Name - Industry | JobsReport Company Profile",
+  "metaDescription": "140-160 characters. Include company name, industry, location, and services."
+}`
         }, { 
           role: 'user', 
-          content: `Source information:\n${rawText.substring(0, 3000)}`
+          content: `Write a company profile using these facts:
+
+Company: ${facts.name || ''}
+Industry: ${facts.industry || ''}
+Headquarters: ${[facts.streetAddress, facts.area, facts.locality, facts.district].filter(Boolean).join(', ')}
+Country: ${facts.country || ''}
+Founded: ${facts.foundedYear || ''}
+Employees: ${facts.employeeCount || ''}
+Website: ${facts.website || ''}
+Services: ${(facts.services || []).join(', ')}
+Specialties: ${(facts.specialties || []).join(', ')}
+Industries Served: ${(facts.industriesServed || []).join(', ')}
+
+Semantic variations to use naturally: ${nameVariations.join(', ')}
+
+Source text for reference:
+${rawText.substring(0, 3000)}`
         }],
-        temperature: 0.3, max_tokens: 1200,
+        temperature: 0.6, max_tokens: 2000,
       }),
     });
 
@@ -115,7 +171,7 @@ RULES:
     if (descRaw.choices?.[0]) {
       let descContent = descRaw.choices[0].message.content || '';
       
-      // ✅ Aggressive cleaning
+      // Aggressive cleaning
       descContent = descContent
         .replace(/```json\s*/g, '')
         .replace(/```\s*/g, '')
@@ -130,17 +186,16 @@ RULES:
       try {
         descriptionData = JSON.parse(descContent);
       } catch {
-        // If JSON parse fails, use raw text as description
         descriptionData = {
-          description: descContent.replace(/[{}"]/g, '').substring(0, 1000),
+          description: descContent.replace(/[{}"]/g, '').substring(0, 1500),
           shortDescription: '',
-          metaTitle: `${facts.name || 'Company'} - ${facts.industry || 'Company'} | JobsReport`,
+          metaTitle: `${facts.name || 'Company'} - ${facts.industry || ''} | JobsReport`,
           metaDescription: ''
         };
       }
     }
 
-    // ✅ Final cleanup - remove any remaining HTML entities
+    // Final cleanup
     const cleanField = (str: string) => {
       if (!str) return '';
       return str
@@ -160,6 +215,7 @@ RULES:
         name: facts.name?.trim() || '',
         industry: facts.industry?.trim() || '',
         description: cleanField(descriptionData.description) || rawText.substring(0, 500),
+        shortDescription: cleanField(descriptionData.shortDescription) || '',
         website: facts.website?.trim() || '',
         streetAddress: facts.streetAddress?.trim() || '',
         area: facts.area?.trim() || '',
@@ -170,6 +226,8 @@ RULES:
         country: facts.country?.trim() || 'TZ',
         foundedYear: facts.foundedYear?.trim() || '',
         employeeCount: facts.employeeCount?.trim() || '',
+        metaTitle: cleanField(descriptionData.metaTitle) || `${facts.name} - ${facts.industry} | JobsReport`,
+        metaDescription: cleanField(descriptionData.metaDescription) || '',
       }
     }), {
       status: 200,
