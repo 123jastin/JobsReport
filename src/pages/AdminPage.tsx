@@ -161,9 +161,8 @@ export default function AdminPage() {
   const [isDraft, setIsDraft] = useState(false);
   const [applicationType, setApplicationType] = useState<'url' | 'email' | 'whatsapp' | 'instructions'>('url');
   
-
   // ✅ Schema data state
-const [schemaData, setSchemaData] = useState({
+  const [schemaData, setSchemaData] = useState({
     job_category: 'Other',
     industry: '',
     employment_type: 'FULL_TIME',
@@ -175,7 +174,7 @@ const [schemaData, setSchemaData] = useState({
     salary_min: null as number | null,
     salary_max: null as number | null,
     salary_currency: 'TZS',
-    street_address: '',  // ✅ Add this
+    street_address: '',
     city: '',
     region: '',
     country: 'Tanzania',
@@ -184,12 +183,22 @@ const [schemaData, setSchemaData] = useState({
     canonical_url: ''
   });
 
-
-  // --- COMPANY FORM STATES ---
+  // --- COMPANY FORM STATES (UPDATED) ---
   const [companyForm, setCompanyForm] = useState({
     name: '',
     url: '',
-    logoUrl: ''
+    logoUrl: '',
+    description: '',
+    streetAddress: '',
+    area: '',
+    locality: '',
+    district: '',
+    postalCode: '',
+    postalArea: '',
+    country: 'TZ',
+    industry: '',
+    foundedYear: '',
+    employeeCount: ''
   });
 
   // --- ROLE FORM STATES ---
@@ -380,7 +389,7 @@ const [schemaData, setSchemaData] = useState({
   };
 
   // ✅ AI Job Parser with Template Support
- const handleAIProcessJob = async () => {
+  const handleAIProcessJob = async () => {
     if (!rawJobText.trim() || rawJobText.trim().length < 20) {
       showFeedback('error', 'Please paste a complete job description (at least 20 characters).');
       return;
@@ -466,9 +475,6 @@ const [schemaData, setSchemaData] = useState({
     }
   };
 
-  
-
-  
   // ✅ Generate thumbnail from image file
   const generateThumbnail = (file: File, maxWidth: number = 400): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -666,8 +672,7 @@ const [schemaData, setSchemaData] = useState({
     });
   };
 
-  
-const handleEditJob = (job: RawJob) => {
+  const handleEditJob = (job: RawJob) => {
     setEditingJobId(job.id);
     setJobForm({
       title: job.title,
@@ -698,7 +703,6 @@ const handleEditJob = (job: RawJob) => {
       salary_min: j.salary_min || null,
       salary_max: j.salary_max || null,
       salary_currency: j.salary_currency || 'TZS',
-      // ✅ Location fields for Google Schema
       street_address: j.street_address || '',
       city: j.city || '',
       region: j.region || '',
@@ -724,9 +728,6 @@ const handleEditJob = (job: RawJob) => {
     setJobFiles([]);
     window.scrollTo({ top: 300, behavior: 'smooth' });
   };
-    
-
-  
 
   const handleCancelEditJob = () => {
     setEditingJobId(null);
@@ -750,7 +751,7 @@ const handleEditJob = (job: RawJob) => {
     setIsCreatingNewCompanyInline(false);
   };
 
-const handleIngestJob = async (e: FormEvent) => {
+  const handleIngestJob = async (e: FormEvent) => {
     e.preventDefault();
     
     const targetCompany = isCreatingNewCompanyInline 
@@ -846,11 +847,11 @@ const handleIngestJob = async (e: FormEvent) => {
           applyUrl += `?subject=${encodeURIComponent(jobForm.companyNewUrl)}`;
         }
       } else if (applicationType === 'whatsapp') {
-        whatsapp_number = jobForm.url; // Store WhatsApp number
-        applyUrl = ''; // No URL for WhatsApp
+        whatsapp_number = jobForm.url;
+        applyUrl = '';
       } else if (applicationType === 'instructions') {
-        application_instructions = jobForm.url; // Store instructions text
-        applyUrl = ''; // No URL for instructions-only
+        application_instructions = jobForm.url;
+        applyUrl = '';
       }
 
       const apiUrl = editingJobId ? `/api/admin/jobs/${editingJobId}` : '/api/admin/jobs';
@@ -946,13 +947,6 @@ const handleIngestJob = async (e: FormEvent) => {
     }
   };
 
-
-
-
-
-
-
-
   const handleToggleJobActive = async (id: string, currentStatus: boolean) => {
     if (userRole === 'editor') {
       showFeedback('error', 'PERMISSION DENIED.');
@@ -974,7 +968,7 @@ const handleIngestJob = async (e: FormEvent) => {
       showFeedback('error', 'Could not sync active parameter.');
     }
   };
- 
+
   const handleDeleteJob = async (id: string) => {
     if (userRole === 'editor') {
       showFeedback('error', 'PERMISSION DENIED.');
@@ -997,141 +991,167 @@ const handleIngestJob = async (e: FormEvent) => {
     }
   };
 
+  // Updated handleEditCompany
+  const handleEditCompany = (co: Company) => {
+    setEditingCompanyId(co.id);
+    setCompanyForm({
+      name: co.name,
+      url: co.url || '',
+      logoUrl: co.logoUrl || '',
+      description: (co as any).description || '',
+      streetAddress: (co as any).streetAddress || '',
+      area: (co as any).area || '',
+      locality: (co as any).locality || '',
+      district: (co as any).district || '',
+      postalCode: (co as any).postalCode || '',
+      postalArea: (co as any).postalArea || '',
+      country: (co as any).country || 'TZ',
+      industry: (co as any).industry || '',
+      foundedYear: (co as any).foundedYear || '',
+      employeeCount: (co as any).employeeCount || ''
+    });
+    window.scrollTo({ top: 300, behavior: 'smooth' });
+  };
 
+  // Updated handleCancelEditCompany
+  const handleCancelEditCompany = () => {
+    setEditingCompanyId(null);
+    setCompanyForm({ 
+      name: '', url: '', logoUrl: '', description: '',
+      streetAddress: '', area: '', locality: '', district: '',
+      postalCode: '', postalArea: '', country: 'TZ', industry: '',
+      foundedYear: '', employeeCount: ''
+    });
+  };
 
-// Add handleEditCompany function
-const handleEditCompany = (co: Company) => {
-  setEditingCompanyId(co.id);
-  setCompanyForm({
-    name: co.name,
-    url: co.url || '',
-    logoUrl: co.logoUrl || ''
-  });
-  window.scrollTo({ top: 300, behavior: 'smooth' });
-};
-
-// Add handleCancelEditCompany function
-const handleCancelEditCompany = () => {
-  setEditingCompanyId(null);
-  setCompanyForm({ name: '', url: '', logoUrl: '' });
-};
-
-// Updated handleDeleteCompany with better error handling
-const handleDeleteCompany = async (id: string) => {
-  if (userRole === 'editor') {
-    showFeedback('error', 'PERMISSION DENIED: Purge request rejected.');
-    return;
-  }
-
-  if (!confirm("Remove this company? This will also delete all jobs associated with this company.")) return;
-
-  try {
-    const res = await fetch(`/api/admin/companies/${id}`, { method: 'DELETE' });
-    const data = await res.json();
-    
-    if (res.ok) {
-      setCompaniesState(prev => prev.filter(c => c.id !== id));
-      showFeedback('success', data.message || 'Company removed from active inventory.');
-      fetchSystemData();
-    } else {
-      showFeedback('error', data.error || data.details || 'Could not delete company.');
-    }
-  } catch (err) {
-    showFeedback('error', 'Network error. Could not delete company profile.');
-  }
-};
-
-// Updated handleCreateCompany for both create and edit
-const handleCreateCompany = async (e: FormEvent) => {
-  e.preventDefault();
-  if (!companyForm.name) return;
-
-  if (userRole === 'editor') {
-    showFeedback('error', 'PERMISSION DENIED: Corporate index editing is blocked.');
-    return;
-  }
-
-  if (!editingCompanyId) {
-    const duplicateExists = companiesState.some(
-      c => c.name.toLowerCase() === companyForm.name.toLowerCase().trim()
-    );
-    if (duplicateExists) {
-      showFeedback('error', `Company "${companyForm.name}" already exists.`);
+  // Updated handleDeleteCompany
+  const handleDeleteCompany = async (id: string) => {
+    if (userRole === 'editor') {
+      showFeedback('error', 'PERMISSION DENIED: Purge request rejected.');
       return;
     }
-  }
 
-  setActionLoading(true);
-  try {
-    let logoUrl = companyForm.logoUrl;
-    
-    // Upload logo to R2 if it's a base64 image
-    if (logoUrl && logoUrl.startsWith('data:image')) {
-      const fileInput = document.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement;
-      const file = fileInput?.files?.[0];
+    if (!confirm("Remove this company? This will also delete all jobs associated with this company.")) return;
+
+    try {
+      const res = await fetch(`/api/admin/companies/${id}`, { method: 'DELETE' });
+      const data = await res.json();
       
-      if (file) {
-        try {
-          const compressedLogo = await compressToWebP(file, 200);
-          const response = await fetch(compressedLogo);
-          const blob = await response.blob();
-          const formData = new FormData();
-          const logoFileName = `logo-${companyForm.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}.webp`;
-          formData.append('file', blob, logoFileName);
-          formData.append('name', logoFileName);
-          formData.append('altText', `${companyForm.name} logo`);
-          const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
-          if (uploadRes.ok) {
-            const uploadData = await uploadRes.json();
-            logoUrl = uploadData.url;
-            console.log('Logo uploaded to R2:', logoUrl);
-          }
-        } catch (logoErr) { console.error('Logo upload failed:', logoErr); }
-      }
-    }
-
-    const url = editingCompanyId 
-      ? `/api/admin/companies/${editingCompanyId}` 
-      : '/api/admin/companies';
-    const method = editingCompanyId ? 'PUT' : 'POST';
-
-    const res = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: companyForm.name.trim(),
-        url: companyForm.url,
-        logoUrl: logoUrl
-      })
-    });
-    
-    const data = await res.json();
-    
-    if (res.ok) {
-      if (editingCompanyId) {
-        setCompaniesState(prev => prev.map(c => c.id === editingCompanyId ? { ...c, ...data, logoUrl: data.logoUrl || c.logoUrl } : c));
-        showFeedback('success', `Updated ${companyForm.name}.`);
+      if (res.ok) {
+        setCompaniesState(prev => prev.filter(c => c.id !== id));
+        showFeedback('success', data.message || 'Company removed from active inventory.');
+        fetchSystemData();
       } else {
-        setCompaniesState(prev => [...prev, { ...data, logoUrl: data.logoUrl || '' }]);
-        showFeedback('success', `Created ${companyForm.name}.`);
+        showFeedback('error', data.error || data.details || 'Could not delete company.');
       }
-      setCompanyForm({ name: '', url: '', logoUrl: '' });
-      setEditingCompanyId(null);
-      fetchSystemData();
-    } else {
-      showFeedback('error', data.error || data.details || 'Failed to save company');
+    } catch (err) {
+      showFeedback('error', 'Network error. Could not delete company profile.');
     }
-  } catch (err) {
-    showFeedback('error', 'Error establishing corporate database reference.');
-    console.error('Company save error:', err);
-  } finally {
-    setActionLoading(false);
-  }
-};
-  
+  };
 
+  // Updated handleCreateCompany
+  const handleCreateCompany = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!companyForm.name) return;
 
-  
+    if (userRole === 'editor') {
+      showFeedback('error', 'PERMISSION DENIED: Corporate index editing is blocked.');
+      return;
+    }
+
+    if (!editingCompanyId) {
+      const duplicateExists = companiesState.some(
+        c => c.name.toLowerCase() === companyForm.name.toLowerCase().trim()
+      );
+      if (duplicateExists) {
+        showFeedback('error', `Company "${companyForm.name}" already exists.`);
+        return;
+      }
+    }
+
+    setActionLoading(true);
+    try {
+      let logoUrl = companyForm.logoUrl;
+      
+      // Upload logo to R2 if it's a base64 image
+      if (logoUrl && logoUrl.startsWith('data:image')) {
+        const fileInput = document.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement;
+        const file = fileInput?.files?.[0];
+        
+        if (file) {
+          try {
+            const compressedLogo = await compressToWebP(file, 200);
+            const response = await fetch(compressedLogo);
+            const blob = await response.blob();
+            const formData = new FormData();
+            const logoFileName = `logo-${companyForm.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}.webp`;
+            formData.append('file', blob, logoFileName);
+            formData.append('name', logoFileName);
+            formData.append('altText', `${companyForm.name} logo`);
+            const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+            if (uploadRes.ok) {
+              const uploadData = await uploadRes.json();
+              logoUrl = uploadData.url;
+              console.log('Logo uploaded to R2:', logoUrl);
+            }
+          } catch (logoErr) { console.error('Logo upload failed:', logoErr); }
+        }
+      }
+
+      const url = editingCompanyId 
+        ? `/api/admin/companies/${editingCompanyId}` 
+        : '/api/admin/companies';
+      const method = editingCompanyId ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: companyForm.name.trim(),
+          url: companyForm.url,
+          logoUrl: logoUrl,
+          description: companyForm.description,
+          streetAddress: companyForm.streetAddress,
+          area: companyForm.area,
+          locality: companyForm.locality,
+          district: companyForm.district,
+          postalCode: companyForm.postalCode,
+          postalArea: companyForm.postalArea,
+          country: companyForm.country,
+          industry: companyForm.industry,
+          foundedYear: companyForm.foundedYear,
+          employeeCount: companyForm.employeeCount
+        })
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok) {
+        if (editingCompanyId) {
+          setCompaniesState(prev => prev.map(c => c.id === editingCompanyId ? { ...c, ...data, logoUrl: data.logoUrl || c.logoUrl } : c));
+          showFeedback('success', `Updated ${companyForm.name}.`);
+        } else {
+          setCompaniesState(prev => [...prev, { ...data, logoUrl: data.logoUrl || '' }]);
+          showFeedback('success', `Created ${companyForm.name}.`);
+        }
+        setCompanyForm({ 
+          name: '', url: '', logoUrl: '', description: '',
+          streetAddress: '', area: '', locality: '', district: '',
+          postalCode: '', postalArea: '', country: 'TZ', industry: '',
+          foundedYear: '', employeeCount: ''
+        });
+        setEditingCompanyId(null);
+        fetchSystemData();
+      } else {
+        showFeedback('error', data.error || data.details || 'Failed to save company');
+      }
+    } catch (err) {
+      showFeedback('error', 'Error establishing corporate database reference.');
+      console.error('Company save error:', err);
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   const handleAddKeywordToRole = () => {
     if (!roleForm.keywordInput.trim()) return;
@@ -1184,35 +1204,31 @@ const handleCreateCompany = async (e: FormEvent) => {
     }
   };
 
-  
-const handleDeleteRole = async (id: string) => {
-  if (userRole === 'editor') {
-    showFeedback('error', 'PERMISSION DENIED: Role expulsion rejected.');
-    return;
-  }
-
-  if (!confirm("Delete this role? Jobs using this role will need to be reassigned first.")) return;
-
-  try {
-    const res = await fetch(`/api/admin/roles/${id}`, { method: 'DELETE' });
-    const data = await res.json();
-    
-    if (res.ok) {
-      setRolesState(prev => prev.filter(r => r.id !== id));
-      showFeedback('success', 'Role deleted successfully.');
-      fetchSystemData();
-    } else if (res.status === 409) {
-      // Jobs are using this role
-      showFeedback('error', data.error || 'Jobs are using this role. Reassign them first.');
-    } else {
-      showFeedback('error', data.error || 'Could not delete role.');
+  const handleDeleteRole = async (id: string) => {
+    if (userRole === 'editor') {
+      showFeedback('error', 'PERMISSION DENIED: Role expulsion rejected.');
+      return;
     }
-  } catch (err) {
-    showFeedback('error', 'Network error. Could not delete role.');
-  }
-};
 
+    if (!confirm("Delete this role? Jobs using this role will need to be reassigned first.")) return;
 
+    try {
+      const res = await fetch(`/api/admin/roles/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      
+      if (res.ok) {
+        setRolesState(prev => prev.filter(r => r.id !== id));
+        showFeedback('success', 'Role deleted successfully.');
+        fetchSystemData();
+      } else if (res.status === 409) {
+        showFeedback('error', data.error || 'Jobs are using this role. Reassign them first.');
+      } else {
+        showFeedback('error', data.error || 'Could not delete role.');
+      }
+    } catch (err) {
+      showFeedback('error', 'Network error. Could not delete role.');
+    }
+  };
 
   const handlePostReport = async (e: FormEvent) => {
     e.preventDefault();
@@ -1465,7 +1481,7 @@ const handleDeleteRole = async (id: string) => {
     } else if (type === 'segmented') {
       tpl = `<h2>Functional Breakdown of Regional Placements</h2>\n<p>Hiring indexes remain concentrated in leading regional commerce ports and enterprise hubs. Let us look at specific segments:</p>\n<h3>1. Software Engineering</h3>\n<p>Modern applications require highly robust API interfaces and structured database architectures. Companies are investing heavily in refactoring legacy stacks here.</p>\n<h3>2. Infrastructure Specialists</h3>\n<p>Security protocols and reliable container delivery pipelines stand out as high prioritizations.</p>`;
     } else {
-      tpl = `<p>The current landscape indicates a significant growth spike in active listings. As enterprise teams continue to scale, hiring velocity is projected to sustain its upwards trajectory throughout the upcoming quarters. Below, our dynamic normalizer provides live telemetry on corporate placements.</p>`;
+      tpl = `<p>The current landscape indicates a significant growth spike in active listings. As enterprise teams continue to scale, hiring velocity is projected to sustain its upwards trajectory over the upcoming quarters. Below, our dynamic normalizer provides live telemetry on corporate placements.</p>`;
     }
     const newExcerpt = reportForm.excerpt + (reportForm.excerpt ? '\n\n' : '') + tpl;
     setReportForm(prev => ({ ...prev, excerpt: newExcerpt }));
@@ -1888,56 +1904,53 @@ const handleDeleteRole = async (id: string) => {
 
           </div>
 
-
-{/* 🧪 Google Indexing API Test */}
-<div className="p-5 rounded-2xl bg-white/[0.01] border border-white/5 space-y-3">
-  <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-    <Globe size={14} className="text-green-400" />
-    🧪 Google Indexing API Test
-  </h4>
-  <div className="flex gap-2">
-    <input 
-      type="text" 
-      id="test-indexing-url"
-      placeholder="Job URL to notify Google..."
-      defaultValue="https://jobsreport.online/"
-      className="flex-1 bg-black/40 border border-white/10 px-3 py-2 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-green-500/50"
-    />
-    <button
-      onClick={async () => {
-        const url = (document.getElementById('test-indexing-url') as HTMLInputElement).value;
-        if (!url) { showFeedback('error', 'Please enter a URL'); return; }
-        setActionLoading(true);
-        try {
-          const res = await fetch('/api/test-indexing', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url })
-          });
-          const data = await res.json();
-          if (data.success) {
-            showFeedback('success', `✅ Google notified: ${url}`);
-          } else {
-            showFeedback('error', `❌ Failed: ${JSON.stringify(data.error || data)}`);
-          }
-        } catch (err) {
-          showFeedback('error', 'Network error');
-        } finally {
-          setActionLoading(false);
-        }
-      }}
-      disabled={actionLoading}
-      className="px-4 py-2 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all whitespace-nowrap"
-    >
-      {actionLoading ? 'Testing...' : '🚀 Notify Google'}
-    </button>
-  </div>
-  <p className="text-[9px] text-gray-500 font-mono">
-    Sends URL to Google Indexing API for instant crawling
-  </p>
-</div>
-
-
+          {/* Google Indexing API Test */}
+          <div className="p-5 rounded-2xl bg-white/[0.01] border border-white/5 space-y-3">
+            <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+              <Globe size={14} className="text-green-400" />
+              🧪 Google Indexing API Test
+            </h4>
+            <div className="flex gap-2">
+              <input 
+                type="text" 
+                id="test-indexing-url"
+                placeholder="Job URL to notify Google..."
+                defaultValue="https://jobsreport.online/"
+                className="flex-1 bg-black/40 border border-white/10 px-3 py-2 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-green-500/50"
+              />
+              <button
+                onClick={async () => {
+                  const url = (document.getElementById('test-indexing-url') as HTMLInputElement).value;
+                  if (!url) { showFeedback('error', 'Please enter a URL'); return; }
+                  setActionLoading(true);
+                  try {
+                    const res = await fetch('/api/test-indexing', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ url })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                      showFeedback('success', `✅ Google notified: ${url}`);
+                    } else {
+                      showFeedback('error', `❌ Failed: ${JSON.stringify(data.error || data)}`);
+                    }
+                  } catch (err) {
+                    showFeedback('error', 'Network error');
+                  } finally {
+                    setActionLoading(false);
+                  }
+                }}
+                disabled={actionLoading}
+                className="px-4 py-2 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all whitespace-nowrap"
+              >
+                {actionLoading ? 'Testing...' : '🚀 Notify Google'}
+              </button>
+            </div>
+            <p className="text-[9px] text-gray-500 font-mono">
+              Sends URL to Google Indexing API for instant crawling
+            </p>
+          </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             
@@ -2243,126 +2256,121 @@ const handleDeleteRole = async (id: string) => {
                   </div>
                 </div>
 
+                {/* Apply Method Selection */}
+                <div className="space-y-3 border-t border-white/5 pt-4">
+                  <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">
+                    Application Method
+                  </label>
+                  
+                  {/* 4-Option Toggle */}
+                  <div className="flex flex-wrap bg-black/40 p-1 rounded-xl border border-white/5 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setApplicationType('url')}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
+                        applicationType === 'url' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'
+                      }`}
+                    >
+                      🔗 URL
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setApplicationType('email')}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
+                        applicationType === 'email' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'
+                      }`}
+                    >
+                      ✉️ Email
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setApplicationType('whatsapp')}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
+                        applicationType === 'whatsapp' ? 'bg-green-600 text-white' : 'text-gray-500 hover:text-white'
+                      }`}
+                    >
+                      💬 WhatsApp
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setApplicationType('instructions')}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
+                        applicationType === 'instructions' ? 'bg-violet-600 text-white' : 'text-gray-500 hover:text-white'
+                      }`}
+                    >
+                      📋 Instructions
+                    </button>
+                  </div>
 
+                  {/* URL Input */}
+                  {applicationType === 'url' && (
+                    <div className="space-y-1">
+                      <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Application URL</label>
+                      <input 
+                        type="url" 
+                        value={jobForm.url}
+                        onChange={(e) => setJobForm(prev => ({ ...prev, url: e.target.value }))}
+                        placeholder="https://company.com/careers/apply"
+                        className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                      />
+                    </div>
+                  )}
 
-                                                  
-{/* Apply Method Selection */}
-<div className="space-y-3 border-t border-white/5 pt-4">
-  <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">
-    Application Method
-  </label>
-  
-  {/* 4-Option Toggle */}
-  <div className="flex flex-wrap bg-black/40 p-1 rounded-xl border border-white/5 gap-1">
-    <button
-      type="button"
-      onClick={() => setApplicationType('url')}
-      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
-        applicationType === 'url' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'
-      }`}
-    >
-      🔗 URL
-    </button>
-    <button
-      type="button"
-      onClick={() => setApplicationType('email')}
-      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
-        applicationType === 'email' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'
-      }`}
-    >
-      ✉️ Email
-    </button>
-    <button
-      type="button"
-      onClick={() => setApplicationType('whatsapp')}
-      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
-        applicationType === 'whatsapp' ? 'bg-green-600 text-white' : 'text-gray-500 hover:text-white'
-      }`}
-    >
-      💬 WhatsApp
-    </button>
-    <button
-      type="button"
-      onClick={() => setApplicationType('instructions')}
-      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
-        applicationType === 'instructions' ? 'bg-violet-600 text-white' : 'text-gray-500 hover:text-white'
-      }`}
-    >
-      📋 Instructions
-    </button>
-  </div>
+                  {/* Email Input */}
+                  {applicationType === 'email' && (
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Application Email</label>
+                        <input 
+                          type="email" 
+                          value={jobForm.url}
+                          onChange={(e) => setJobForm(prev => ({ ...prev, url: e.target.value }))}
+                          placeholder="careers@company.com"
+                          className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Email Subject (Optional)</label>
+                        <input 
+                          type="text" 
+                          value={jobForm.companyNewUrl}
+                          onChange={(e) => setJobForm(prev => ({ ...prev, companyNewUrl: e.target.value }))}
+                          placeholder={`Application for ${jobForm.title || 'Position'}`}
+                          className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                        />
+                      </div>
+                    </div>
+                  )}
 
-  {/* URL Input */}
-  {applicationType === 'url' && (
-    <div className="space-y-1">
-      <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Application URL</label>
-      <input 
-        type="url" 
-        value={jobForm.url}
-        onChange={(e) => setJobForm(prev => ({ ...prev, url: e.target.value }))}
-        placeholder="https://company.com/careers/apply"
-        className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
-      />
-    </div>
-  )}
+                  {/* WhatsApp Input */}
+                  {applicationType === 'whatsapp' && (
+                    <div className="space-y-1">
+                      <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">WhatsApp Number</label>
+                      <input 
+                        type="text" 
+                        value={jobForm.url}
+                        onChange={(e) => setJobForm(prev => ({ ...prev, url: e.target.value }))}
+                        placeholder="+255 612 345 678"
+                        className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-green-500 transition-colors"
+                      />
+                      <p className="text-[8px] text-gray-500 font-mono mt-1">Applicants will open WhatsApp to contact you</p>
+                    </div>
+                  )}
 
-  {/* Email Input */}
-  {applicationType === 'email' && (
-    <div className="space-y-3">
-      <div className="space-y-1">
-        <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Application Email</label>
-        <input 
-          type="email" 
-          value={jobForm.url}
-          onChange={(e) => setJobForm(prev => ({ ...prev, url: e.target.value }))}
-          placeholder="careers@company.com"
-          className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
-        />
-      </div>
-      <div className="space-y-1">
-        <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Email Subject (Optional)</label>
-        <input 
-          type="text" 
-          value={jobForm.companyNewUrl}
-          onChange={(e) => setJobForm(prev => ({ ...prev, companyNewUrl: e.target.value }))}
-          placeholder={`Application for ${jobForm.title || 'Position'}`}
-          className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
-        />
-      </div>
-    </div>
-  )}
-
-  {/* WhatsApp Input */}
-  {applicationType === 'whatsapp' && (
-    <div className="space-y-1">
-      <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">WhatsApp Number</label>
-      <input 
-        type="text" 
-        value={jobForm.url}
-        onChange={(e) => setJobForm(prev => ({ ...prev, url: e.target.value }))}
-        placeholder="+255 612 345 678"
-        className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-green-500 transition-colors"
-      />
-      <p className="text-[8px] text-gray-500 font-mono mt-1">Applicants will open WhatsApp to contact you</p>
-    </div>
-  )}
-
-  {/* Instructions Input */}
-  {applicationType === 'instructions' && (
-    <div className="space-y-1">
-      <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Application Instructions</label>
-      <textarea
-        value={jobForm.url}
-        onChange={(e) => setJobForm(prev => ({ ...prev, url: e.target.value }))}
-        placeholder="Submit your application to the Secretary's Office at Morning Star School, P.O. Box 123, Dar es Salaam..."
-        className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-violet-500 transition-colors h-20 resize-none"
-      />
-      <p className="text-[8px] text-gray-500 font-mono mt-1">These instructions will be shown to applicants</p>
-    </div>
-  )}
-</div>
-
-
+                  {/* Instructions Input */}
+                  {applicationType === 'instructions' && (
+                    <div className="space-y-1">
+                      <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Application Instructions</label>
+                      <textarea
+                        value={jobForm.url}
+                        onChange={(e) => setJobForm(prev => ({ ...prev, url: e.target.value }))}
+                        placeholder="Submit your application to the Secretary's Office at Morning Star School, P.O. Box 123, Dar es Salaam..."
+                        className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-violet-500 transition-colors h-20 resize-none"
+                      />
+                      <p className="text-[8px] text-gray-500 font-mono mt-1">These instructions will be shown to applicants</p>
+                    </div>
+                  )}
+                </div>
 
                 <div className="space-y-1">
                   <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Job Expiry Date</label>
@@ -2437,7 +2445,7 @@ const handleDeleteRole = async (id: string) => {
                       Job Description {jobDescription && <span className="text-emerald-400 ml-1">• Ready</span>}
                     </label>
                     <div className="flex items-center gap-2">
-                      {/* ✅ Edit Mode Toggle */}
+                      {/* Edit Mode Toggle */}
                       {jobDescription && (
                         <div className="flex bg-black/60 p-0.5 rounded-lg font-mono text-[9px] font-bold">
                           <button
@@ -2518,7 +2526,7 @@ const handleDeleteRole = async (id: string) => {
                     </div>
                   )}
                   
-                  {/* ✅ Visual Editor */}
+                  {/* Visual Editor */}
                   {descEditMode === 'visual' && (
                     <div 
                       ref={jobDescEditorRef}
@@ -2535,7 +2543,7 @@ const handleDeleteRole = async (id: string) => {
                     />
                   )}
 
-                  {/* ✅ Code/HTML Editor */}
+                  {/* Code/HTML Editor */}
                   {descEditMode === 'code' && (
                     <textarea
                       value={jobDescription}
@@ -2563,203 +2571,199 @@ const handleDeleteRole = async (id: string) => {
                   </div>
                 </div>
 
-{/* ✅ Schema & SEO Data Section */}
-<div className="space-y-2 border-t border-white/5 pt-4">
-  <div className="flex items-center justify-between">
-    <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">
-      Schema & SEO Data
-    </label>
-    <button
-      type="button"
-      onClick={async () => {
-        if (!jobForm.title) { showFeedback('error', 'Please enter a job title first'); return; }
-        setActionLoading(true);
-        try {
-          const res = await fetch('/api/ai/extract-schema', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              title: jobForm.title,
-              description: jobDescription,
-              location: jobForm.location,
-              company: isCreatingNewCompanyInline ? jobForm.companyNewName : jobForm.companySelected
-            })
-          });
-          const result = await res.json();
-          if (result.success && result.schema) {
-            setSchemaData(prev => ({
-              ...prev,
-              job_category: result.schema.job_category || prev.job_category,
-              industry: result.schema.industry || prev.industry,
-              employment_type: result.schema.employment_type || prev.employment_type,
-              workplace_type: result.schema.workplace_type || prev.workplace_type,
-              education_level: result.schema.education_level || prev.education_level,
-              experience_months: result.schema.experience_months || prev.experience_months,
-              skills: Array.isArray(result.schema.skills) ? result.schema.skills : prev.skills,
-              benefits: Array.isArray(result.schema.benefits) ? result.schema.benefits : prev.benefits,
-              salary_min: result.schema.salary_min ? Number(result.schema.salary_min) : prev.salary_min,
-              salary_max: result.schema.salary_max ? Number(result.schema.salary_max) : prev.salary_max,
-              salary_currency: result.schema.salary_currency || prev.salary_currency,
-            }));
-            showFeedback('success', 'Schema extracted! Fill location manually below.');
-          } else {
-            showFeedback('error', result.error || 'Schema extraction failed');
-          }
-        } catch (err) { showFeedback('error', 'AI service unavailable'); }
-        finally { setActionLoading(false); }
-      }}
-      disabled={actionLoading || !jobForm.title}
-      className="text-[9px] font-mono font-bold text-violet-500 hover:text-violet-400 disabled:text-gray-600 uppercase flex items-center gap-1 transition-colors"
-    >
-      <Sparkles size={12} /> Auto-Extract Schema
-    </button>
-  </div>
+                {/* Schema & SEO Data Section */}
+                <div className="space-y-2 border-t border-white/5 pt-4">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">
+                      Schema & SEO Data
+                    </label>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!jobForm.title) { showFeedback('error', 'Please enter a job title first'); return; }
+                        setActionLoading(true);
+                        try {
+                          const res = await fetch('/api/ai/extract-schema', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              title: jobForm.title,
+                              description: jobDescription,
+                              location: jobForm.location,
+                              company: isCreatingNewCompanyInline ? jobForm.companyNewName : jobForm.companySelected
+                            })
+                          });
+                          const result = await res.json();
+                          if (result.success && result.schema) {
+                            setSchemaData(prev => ({
+                              ...prev,
+                              job_category: result.schema.job_category || prev.job_category,
+                              industry: result.schema.industry || prev.industry,
+                              employment_type: result.schema.employment_type || prev.employment_type,
+                              workplace_type: result.schema.workplace_type || prev.workplace_type,
+                              education_level: result.schema.education_level || prev.education_level,
+                              experience_months: result.schema.experience_months || prev.experience_months,
+                              skills: Array.isArray(result.schema.skills) ? result.schema.skills : prev.skills,
+                              benefits: Array.isArray(result.schema.benefits) ? result.schema.benefits : prev.benefits,
+                              salary_min: result.schema.salary_min ? Number(result.schema.salary_min) : prev.salary_min,
+                              salary_max: result.schema.salary_max ? Number(result.schema.salary_max) : prev.salary_max,
+                              salary_currency: result.schema.salary_currency || prev.salary_currency,
+                            }));
+                            showFeedback('success', 'Schema extracted! Fill location manually below.');
+                          } else {
+                            showFeedback('error', result.error || 'Schema extraction failed');
+                          }
+                        } catch (err) { showFeedback('error', 'AI service unavailable'); }
+                        finally { setActionLoading(false); }
+                      }}
+                      disabled={actionLoading || !jobForm.title}
+                      className="text-[9px] font-mono font-bold text-violet-500 hover:text-violet-400 disabled:text-gray-600 uppercase flex items-center gap-1 transition-colors"
+                    >
+                      <Sparkles size={12} /> Auto-Extract Schema
+                    </button>
+                  </div>
 
-  {/* Row 1: Category (FREE TEXT) + Employment + Workplace */}
-  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-    <input 
-      type="text" 
-      placeholder="Category (e.g. IT, Accounting)" 
-      value={schemaData.job_category || ''} 
-      onChange={(e) => setSchemaData(prev => ({...prev, job_category: e.target.value}))} 
-      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
-    />
-    <select value={schemaData.employment_type || 'FULL_TIME'} onChange={(e) => setSchemaData(prev => ({...prev, employment_type: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
-      <option value="FULL_TIME">Full Time</option>
-      <option value="PART_TIME">Part Time</option>
-      <option value="CONTRACT">Contract</option>
-      <option value="TEMPORARY">Temporary</option>
-      <option value="INTERNSHIP">Internship</option>
-    </select>
-    <select value={schemaData.workplace_type || 'Onsite'} onChange={(e) => setSchemaData(prev => ({...prev, workplace_type: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
-      <option value="Onsite">Onsite</option>
-      <option value="Remote">Remote</option>
-      <option value="Hybrid">Hybrid</option>
-    </select>
-  </div>
+                  {/* Row 1: Category (FREE TEXT) + Employment + Workplace */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="Category (e.g. IT, Accounting)" 
+                      value={schemaData.job_category || ''} 
+                      onChange={(e) => setSchemaData(prev => ({...prev, job_category: e.target.value}))} 
+                      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+                    />
+                    <select value={schemaData.employment_type || 'FULL_TIME'} onChange={(e) => setSchemaData(prev => ({...prev, employment_type: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
+                      <option value="FULL_TIME">Full Time</option>
+                      <option value="PART_TIME">Part Time</option>
+                      <option value="CONTRACT">Contract</option>
+                      <option value="TEMPORARY">Temporary</option>
+                      <option value="INTERNSHIP">Internship</option>
+                    </select>
+                    <select value={schemaData.workplace_type || 'Onsite'} onChange={(e) => setSchemaData(prev => ({...prev, workplace_type: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
+                      <option value="Onsite">Onsite</option>
+                      <option value="Remote">Remote</option>
+                      <option value="Hybrid">Hybrid</option>
+                    </select>
+                  </div>
 
-  {/* Row 2: Education + Experience + Industry (FREE TEXT) */}
-  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-    <select value={schemaData.education_level || 'Any'} onChange={(e) => setSchemaData(prev => ({...prev, education_level: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
-      <option value="Any">Any Education</option>
-      <option value="High School">High School</option>
-      <option value="Diploma">Diploma</option>
-      <option value="Bachelor">Bachelor</option>
-      <option value="Master">Master</option>
-      <option value="PhD">PhD</option>
-    </select>
-    <input 
-      type="number" 
-      placeholder="Experience (months)" 
-      value={schemaData.experience_months || ''} 
-      onChange={(e) => setSchemaData(prev => ({...prev, experience_months: parseInt(e.target.value) || 0}))} 
-      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
-    />
-    <input 
-      type="text" 
-      placeholder="Industry (e.g. Finance)" 
-      value={schemaData.industry || ''} 
-      onChange={(e) => setSchemaData(prev => ({...prev, industry: e.target.value}))} 
-      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
-    />
-  </div>
+                  {/* Row 2: Education + Experience + Industry (FREE TEXT) */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    <select value={schemaData.education_level || 'Any'} onChange={(e) => setSchemaData(prev => ({...prev, education_level: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
+                      <option value="Any">Any Education</option>
+                      <option value="High School">High School</option>
+                      <option value="Diploma">Diploma</option>
+                      <option value="Bachelor">Bachelor</option>
+                      <option value="Master">Master</option>
+                      <option value="PhD">PhD</option>
+                    </select>
+                    <input 
+                      type="number" 
+                      placeholder="Experience (months)" 
+                      value={schemaData.experience_months || ''} 
+                      onChange={(e) => setSchemaData(prev => ({...prev, experience_months: parseInt(e.target.value) || 0}))} 
+                      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="Industry (e.g. Finance)" 
+                      value={schemaData.industry || ''} 
+                      onChange={(e) => setSchemaData(prev => ({...prev, industry: e.target.value}))} 
+                      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+                    />
+                  </div>
 
-  {/* Row 3: Currency + Salary Min + Salary Max */}
-  <div className="grid grid-cols-3 gap-2">
-    <select value={schemaData.salary_currency || 'TZS'} onChange={(e) => setSchemaData(prev => ({...prev, salary_currency: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
-      <option value="TZS">🇹🇿 TSh</option>
-      <option value="KES">🇰🇪 KSh</option>
-      <option value="UGX">🇺🇬 USh</option>
-      <option value="USD">🇺🇸 $</option>
-      <option value="EUR">🇪🇺 €</option>
-      <option value="GBP">🇬🇧 £</option>
-      <option value="ZAR">🇿🇦 R</option>
-      <option value="NGN">🇳🇬 ₦</option>
-      <option value="AED">🇦🇪 د.إ</option>
-    </select>
-    <input 
-      type="number" 
-      placeholder="Min Salary" 
-      value={schemaData.salary_min || ''} 
-      onChange={(e) => setSchemaData(prev => ({...prev, salary_min: parseFloat(e.target.value) || null}))} 
-      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
-    />
-    <input 
-      type="number" 
-      placeholder="Max Salary" 
-      value={schemaData.salary_max || ''} 
-      onChange={(e) => setSchemaData(prev => ({...prev, salary_max: parseFloat(e.target.value) || null}))} 
-      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
-    />
-  </div>
+                  {/* Row 3: Currency + Salary Min + Salary Max */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <select value={schemaData.salary_currency || 'TZS'} onChange={(e) => setSchemaData(prev => ({...prev, salary_currency: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
+                      <option value="TZS">🇹🇿 TSh</option>
+                      <option value="KES">🇰🇪 KSh</option>
+                      <option value="UGX">🇺🇬 USh</option>
+                      <option value="USD">🇺🇸 $</option>
+                      <option value="EUR">🇪🇺 €</option>
+                      <option value="GBP">🇬🇧 £</option>
+                      <option value="ZAR">🇿🇦 R</option>
+                      <option value="NGN">🇳🇬 ₦</option>
+                      <option value="AED">🇦🇪 د.إ</option>
+                    </select>
+                    <input 
+                      type="number" 
+                      placeholder="Min Salary" 
+                      value={schemaData.salary_min || ''} 
+                      onChange={(e) => setSchemaData(prev => ({...prev, salary_min: parseFloat(e.target.value) || null}))} 
+                      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+                    />
+                    <input 
+                      type="number" 
+                      placeholder="Max Salary" 
+                      value={schemaData.salary_max || ''} 
+                      onChange={(e) => setSchemaData(prev => ({...prev, salary_max: parseFloat(e.target.value) || null}))} 
+                      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+                    />
+                  </div>
 
-  {/* Row 4: LOCATION FIELDS - Google Schema (Street, City, Region, Country) */}
-  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-    <input 
-      type="text" 
-      placeholder="Street (e.g. Kashai)" 
-      value={schemaData.street_address || ''} 
-      onChange={(e) => setSchemaData(prev => ({...prev, street_address: e.target.value}))} 
-      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
-    />
-    <input 
-      type="text" 
-      placeholder="City *" 
-      value={schemaData.city || ''} 
-      onChange={(e) => setSchemaData(prev => ({...prev, city: e.target.value}))} 
-      className="bg-black/40 border border-emerald-500/20 px-2 py-2 rounded-lg text-[10px] text-white" 
-    />
-    <input 
-      type="text" 
-      placeholder="Region" 
-      value={schemaData.region || ''} 
-      onChange={(e) => setSchemaData(prev => ({...prev, region: e.target.value}))} 
-      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
-    />
-    <input 
-      type="text" 
-      placeholder="Country" 
-      value={schemaData.country || ''} 
-      onChange={(e) => setSchemaData(prev => ({...prev, country: e.target.value}))} 
-      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
-    />
-  </div>
+                  {/* Row 4: LOCATION FIELDS - Google Schema */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="Street (e.g. Kashai)" 
+                      value={schemaData.street_address || ''} 
+                      onChange={(e) => setSchemaData(prev => ({...prev, street_address: e.target.value}))} 
+                      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="City *" 
+                      value={schemaData.city || ''} 
+                      onChange={(e) => setSchemaData(prev => ({...prev, city: e.target.value}))} 
+                      className="bg-black/40 border border-emerald-500/20 px-2 py-2 rounded-lg text-[10px] text-white" 
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="Region" 
+                      value={schemaData.region || ''} 
+                      onChange={(e) => setSchemaData(prev => ({...prev, region: e.target.value}))} 
+                      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="Country" 
+                      value={schemaData.country || ''} 
+                      onChange={(e) => setSchemaData(prev => ({...prev, country: e.target.value}))} 
+                      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+                    />
+                  </div>
 
-  {/* Row 5: Postcode + Skills + Benefits */}
-  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-    <input 
-      type="text" 
-      placeholder="Postcode (e.g. 35101)" 
-      value={schemaData.postcode || ''} 
-      onChange={(e) => setSchemaData(prev => ({...prev, postcode: e.target.value}))} 
-      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
-    />
-    <input 
-      type="text" 
-      placeholder="Skills (comma separated)" 
-      value={Array.isArray(schemaData.skills) ? schemaData.skills.join(', ') : ''} 
-      onChange={(e) => setSchemaData(prev => ({...prev, skills: e.target.value.split(',').map(s => s.trim()).filter(Boolean)}))} 
-      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
-    />
-    <input 
-      type="text" 
-      placeholder="Benefits (comma separated)" 
-      value={Array.isArray(schemaData.benefits) ? schemaData.benefits.join(', ') : ''} 
-      onChange={(e) => setSchemaData(prev => ({...prev, benefits: e.target.value.split(',').map(s => s.trim()).filter(Boolean)}))} 
-      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
-    />
-  </div>
+                  {/* Row 5: Postcode + Skills + Benefits */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="Postcode (e.g. 35101)" 
+                      value={schemaData.postcode || ''} 
+                      onChange={(e) => setSchemaData(prev => ({...prev, postcode: e.target.value}))} 
+                      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="Skills (comma separated)" 
+                      value={Array.isArray(schemaData.skills) ? schemaData.skills.join(', ') : ''} 
+                      onChange={(e) => setSchemaData(prev => ({...prev, skills: e.target.value.split(',').map(s => s.trim()).filter(Boolean)}))} 
+                      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="Benefits (comma separated)" 
+                      value={Array.isArray(schemaData.benefits) ? schemaData.benefits.join(', ') : ''} 
+                      onChange={(e) => setSchemaData(prev => ({...prev, benefits: e.target.value.split(',').map(s => s.trim()).filter(Boolean)}))} 
+                      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+                    />
+                  </div>
 
-  {/* Google Schema indicator */}
-  <div className="flex items-center gap-2 text-[8px] text-gray-500 font-mono">
-    <Globe size={10} />
-    <span>These location fields are used by Google for job search results</span>
-  </div>
-</div>
-
-
-
-
+                  {/* Google Schema indicator */}
+                  <div className="flex items-center gap-2 text-[8px] text-gray-500 font-mono">
+                    <Globe size={10} />
+                    <span>These location fields are used by Google for job search results</span>
+                  </div>
+                </div>
 
                 {/* Action Buttons - Save Draft + Publish */}
                 <div className="flex gap-2 pt-2">
@@ -2773,7 +2777,7 @@ const handleDeleteRole = async (id: string) => {
                     </button>
                   )}
                   
-                  {/* ✅ Save Draft Button */}
+                  {/* Save Draft Button */}
                   <button
                     type="button"
                     onClick={async (e) => {
@@ -2790,7 +2794,7 @@ const handleDeleteRole = async (id: string) => {
                     {actionLoading && isDraft ? 'Saving...' : 'Save Draft'}
                   </button>
                   
-                  {/* ✅ Publish Button */}
+                  {/* Publish Button */}
                   <button
                     type="submit"
                     disabled={actionLoading || !!duplicateWarning}
@@ -2878,7 +2882,7 @@ const handleDeleteRole = async (id: string) => {
                       )}
                     </div>
                     
-                    {/* ✅ Draft Badge */}
+                    {/* Draft Badge */}
                     {job.active === false && (
                       <div className="flex items-center gap-1 mt-1">
                         <span className="px-1.5 py-0.5 rounded text-[7px] font-bold bg-amber-500/10 text-amber-400 uppercase">
@@ -2950,7 +2954,7 @@ const handleDeleteRole = async (id: string) => {
         </motion.div>
       )}
 
-      {/* TAB 3: COMPANY MANAGEMENT */}
+      {/* TAB 3: COMPANY MANAGEMENT - UPDATED WITH ENHANCED FORM */}
       {activeTab === 'companies' && (
         <motion.div 
           initial={{ opacity: 0 }}
@@ -2966,33 +2970,200 @@ const handleDeleteRole = async (id: string) => {
                 <p className="text-xs text-gray-500 mt-1">Manual company profile initialization for Spotlight visualization panels.</p>
               </div>
 
-              <form onSubmit={handleCreateCompany} className="space-y-4">
+              <form onSubmit={handleCreateCompany} className="space-y-5">
                 
-                <div className="space-y-1">
-                  <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Company Title</label>
-                  <input 
-                    type="text" 
-                    value={companyForm.name}
-                    onChange={(e) => setCompanyForm(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="e.g. Stripe Inc"
-                    className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
-                    required
+                {/* === BASIC INFORMATION === */}
+                <div className="border-b border-white/5 pb-4">
+                  <h4 className="text-[11px] font-extrabold text-blue-400 uppercase tracking-widest flex items-center gap-2 mb-4">
+                    <Building2 size={14} /> Basic Information
+                  </h4>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Company Name *</label>
+                      <input 
+                        type="text" 
+                        value={companyForm.name}
+                        onChange={(e) => setCompanyForm(prev => ({ ...prev, name: e.target.value }))}
+                        placeholder="e.g. Selcom Tanzania"
+                        className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Industry</label>
+                      <input 
+                        type="text" 
+                        value={companyForm.industry}
+                        onChange={(e) => setCompanyForm(prev => ({ ...prev, industry: e.target.value }))}
+                        placeholder="e.g. Fintech, Digital Payments, Mobile Money"
+                        className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-1">
+                    <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Website URL</label>
+                    <input 
+                      type="url" 
+                      value={companyForm.url}
+                      onChange={(e) => setCompanyForm(prev => ({ ...prev, url: e.target.value }))}
+                      placeholder="https://www.selcom.net"
+                      className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                    />
+                  </div>
+                </div>
+
+                {/* === LOCATION DETAILS === */}
+                <div className="border-b border-white/5 pb-4">
+                  <h4 className="text-[11px] font-extrabold text-emerald-400 uppercase tracking-widest flex items-center gap-2 mb-4">
+                    <MapPin size={14} /> Location Details
+                  </h4>
+                  
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Street Address</label>
+                      <input 
+                        type="text" 
+                        value={companyForm.streetAddress}
+                        onChange={(e) => setCompanyForm(prev => ({ ...prev, streetAddress: e.target.value }))}
+                        placeholder="e.g. Street Plot 1520, Mwai Kibaki Road, Mikocheni"
+                        className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div className="space-y-1">
+                        <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Area</label>
+                        <input 
+                          type="text" 
+                          value={companyForm.area}
+                          onChange={(e) => setCompanyForm(prev => ({ ...prev, area: e.target.value }))}
+                          placeholder="e.g. Mikocheni"
+                          className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Locality</label>
+                        <input 
+                          type="text" 
+                          value={companyForm.locality}
+                          onChange={(e) => setCompanyForm(prev => ({ ...prev, locality: e.target.value }))}
+                          placeholder="e.g. Dar es Salaam"
+                          className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">District</label>
+                        <input 
+                          type="text" 
+                          value={companyForm.district}
+                          onChange={(e) => setCompanyForm(prev => ({ ...prev, district: e.target.value }))}
+                          placeholder="e.g. Kinondoni"
+                          className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div className="space-y-1">
+                        <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Postal Code</label>
+                        <input 
+                          type="text" 
+                          value={companyForm.postalCode}
+                          onChange={(e) => setCompanyForm(prev => ({ ...prev, postalCode: e.target.value }))}
+                          placeholder="e.g. 14111"
+                          className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Postal Area</label>
+                        <input 
+                          type="text" 
+                          value={companyForm.postalArea}
+                          onChange={(e) => setCompanyForm(prev => ({ ...prev, postalArea: e.target.value }))}
+                          placeholder="e.g. Mikocheni area"
+                          className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Country</label>
+                        <select
+                          value={companyForm.country}
+                          onChange={(e) => setCompanyForm(prev => ({ ...prev, country: e.target.value }))}
+                          className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors cursor-pointer"
+                        >
+                          <option value="TZ">🇹🇿 Tanzania</option>
+                          <option value="KE">🇰🇪 Kenya</option>
+                          <option value="UG">🇺🇬 Uganda</option>
+                          <option value="RW">🇷🇼 Rwanda</option>
+                          <option value="ZA">🇿🇦 South Africa</option>
+                          <option value="NG">🇳🇬 Nigeria</option>
+                          <option value="GH">🇬🇭 Ghana</option>
+                          <option value="US">🇺🇸 United States</option>
+                          <option value="GB">🇬🇧 United Kingdom</option>
+                          <option value="AE">🇦🇪 UAE</option>
+                          <option value="IN">🇮🇳 India</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* === COMPANY DETAILS === */}
+                <div className="border-b border-white/5 pb-4">
+                  <h4 className="text-[11px] font-extrabold text-violet-400 uppercase tracking-widest flex items-center gap-2 mb-4">
+                    <Briefcase size={14} /> Company Details
+                  </h4>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Founded Year</label>
+                      <input 
+                        type="text" 
+                        value={companyForm.foundedYear}
+                        onChange={(e) => setCompanyForm(prev => ({ ...prev, foundedYear: e.target.value }))}
+                        placeholder="e.g. 2005"
+                        className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Employee Count</label>
+                      <input 
+                        type="text" 
+                        value={companyForm.employeeCount}
+                        onChange={(e) => setCompanyForm(prev => ({ ...prev, employeeCount: e.target.value }))}
+                        placeholder="e.g. 500 - 1000"
+                        className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* === DESCRIPTION === */}
+                <div className="border-b border-white/5 pb-4">
+                  <h4 className="text-[11px] font-extrabold text-amber-400 uppercase tracking-widest flex items-center gap-2 mb-4">
+                    <FileText size={14} /> Company Description
+                  </h4>
+                  
+                  <textarea
+                    value={companyForm.description}
+                    onChange={(e) => setCompanyForm(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Write a comprehensive company description..."
+                    className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors h-32 resize-none"
+                    rows={4}
                   />
                 </div>
 
+                {/* === LOGO === */}
                 <div className="space-y-1">
-                  <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Main website careers portal URL</label>
-                  <input 
-                    type="url" 
-                    value={companyForm.url}
-                    onChange={(e) => setCompanyForm(prev => ({ ...prev, url: e.target.value }))}
-                    placeholder="https://stripe.com/jobs"
-                    className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Spotlight Logo Vector</label>
+                  <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Company Logo</label>
                   <div className="border border-dashed border-white/10 hover:border-white/20 p-6 rounded-2xl text-center relative cursor-pointer group">
                     <input 
                       type="file" 
@@ -3002,17 +3173,18 @@ const handleDeleteRole = async (id: string) => {
                     />
                     <Upload size={16} className="mx-auto text-gray-500 group-hover:text-white transition-colors mb-2" />
                     <span className="block text-[11px] text-gray-400">
-                      {companyForm.logoUrl ? "✓ PNG/SVG LOGO LOADED IN MEMORY" : "Drag & drop company logo icon here"}
+                      {companyForm.logoUrl ? "✓ LOGO LOADED IN MEMORY" : "Drag & drop company logo"}
                     </span>
                   </div>
                 </div>
 
-                <div className="flex gap-2">
+                {/* === SUBMIT BUTTONS === */}
+                <div className="flex gap-2 pt-2">
                   {editingCompanyId && (
                     <button
                       type="button"
                       onClick={handleCancelEditCompany}
-                      className="flex-1 py-3 bg-white/5 border border-white/10 text-stone-300 font-extrabold text-[11px] uppercase rounded-2xl"
+                      className="flex-1 py-3 bg-white/5 border border-white/10 text-stone-300 font-extrabold text-[11px] uppercase rounded-2xl transition-all"
                     >
                       Cancel
                     </button>
@@ -3020,9 +3192,9 @@ const handleDeleteRole = async (id: string) => {
                   <button
                     type="submit"
                     disabled={actionLoading}
-                    className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-500 text-stone-100 font-extrabold text-[11px] uppercase tracking-widest rounded-2xl transition-all cursor-pointer"
+                    className="flex-1 py-3.5 bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-500 hover:to-violet-500 disabled:from-gray-800 disabled:to-gray-800 disabled:text-gray-500 text-stone-100 font-extrabold text-[11px] uppercase tracking-widest rounded-2xl transition-all cursor-pointer shadow-lg shadow-blue-500/10"
                   >
-                    {actionLoading ? "Processing..." : editingCompanyId ? "UPDATE COMPANY" : "PUBLISH CORPORATE DOMAIN NODE"}
+                    {actionLoading ? "Processing..." : editingCompanyId ? "UPDATE COMPANY" : "PUBLISH COMPANY"}
                   </button>
                 </div>
 
