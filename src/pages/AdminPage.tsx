@@ -185,25 +185,27 @@ export default function AdminPage() {
     country: 'Tanzania',
     postcode: '',
     slug: '',
-    canonical_url: ''
+    canonical_url: '',
+    whatsapp_number: '',
+    application_instructions: ''
   });
 
   // --- COMPANY FORM STATES (UPDATED) ---
   const [companyForm, setCompanyForm] = useState({
     name: '',
-    website: '',
-    logo_url: '',
+    url: '',
+    logoUrl: '',
     description: '',
-    street_address: '',
+    streetAddress: '',
     area: '',
     locality: '',
     district: '',
-    postal_code: '',
-    postal_area: '',
+    postalCode: '',
+    postalArea: '',
     country: 'TZ',
     industry: '',
-    founded_year: '',
-    employee_count: ''
+    foundedYear: '',
+    employeeCount: ''
   });
 
   // --- ROLE FORM STATES ---
@@ -452,7 +454,12 @@ export default function AdminPage() {
           });
           const schemaResult = await schemaRes.json();
           if (schemaResult.success && schemaResult.schema) {
-            setSchemaData(prev => ({ ...prev, ...schemaResult.schema }));
+            setSchemaData(prev => ({ 
+              ...prev, 
+              ...schemaResult.schema,
+              whatsapp_number: schemaResult.schema?.whatsapp_number || '',
+              application_instructions: schemaResult.schema?.application_instructions || ''
+            }));
             console.log('Schema extracted:', schemaResult.schema);
           }
         } catch (schemaErr) {
@@ -504,16 +511,16 @@ export default function AdminPage() {
           name: result.data.name || prev.name,
           industry: result.data.industry || prev.industry,
           description: result.data.description || prev.description,
-          website: result.data.website || prev.website,
-          street_address: result.data.streetAddress || prev.street_address,
+          url: result.data.website || prev.url,
+          streetAddress: result.data.streetAddress || prev.streetAddress,
           area: result.data.area || prev.area,
           locality: result.data.locality || prev.locality,
           district: result.data.district || prev.district,
-          postal_code: result.data.postalCode || prev.postal_code,
-          postal_area: result.data.postalArea || prev.postal_area,
+          postalCode: result.data.postalCode || prev.postalCode,
+          postalArea: result.data.postalArea || prev.postalArea,
           country: result.data.country || prev.country,
-          founded_year: result.data.foundedYear || prev.founded_year,
-          employee_count: result.data.employeeCount || prev.employee_count,
+          foundedYear: result.data.foundedYear || prev.foundedYear,
+          employeeCount: result.data.employeeCount || prev.employeeCount,
         }));
 
         showFeedback('success', 'Company parsed! Form auto-filled with AI-enhanced description.');
@@ -695,7 +702,7 @@ export default function AdminPage() {
         setMediaForm(prev => ({ ...prev, name: file.name }));
       } else if (target === 'company') {
         setJobForm(prev => ({ ...prev, companyNewLogo: base64String }));
-        setCompanyForm(prev => ({ ...prev, logo_url: base64String }));
+        setCompanyForm(prev => ({ ...prev, logoUrl: base64String }));
         showFeedback('success', `Logo "${file.name}" cached.`);
       } else if (target === 'article') {
         setNewRichMediaUrl(base64String);
@@ -772,7 +779,9 @@ export default function AdminPage() {
       country: j.country || 'Tanzania',
       postcode: j.postcode || '',
       slug: j.slug || '',
-      canonical_url: j.canonical_url || ''
+      canonical_url: j.canonical_url || '',
+      whatsapp_number: j.whatsapp_number || '',
+      application_instructions: j.application_instructions || ''
     });
     
     // Set application type
@@ -1059,19 +1068,19 @@ export default function AdminPage() {
     setEditingCompanyId(co.id);
     setCompanyForm({
       name: co.name,
-      website: co.website || '',
-      logo_url: co.logo_url || '',
+      url: co.url || '',
+      logoUrl: co.logoUrl || '',
       description: (co as any).description || '',
-      street_address: (co as any).street_address || '',
+      streetAddress: (co as any).streetAddress || '',
       area: (co as any).area || '',
       locality: (co as any).locality || '',
       district: (co as any).district || '',
-      postal_code: (co as any).postal_code || '',
-      postal_area: (co as any).postal_area || '',
+      postalCode: (co as any).postalCode || '',
+      postalArea: (co as any).postalArea || '',
       country: (co as any).country || 'TZ',
       industry: (co as any).industry || '',
-      founded_year: (co as any).founded_year || '',
-      employee_count: (co as any).employee_count || ''
+      foundedYear: (co as any).foundedYear || '',
+      employeeCount: (co as any).employeeCount || ''
     });
     window.scrollTo({ top: 300, behavior: 'smooth' });
   };
@@ -1080,10 +1089,10 @@ export default function AdminPage() {
   const handleCancelEditCompany = () => {
     setEditingCompanyId(null);
     setCompanyForm({ 
-      name: '', website: '', logo_url: '', description: '',
-      street_address: '', area: '', locality: '', district: '',
-      postal_code: '', postal_area: '', country: 'TZ', industry: '',
-      founded_year: '', employee_count: ''
+      name: '', url: '', logoUrl: '', description: '',
+      streetAddress: '', area: '', locality: '', district: '',
+      postalCode: '', postalArea: '', country: 'TZ', industry: '',
+      foundedYear: '', employeeCount: ''
     });
   };
 
@@ -1134,7 +1143,7 @@ export default function AdminPage() {
 
     setActionLoading(true);
     try {
-      let logoUrl = companyForm.logo_url;
+      let logoUrl = companyForm.logoUrl;
       
       // Upload logo to R2 if it's a base64 image
       if (logoUrl && logoUrl.startsWith('data:image')) {
@@ -1171,19 +1180,19 @@ export default function AdminPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: companyForm.name.trim(),
-          website: companyForm.website,
-          logo_url: logoUrl,
+          url: companyForm.url,
+          logoUrl: logoUrl,
           description: companyForm.description,
-          street_address: companyForm.street_address,
+          streetAddress: companyForm.streetAddress,
           area: companyForm.area,
           locality: companyForm.locality,
           district: companyForm.district,
-          postal_code: companyForm.postal_code,
-          postal_area: companyForm.postal_area,
+          postalCode: companyForm.postalCode,
+          postalArea: companyForm.postalArea,
           country: companyForm.country,
           industry: companyForm.industry,
-          founded_year: companyForm.founded_year,
-          employee_count: companyForm.employee_count
+          foundedYear: companyForm.foundedYear,
+          employeeCount: companyForm.employeeCount
         })
       });
       
@@ -1191,17 +1200,17 @@ export default function AdminPage() {
       
       if (res.ok) {
         if (editingCompanyId) {
-          setCompaniesState(prev => prev.map(c => c.id === editingCompanyId ? { ...c, ...data, logo_url: data.logo_url || c.logo_url } : c));
+          setCompaniesState(prev => prev.map(c => c.id === editingCompanyId ? { ...c, ...data, logoUrl: data.logoUrl || c.logoUrl } : c));
           showFeedback('success', `Updated ${companyForm.name}.`);
         } else {
-          setCompaniesState(prev => [...prev, { ...data, logo_url: data.logo_url || '' }]);
+          setCompaniesState(prev => [...prev, { ...data, logoUrl: data.logoUrl || '' }]);
           showFeedback('success', `Created ${companyForm.name}.`);
         }
         setCompanyForm({ 
-          name: '', website: '', logo_url: '', description: '',
-          street_address: '', area: '', locality: '', district: '',
-          postal_code: '', postal_area: '', country: 'TZ', industry: '',
-          founded_year: '', employee_count: ''
+          name: '', url: '', logoUrl: '', description: '',
+          streetAddress: '', area: '', locality: '', district: '',
+          postalCode: '', postalArea: '', country: 'TZ', industry: '',
+          foundedYear: '', employeeCount: ''
         });
         setEditingCompanyId(null);
         fetchSystemData();
@@ -3017,7 +3026,7 @@ export default function AdminPage() {
         </motion.div>
       )}
 
-      {/* TAB 3: COMPANY MANAGEMENT - WITH AI PARSER AND ENHANCED FORM */}
+      {/* TAB 3: COMPANY MANAGEMENT - UPDATED WITH ENHANCED FORM */}
       {activeTab === 'companies' && (
         <motion.div 
           initial={{ opacity: 0 }}
@@ -3139,8 +3148,8 @@ export default function AdminPage() {
                     <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Website URL</label>
                     <input 
                       type="url" 
-                      value={companyForm.website}
-                      onChange={(e) => setCompanyForm(prev => ({ ...prev, website: e.target.value }))}
+                      value={companyForm.url}
+                      onChange={(e) => setCompanyForm(prev => ({ ...prev, url: e.target.value }))}
                       placeholder="https://www.selcom.net"
                       className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
                     />
@@ -3158,8 +3167,8 @@ export default function AdminPage() {
                       <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Street Address</label>
                       <input 
                         type="text" 
-                        value={companyForm.street_address}
-                        onChange={(e) => setCompanyForm(prev => ({ ...prev, street_address: e.target.value }))}
+                        value={companyForm.streetAddress}
+                        onChange={(e) => setCompanyForm(prev => ({ ...prev, streetAddress: e.target.value }))}
                         placeholder="e.g. Street Plot 1520, Mwai Kibaki Road, Mikocheni"
                         className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
                       />
@@ -3205,8 +3214,8 @@ export default function AdminPage() {
                         <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Postal Code</label>
                         <input 
                           type="text" 
-                          value={companyForm.postal_code}
-                          onChange={(e) => setCompanyForm(prev => ({ ...prev, postal_code: e.target.value }))}
+                          value={companyForm.postalCode}
+                          onChange={(e) => setCompanyForm(prev => ({ ...prev, postalCode: e.target.value }))}
                           placeholder="e.g. 14111"
                           className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
                         />
@@ -3216,8 +3225,8 @@ export default function AdminPage() {
                         <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Postal Area</label>
                         <input 
                           type="text" 
-                          value={companyForm.postal_area}
-                          onChange={(e) => setCompanyForm(prev => ({ ...prev, postal_area: e.target.value }))}
+                          value={companyForm.postalArea}
+                          onChange={(e) => setCompanyForm(prev => ({ ...prev, postalArea: e.target.value }))}
                           placeholder="e.g. Mikocheni area"
                           className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
                         />
@@ -3258,8 +3267,8 @@ export default function AdminPage() {
                       <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Founded Year</label>
                       <input 
                         type="text" 
-                        value={companyForm.founded_year}
-                        onChange={(e) => setCompanyForm(prev => ({ ...prev, founded_year: e.target.value }))}
+                        value={companyForm.foundedYear}
+                        onChange={(e) => setCompanyForm(prev => ({ ...prev, foundedYear: e.target.value }))}
                         placeholder="e.g. 2005"
                         className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
                       />
@@ -3269,8 +3278,8 @@ export default function AdminPage() {
                       <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Employee Count</label>
                       <input 
                         type="text" 
-                        value={companyForm.employee_count}
-                        onChange={(e) => setCompanyForm(prev => ({ ...prev, employee_count: e.target.value }))}
+                        value={companyForm.employeeCount}
+                        onChange={(e) => setCompanyForm(prev => ({ ...prev, employeeCount: e.target.value }))}
                         placeholder="e.g. 500 - 1000"
                         className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
                       />
@@ -3287,7 +3296,7 @@ export default function AdminPage() {
                   <textarea
                     value={companyForm.description}
                     onChange={(e) => setCompanyForm(prev => ({ ...prev, description: e.target.value }))}
-                    placeholder="Write a comprehensive company description... (AI will auto-generate from pasted text)"
+                    placeholder="Write a comprehensive company description..."
                     className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors h-32 resize-none"
                     rows={4}
                   />
@@ -3305,7 +3314,7 @@ export default function AdminPage() {
                     />
                     <Upload size={16} className="mx-auto text-gray-500 group-hover:text-white transition-colors mb-2" />
                     <span className="block text-[11px] text-gray-400">
-                      {companyForm.logo_url ? "✓ LOGO LOADED IN MEMORY" : "Drag & drop company logo"}
+                      {companyForm.logoUrl ? "✓ LOGO LOADED IN MEMORY" : "Drag & drop company logo"}
                     </span>
                   </div>
                 </div>
@@ -3346,8 +3355,8 @@ export default function AdminPage() {
                   className="p-4 bg-white/[0.01] border hover:bg-white/[0.02] border-white/5 rounded-3xl transition-all flex items-center justify-between gap-4"
                 >
                   <div className="flex items-center gap-3">
-                    {co.logo_url ? (
-                      <img src={co.logo_url} alt={co.name} referrerPolicy="no-referrer" className="w-10 h-10 object-cover rounded-xl border border-white/10" />
+                    {co.logoUrl ? (
+                      <img src={co.logoUrl} alt={co.name} referrerPolicy="no-referrer" className="w-10 h-10 object-cover rounded-xl border border-white/10" />
                     ) : (
                       <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-violet-600 rounded-xl flex items-center justify-center font-bold font-mono text-white">
                         {co.name.slice(0, 2).toUpperCase()}
@@ -3357,7 +3366,7 @@ export default function AdminPage() {
                     <div className="space-y-0.5">
                       <span className="text-xs font-bold text-stone-100 block">{co.name}</span>
                       <button 
-                        onClick={() => triggerRedirect(co.website, co.name, 'Admin Verified Directory')}
+                        onClick={() => triggerRedirect(co.url, co.name, 'Admin Verified Directory')}
                         className="text-[10px] text-blue-400 hover:underline flex items-center gap-1 font-mono cursor-pointer"
                       >
                         <Globe size={10} /> Domain portal <ExternalLink size={8} />
