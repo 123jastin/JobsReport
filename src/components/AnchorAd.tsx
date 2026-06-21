@@ -17,14 +17,14 @@ export default function AnchorAd() {
         // 🔥 Clear previous ad
         containerRef.current.innerHTML = '';
         
-        // 🔥 Create fresh ins element - responsive width
+        // 🔥 Create fresh ins element - compact anchor
         const ins = document.createElement('ins');
         ins.className = 'adsbygoogle';
         ins.style.display = 'block';
         ins.style.width = '100%';
-        ins.style.maxWidth = '320px'; // 🔥 Reduced from 728px
-        ins.style.height = '50px';    // 🔥 Reduced from 80px
-        ins.style.margin = '0 auto';  // 🔥 Center the ad
+        ins.style.maxWidth = '320px';
+        ins.style.height = '50px'; // 🔥 Google's minimum for anchor ads
+        ins.style.margin = '0 auto';
         ins.setAttribute('data-ad-client', 'ca-pub-8155064094205693');
         ins.setAttribute('data-ad-slot', '6727401898');
         ins.setAttribute('data-ad-format', 'horizontal');
@@ -61,7 +61,7 @@ export default function AnchorAd() {
       zIndex: 40,
       background: 'rgba(0,0,0,0.95)',
       borderTop: '1px solid rgba(255,255,255,0.1)',
-      padding: '6px 16px',
+      padding: '2px 16px',  // 🔥 Reduced padding
       display: 'flex',
       justifyContent: 'center',
       alignItems: 'center',
@@ -71,9 +71,9 @@ export default function AnchorAd() {
         onClick={() => setIsDismissed(true)}
         style={{
           position: 'absolute',
-          top: '2px',
-          right: '8px',
-          padding: '3px',
+          top: '0px',
+          right: '6px',
+          padding: '2px',
           borderRadius: '50%',
           background: 'rgba(255,255,255,0.1)',
           border: 'none',
@@ -86,10 +86,10 @@ export default function AnchorAd() {
         }}
         aria-label="Close ad"
       >
-        <X size={12} />
+        <X size={10} />
       </button>
 
-      {/* 🔥 Anchor Ad - Centered and compact */}
+      {/* 🔥 Compact Anchor Ad */}
       <div 
         ref={containerRef} 
         style={{ 
