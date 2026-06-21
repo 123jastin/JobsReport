@@ -7,6 +7,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 
 import Layout from './components/Layout';
 import RouteTracker from './components/RouteTracker';
+import AutoAdsRefresh from './components/AutoAdsRefresh';
+import AnchorAd from './components/AnchorAd';
 import HomePage from './pages/HomePage';
 import CountryPage from './pages/CountryPage';
 import CompaniesPage from './pages/CompaniesPage';
@@ -33,8 +35,11 @@ export default function App() {
       <CareerRedirectProvider>
         <AuthProvider>
           <Router>
-            {/* 🔥 Track GA pageviews on every route change */}
+            {/* 🔥 GA pageview tracking on every route change */}
             <RouteTracker />
+            
+            {/* 🔥 Refresh vignette Auto Ads on every route change */}
+            <AutoAdsRefresh />
             
             <Layout>
               <Routes>
@@ -81,6 +86,9 @@ export default function App() {
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Layout>
+            
+            {/* 🔥 Manual sticky bottom anchor ad — Slot 6727401898 */}
+            <AnchorAd />
           </Router>
         </AuthProvider>
       </CareerRedirectProvider>
