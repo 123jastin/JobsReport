@@ -38,7 +38,7 @@ export default function Layout({ children }: LayoutProps) {
   const [passcode, setPasscode] = useState('');
   const [loginError, setLoginError] = useState('');
 
-  // 🔥 Route tracking for ad refresh
+  // 🔥 Route tracking for GA pageviews and Clever ads refresh
   const location = useLocation();
   const isFirstLoad = useRef(true);
 
@@ -55,15 +55,26 @@ export default function Layout({ children }: LayoutProps) {
     }
   };
 
-  // 🔥 Refresh Clever + Google Auto Ads on every SPA navigation
+  // 🔥 Track GA pageviews + Refresh Clever ads on every SPA navigation
   useEffect(() => {
-    if (isFirstLoad.current) {
-      isFirstLoad.current = false;
-      return; // Skip first load
+    // 🔥 Send pageview to Google Analytics on EVERY route change
+    if (window.gtag) {
+      window.gtag('config', 'G-KMM0JJEPZ5', {
+        page_path: location.pathname + location.search,
+        page_title: document.title,
+      });
+      console.log('📊 GA pageview tracked:', location.pathname);
     }
 
+    // Skip Clever refresh on first load (handled by index.html)
+    if (isFirstLoad.current) {
+      isFirstLoad.current = false;
+      return;
+    }
+
+    // 🔥 Refresh Clever ads on subsequent navigations
     setTimeout(() => {
-      // 1. Remove old Clever ad elements
+      // Remove old Clever ad elements
       const cleverAds = document.querySelectorAll('[id*="clever"]:not(#clever-ad-space):not(#clever-core)');
       cleverAds.forEach(el => el.remove());
 
@@ -81,19 +92,9 @@ export default function Layout({ children }: LayoutProps) {
         oldCleverScript.parentNode.replaceChild(newCleverScript, oldCleverScript);
       }
 
-      // 2. Refresh Google Auto Ads
-      if ((window as any).adsbygoogle) {
-        try {
-          (window as any).adsbygoogle.push({});
-          console.log('✅ Google Auto Ads refreshed');
-        } catch (e) {
-          console.log('⚠️ Google ads refresh error:', e);
-        }
-      }
-
-      console.log('🔄 All ads refreshed');
+      console.log('🔄 Clever ads refreshed');
     }, 300);
-  }, [location.pathname]);
+  }, [location.pathname, location.search]);
 
   return (
     <div className="min-h-screen bg-bg-deep flex flex-col overflow-x-hidden pt-16">
