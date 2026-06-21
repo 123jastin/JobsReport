@@ -17,17 +17,15 @@ export default function AnchorAd() {
         // 🔥 Clear previous ad
         containerRef.current.innerHTML = '';
         
-        // 🔥 Fixed size - no responsive
+        // 🔥 Fixed size - 320x150
         const ins = document.createElement('ins');
         ins.className = 'adsbygoogle';
         ins.style.display = 'inline-block';
-        ins.style.width = '320px';   // 🔥 Fixed width
-        ins.style.height = '50px';    // 🔥 Fixed height - smallest allowed
+        ins.style.width = '320px';
+        ins.style.height = '150px';   // 🔥 150px height
         ins.style.margin = '0 auto';
         ins.setAttribute('data-ad-client', 'ca-pub-8155064094205693');
         ins.setAttribute('data-ad-slot', '6727401898');
-        // ❌ No data-ad-format
-        // ❌ No data-full-width-responsive
         
         containerRef.current.appendChild(ins);
         
@@ -64,15 +62,15 @@ export default function AnchorAd() {
       display: 'flex',
       justifyContent: 'center',
       alignItems: 'center',
-      minHeight: '54px',
+      minHeight: '154px',
     }}>
       {/* Close button */}
       <button 
         onClick={() => setIsDismissed(true)}
         style={{
           position: 'absolute',
-          top: '0px',
-          right: '6px',
+          top: '2px',
+          right: '8px',
           padding: '2px',
           borderRadius: '50%',
           background: 'rgba(255,255,255,0.1)',
@@ -89,12 +87,12 @@ export default function AnchorAd() {
         <X size={10} />
       </button>
 
-      {/* 🔥 Fixed size anchor ad - 320x50 */}
+      {/* 🔥 Fixed size anchor ad - 320x150 */}
       <div 
         ref={containerRef} 
         style={{ 
           width: '320px',
-          height: '50px',
+          height: '150px',
           overflow: 'hidden',
         }} 
       />
