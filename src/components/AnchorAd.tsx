@@ -17,18 +17,17 @@ export default function AnchorAd() {
         // 🔥 Clear previous ad
         containerRef.current.innerHTML = '';
         
-        // 🔥 Create fresh ins element - compact anchor
+        // 🔥 Fixed size - no responsive
         const ins = document.createElement('ins');
         ins.className = 'adsbygoogle';
-        ins.style.display = 'block';
-        ins.style.width = '100%';
-        ins.style.maxWidth = '320px';
-        ins.style.height = '50px'; // 🔥 Google's minimum for anchor ads
+        ins.style.display = 'inline-block';
+        ins.style.width = '320px';   // 🔥 Fixed width
+        ins.style.height = '50px';    // 🔥 Fixed height - smallest allowed
         ins.style.margin = '0 auto';
         ins.setAttribute('data-ad-client', 'ca-pub-8155064094205693');
         ins.setAttribute('data-ad-slot', '6727401898');
-        ins.setAttribute('data-ad-format', 'horizontal');
-        ins.setAttribute('data-full-width-responsive', 'true');
+        // ❌ No data-ad-format
+        // ❌ No data-full-width-responsive
         
         containerRef.current.appendChild(ins);
         
@@ -61,10 +60,11 @@ export default function AnchorAd() {
       zIndex: 40,
       background: 'rgba(0,0,0,0.95)',
       borderTop: '1px solid rgba(255,255,255,0.1)',
-      padding: '2px 16px',  // 🔥 Reduced padding
+      padding: '2px 16px',
       display: 'flex',
       justifyContent: 'center',
       alignItems: 'center',
+      minHeight: '54px',
     }}>
       {/* Close button */}
       <button 
@@ -89,15 +89,13 @@ export default function AnchorAd() {
         <X size={10} />
       </button>
 
-      {/* 🔥 Compact Anchor Ad */}
+      {/* 🔥 Fixed size anchor ad - 320x50 */}
       <div 
         ref={containerRef} 
         style={{ 
-          display: 'flex', 
-          justifyContent: 'center', 
-          alignItems: 'center',
-          minHeight: '50px',
-          width: '100%',
+          width: '320px',
+          height: '50px',
+          overflow: 'hidden',
         }} 
       />
     </div>
