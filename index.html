@@ -69,13 +69,22 @@
       .ad-container:empty {
         display: none;
       }
+      
+      /* Manual AdSense ad containers - prevent layout shift */
+      ins.adsbygoogle {
+        min-height: 280px;
+        display: block;
+        width: 100%;
+        max-width: 728px;
+        margin: 0 auto;
+      }
     </style>
     
-    <!-- Google AdSense -->
+    <!-- Google AdSense - Manual Ads Only -->
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8155064094205693"
      crossorigin="anonymous"></script>
     
-    <!-- Google Analytics -->
+    <!-- Google Analytics - Initial pageview only, route changes handled by RouteTracker -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-KMM0JJEPZ5"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
@@ -88,7 +97,7 @@
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     
-    <!-- 🔥 Initialize empty AdSense array - AdBanner component handles pushes -->
+    <!-- Initialize empty AdSense array for manual ads -->
     <script>
       window.adsbygoogle = window.adsbygoogle || [];
     </script>
