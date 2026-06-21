@@ -263,6 +263,38 @@ export default function AdminPage() {
   // --- PIPELINE RUN STATE ---
   const [pipelineFinishedInfo, setPipelineFinishedInfo] = useState<{ original: number; deduplicated: number } | null>(null);
 
+  // ✅ AUTO-FILL LOCATION FROM COMPANY
+  const handleAutoFillLocationFromCompany = (companyName: string) => {
+    const company = companiesState.find(c => c.name === companyName);
+    if (!company) {
+      showFeedback('error', `Company "${companyName}" not found in catalog`);
+      return;
+    }
+
+    setSchemaData(prev => ({
+      ...prev,
+      street_address: (company as any).streetAddress || prev.street_address,
+      city: (company as any).locality || prev.city,
+      region: (company as any).district || prev.region,
+      country: (company as any).country === 'TZ' ? 'Tanzania' : 
+               (company as any).country || prev.country,
+      postcode: (company as any).postalCode || prev.postcode,
+      industry: (company as any).industry || prev.industry,
+    }));
+
+    // Also auto-fill location field if empty
+    if (!jobForm.location) {
+      const locationParts = [];
+      if ((company as any).locality) locationParts.push((company as any).locality);
+      if ((company as any).district) locationParts.push((company as any).district);
+      if (locationParts.length > 0) {
+        setJobForm(prev => ({ ...prev, location: locationParts.join(', ') }));
+      }
+    }
+
+    showFeedback('success', `📍 Location auto-filled from ${companyName}`);
+  };
+
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
     setLoginError('');
@@ -783,6 +815,23 @@ export default function AdminPage() {
       whatsapp_number: j.whatsapp_number || '',
       application_instructions: j.application_instructions || ''
     });
+
+    // ✅ AUTO-FILL LOCATION FROM COMPANY WHEN EDITING
+    if (job.company) {
+      const company = companiesState.find(c => c.name === job.company);
+      if (company) {
+        setTimeout(() => {
+          setSchemaData(prev => ({
+            ...prev,
+            street_address: (company as any).streetAddress || prev.street_address,
+            city: (company as any).locality || prev.city,
+            region: (company as any).district || prev.region,
+            country: (company as any).country === 'TZ' ? 'Tanzania' : (company as any).country || prev.country,
+            postcode: (company as any).postalCode || prev.postcode,
+          }));
+        }, 100);
+      }
+    }
     
     // Set application type
     if (j.url && j.url.startsWith('mailto:')) {
@@ -2288,9 +2337,14 @@ export default function AdminPage() {
                   </div>
                 ) : (
                   <div className="space-y-1">
+                    <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Select Company</label>
                     <select
                       value={jobForm.companySelected}
-                      onChange={(e) => setJobForm(prev => ({ ...prev, companySelected: e.target.value }))}
+                      onChange={(e) => {
+                        const selectedCompany = e.target.value;
+                        setJobForm(prev => ({ ...prev, companySelected: selectedCompany }));
+                        handleAutoFillLocationFromCompany(selectedCompany);
+                      }}
                       className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none"
                       required
                     >
@@ -2649,50 +2703,65 @@ export default function AdminPage() {
                     <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">
                       Schema & SEO Data
                     </label>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (!jobForm.title) { showFeedback('error', 'Please enter a job title first'); return; }
-                        setActionLoading(true);
-                        try {
-                          const res = await fetch('/api/ai/extract-schema', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              title: jobForm.title,
-                              description: jobDescription,
-                              location: jobForm.location,
-                              company: isCreatingNewCompanyInline ? jobForm.companyNewName : jobForm.companySelected
-                            })
-                          });
-                          const result = await res.json();
-                          if (result.success && result.schema) {
-                            setSchemaData(prev => ({
-                              ...prev,
-                              job_category: result.schema.job_category || prev.job_category,
-                              industry: result.schema.industry || prev.industry,
-                              employment_type: result.schema.employment_type || prev.employment_type,
-                              workplace_type: result.schema.workplace_type || prev.workplace_type,
-                              education_level: result.schema.education_level || prev.education_level,
-                              experience_months: result.schema.experience_months || prev.experience_months,
-                              skills: Array.isArray(result.schema.skills) ? result.schema.skills : prev.skills,
-                              benefits: Array.isArray(result.schema.benefits) ? result.schema.benefits : prev.benefits,
-                              salary_min: result.schema.salary_min ? Number(result.schema.salary_min) : prev.salary_min,
-                              salary_max: result.schema.salary_max ? Number(result.schema.salary_max) : prev.salary_max,
-                              salary_currency: result.schema.salary_currency || prev.salary_currency,
-                            }));
-                            showFeedback('success', 'Schema extracted! Fill location manually below.');
-                          } else {
-                            showFeedback('error', result.error || 'Schema extraction failed');
-                          }
-                        } catch (err) { showFeedback('error', 'AI service unavailable'); }
-                        finally { setActionLoading(false); }
-                      }}
-                      disabled={actionLoading || !jobForm.title}
-                      className="text-[9px] font-mono font-bold text-violet-500 hover:text-violet-400 disabled:text-gray-600 uppercase flex items-center gap-1 transition-colors"
-                    >
-                      <Sparkles size={12} /> Auto-Extract Schema
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const companyName = isCreatingNewCompanyInline ? jobForm.companyNewName : jobForm.companySelected;
+                          if (companyName) handleAutoFillLocationFromCompany(companyName);
+                          else showFeedback('error', 'Select a company first');
+                        }}
+                        className="text-[9px] font-mono font-bold text-emerald-500 hover:text-emerald-400 uppercase flex items-center gap-1 transition-colors"
+                        title="Auto-fill from company address"
+                      >
+                        <MapPin size={10} />
+                        Fill from Company
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!jobForm.title) { showFeedback('error', 'Please enter a job title first'); return; }
+                          setActionLoading(true);
+                          try {
+                            const res = await fetch('/api/ai/extract-schema', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                title: jobForm.title,
+                                description: jobDescription,
+                                location: jobForm.location,
+                                company: isCreatingNewCompanyInline ? jobForm.companyNewName : jobForm.companySelected
+                              })
+                            });
+                            const result = await res.json();
+                            if (result.success && result.schema) {
+                              setSchemaData(prev => ({
+                                ...prev,
+                                job_category: result.schema.job_category || prev.job_category,
+                                industry: result.schema.industry || prev.industry,
+                                employment_type: result.schema.employment_type || prev.employment_type,
+                                workplace_type: result.schema.workplace_type || prev.workplace_type,
+                                education_level: result.schema.education_level || prev.education_level,
+                                experience_months: result.schema.experience_months || prev.experience_months,
+                                skills: Array.isArray(result.schema.skills) ? result.schema.skills : prev.skills,
+                                benefits: Array.isArray(result.schema.benefits) ? result.schema.benefits : prev.benefits,
+                                salary_min: result.schema.salary_min ? Number(result.schema.salary_min) : prev.salary_min,
+                                salary_max: result.schema.salary_max ? Number(result.schema.salary_max) : prev.salary_max,
+                                salary_currency: result.schema.salary_currency || prev.salary_currency,
+                              }));
+                              showFeedback('success', 'Schema extracted! Fill location manually below.');
+                            } else {
+                              showFeedback('error', result.error || 'Schema extraction failed');
+                            }
+                          } catch (err) { showFeedback('error', 'AI service unavailable'); }
+                          finally { setActionLoading(false); }
+                        }}
+                        disabled={actionLoading || !jobForm.title}
+                        className="text-[9px] font-mono font-bold text-violet-500 hover:text-violet-400 disabled:text-gray-600 uppercase flex items-center gap-1 transition-colors"
+                      >
+                        <Sparkles size={12} /> Auto-Extract Schema
+                      </button>
+                    </div>
                   </div>
 
                   {/* Row 1: Category (FREE TEXT) + Employment + Workplace */}
