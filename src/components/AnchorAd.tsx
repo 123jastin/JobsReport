@@ -17,14 +17,18 @@ export default function AnchorAd() {
         // 🔥 Clear previous ad
         containerRef.current.innerHTML = '';
         
-        // 🔥 Create fresh ins element with YOUR slot ID
+        // 🔥 Create fresh ins element - responsive width
         const ins = document.createElement('ins');
         ins.className = 'adsbygoogle';
-        ins.style.display = 'inline-block';
-        ins.style.width = '719px';
-        ins.style.height = '80px';
+        ins.style.display = 'block';
+        ins.style.width = '100%';
+        ins.style.maxWidth = '320px'; // 🔥 Reduced from 728px
+        ins.style.height = '50px';    // 🔥 Reduced from 80px
+        ins.style.margin = '0 auto';  // 🔥 Center the ad
         ins.setAttribute('data-ad-client', 'ca-pub-8155064094205693');
-        ins.setAttribute('data-ad-slot', '6727401898'); // 🔥 Your slot ID
+        ins.setAttribute('data-ad-slot', '6727401898');
+        ins.setAttribute('data-ad-format', 'horizontal');
+        ins.setAttribute('data-full-width-responsive', 'true');
         
         containerRef.current.appendChild(ins);
         
@@ -57,7 +61,7 @@ export default function AnchorAd() {
       zIndex: 40,
       background: 'rgba(0,0,0,0.95)',
       borderTop: '1px solid rgba(255,255,255,0.1)',
-      padding: '8px 0',
+      padding: '6px 16px',
       display: 'flex',
       justifyContent: 'center',
       alignItems: 'center',
@@ -69,7 +73,7 @@ export default function AnchorAd() {
           position: 'absolute',
           top: '2px',
           right: '8px',
-          padding: '4px',
+          padding: '3px',
           borderRadius: '50%',
           background: 'rgba(255,255,255,0.1)',
           border: 'none',
@@ -82,17 +86,18 @@ export default function AnchorAd() {
         }}
         aria-label="Close ad"
       >
-        <X size={14} />
+        <X size={12} />
       </button>
 
-      {/* 🔥 Your Anchor Ad - Slot 6727401898 */}
+      {/* 🔥 Anchor Ad - Centered and compact */}
       <div 
         ref={containerRef} 
         style={{ 
           display: 'flex', 
           justifyContent: 'center', 
           alignItems: 'center',
-          minHeight: '80px',
+          minHeight: '50px',
+          width: '100%',
         }} 
       />
     </div>
