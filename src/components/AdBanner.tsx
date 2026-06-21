@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 
 interface AdBannerProps {
   slot: string;
@@ -8,16 +9,14 @@ interface AdBannerProps {
 
 export default function AdBanner({ slot, format = 'auto', style }: AdBannerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const location = useLocation();
 
   useEffect(() => {
     // Wait for DOM to be ready
     const timer = setTimeout(() => {
       if (containerRef.current) {
         // 🔥 Clear any existing ad content completely
-        const existingIns = containerRef.current.querySelector('.adsbygoogle');
-        if (existingIns) {
-          existingIns.remove();
-        }
+        containerRef.current.innerHTML = '';
         
         // 🔥 Create fresh ins element
         const ins = document.createElement('ins');
@@ -34,8 +33,8 @@ export default function AdBanner({ slot, format = 'auto', style }: AdBannerProps
         
         // 🔥 Push new ad
         try {
-          ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
-          console.log(`✅ Fresh ad pushed for slot: ${slot}`);
+          (window.adsbygoogle = window.adsbygoogle || []).push({});
+          console.log(`✅ Manual ad pushed for slot: ${slot} on ${location.pathname}`);
         } catch (err: any) {
           console.log(`⚠️ Ad push error for ${slot}:`, err.message);
         }
@@ -49,7 +48,7 @@ export default function AdBanner({ slot, format = 'auto', style }: AdBannerProps
         containerRef.current.innerHTML = '';
       }
     };
-  }, [slot]);
+  }, [slot, location.pathname]); // 🔥 Re-run on route change
 
   return (
     <div 
