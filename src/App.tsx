@@ -6,6 +6,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
 import Layout from './components/Layout';
+import RouteTracker from './components/RouteTracker';
 import HomePage from './pages/HomePage';
 import CountryPage from './pages/CountryPage';
 import CompaniesPage from './pages/CompaniesPage';
@@ -32,6 +33,9 @@ export default function App() {
       <CareerRedirectProvider>
         <AuthProvider>
           <Router>
+            {/* 🔥 Track GA pageviews on every route change */}
+            <RouteTracker />
+            
             <Layout>
               <Routes>
                 {/* 🏠 Homepage */}
