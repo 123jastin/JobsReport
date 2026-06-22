@@ -59,14 +59,23 @@ export default function CompaniesPage() {
 
         if (companiesRes.ok) {
           const companiesData = await companiesRes.json();
-          setCompanies(Array.isArray(companiesData) ? companiesData : []);
+          const companiesList = Array.isArray(companiesData) ? companiesData : (companiesData.companies || []);
+          setCompanies(companiesList);
+          console.log('📊 Companies loaded:', companiesList.length);
         }
 
         if (marketRes.ok) {
           const marketData = await marketRes.json();
-          const allJobs = marketData.jobs || [];
+          
+          // 🔥 Try multiple possible response structures
+          const allJobs = marketData.jobs || marketData.activeJobs || [];
+          
           setJobs(allJobs);
           setTotalActiveJobs(marketData.stats?.totalJobs || allJobs.filter((j: any) => j.active !== false).length);
+          
+          console.log('📊 Jobs loaded:', allJobs.length);
+          console.log('📊 Sample job:', allJobs[0]);
+          console.log('📊 Active jobs total:', marketData.stats?.totalJobs);
         }
       } catch (err) {
         console.error('Failed to load companies:', err);
@@ -98,9 +107,21 @@ export default function CompaniesPage() {
   }, [searchTerm]);
 
   const getCompanyJobs = (companyName: string) => {
-    return jobs.filter(job => 
-      job.company.toLowerCase() === companyName.toLowerCase()
-    ).sort((a, b) => {
+    if (!companyName || jobs.length === 0) return [];
+    
+    const normalizedName = companyName.toLowerCase().trim();
+    
+    return jobs.filter(job => {
+      const jobCompany = (job.company || '').toLowerCase().trim();
+      
+      // 🔥 Multiple matching strategies
+      return (
+        jobCompany === normalizedName ||                           // Exact match
+        jobCompany.includes(normalizedName) ||                    // Partial match
+        normalizedName.includes(jobCompany) ||                    // Reverse partial
+        jobCompany.replace(/[^a-z0-9]/g, '') === normalizedName.replace(/[^a-z0-9]/g, '')  // Alphanumeric only
+      );
+    }).sort((a, b) => {
       if (a.active && !b.active) return -1;
       if (!a.active && b.active) return 1;
       return 0;
@@ -632,6 +653,10 @@ export default function CompaniesPage() {
                 >
                   Next <ChevronRight size={14} />
                 </button>
+                
+                <span className="text-[10px] text-gray-500 font-mono ml-4">
+                  Page {currentPage} of {totalPages}
+                </span>
               </div>
             )}
           </div>
