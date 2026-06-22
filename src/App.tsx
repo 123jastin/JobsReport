@@ -61,8 +61,9 @@ export default function App() {
                 {/* 🎯 Role/Category Pages - SEO Indexable */}
                 <Route path="/role/:roleSlug" element={<MarketPage />} />
 
-                {/* 📊 Market Routes */}
+                {/* 📊 Market Routes — 🔥 ORDER MATTERS: specific routes BEFORE dynamic :jobId */}
                 <Route path="/market/search/:query" element={<MarketPage />} />
+                <Route path="/market/page/:page" element={<MarketPage />} />
                 <Route path="/market/:jobId" element={<JobDetailPage />} />
                 <Route path="/market" element={<MarketPage />} />
 
