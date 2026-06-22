@@ -31,8 +31,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const offset = (page - 1) * limit;
 
   try {
-    // 🔥 Run ALL queries in parallel — no N+1 problem
+    // 🔥 Run ALL queries in parallel — includes total count
     const [
+      totalResult,
       currenciesResult,
       jobsResult,
       rolesResult,
@@ -40,6 +41,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       categoriesResult,
       workplaceResult
     ] = await Promise.all([
+      DB.prepare('SELECT COUNT(*) as total FROM jobs WHERE is_active = 1').all(), // 🔥 TOTAL ACTIVE JOBS
       DB.prepare('SELECT code, name, symbol, flag FROM currencies ORDER BY name').all(),
       DB.prepare(`
         SELECT 
@@ -64,6 +66,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       DB.prepare("SELECT DISTINCT job_category FROM jobs WHERE job_category != '' AND job_category != 'Other' AND is_active = 1").all(),
       DB.prepare("SELECT DISTINCT workplace_type FROM jobs WHERE workplace_type != '' AND is_active = 1").all()
     ]);
+
+    // 🔥 Get total active jobs count
+    const totalActiveJobsCount = totalResult.results[0]?.total || 0;
 
     // 🔥 Build currencies map
     const currenciesMap: Record<string, {symbol: string, name: string, flag: string}> = {};
@@ -162,8 +167,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       jobCategories,
       workplaceTypes,
       stats: {
-        totalJobs: jobs.length,
-        activeJobs: activeJobs.length,
+        totalJobs: totalActiveJobsCount,  // 🔥 ALL active jobs in database
+        activeJobs: activeJobs.length,     // Jobs on this page
         totalCompanies: companies.length,
         totalRoles: roles.length
       }
@@ -171,7 +176,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       headers: { 
         'Content-Type': 'application/json', 
         'Access-Control-Allow-Origin': '*',
-        'Cache-Control': 'public, max-age=30'  // 🔥 Cache 30 seconds
+        'Cache-Control': 'public, max-age=30'
       }
     });
 
