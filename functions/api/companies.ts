@@ -8,49 +8,58 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
 
   try {
-    // 🔥 First, let's check what's in the jobs table
-    const jobsCheck = await DB.prepare(
-      'SELECT DISTINCT company_id FROM jobs WHERE is_active = 1 LIMIT 5'
-    ).all();
-    console.log('Company IDs in jobs:', jobsCheck.results);
-
-    // 🔥 Join with jobs to get counts
-    const result = await DB.prepare(`
-      SELECT 
-        c.id, c.name, c.logo_url, c.website,
-        c.description, c.street_address, c.area, c.locality, c.district,
-        c.postal_code, c.postal_area, c.country, c.industry,
-        c.founded_year, c.employee_count,
-        COUNT(j.id) as total_jobs,
-        SUM(CASE WHEN j.is_active = 1 THEN 1 ELSE 0 END) as active_jobs
-      FROM companies c
-      LEFT JOIN jobs j ON c.id = j.company_id
-      GROUP BY c.id
-      ORDER BY c.name
+    // Get all companies
+    const companiesResult = await DB.prepare(`
+      SELECT id, name, logo_url, website, description, 
+        street_address, area, locality, district,
+        postal_code, postal_area, country, industry,
+        founded_year, employee_count
+      FROM companies 
+      ORDER BY name
     `).all();
-    
-    console.log('Companies with counts:', result.results?.length);
-    console.log('Sample company:', result.results?.[0]);
-    
-    const companies = result.results.map((c: any) => ({
-      id: c.id,
-      name: c.name,
-      logoUrl: c.logo_url || '',
-      url: c.website || '',
-      description: c.description || '',
-      streetAddress: c.street_address || '',
-      area: c.area || '',
-      locality: c.locality || '',
-      district: c.district || '',
-      postalCode: c.postal_code || '',
-      postalArea: c.postal_area || '',
-      country: c.country || 'TZ',
-      industry: c.industry || '',
-      foundedYear: c.founded_year || '',
-      employeeCount: c.employee_count || '',
-      totalJobs: c.total_jobs || 0,
-      activeJobs: c.active_jobs || 0
-    }));
+
+    // Get job counts by company name
+    const jobCountsResult = await DB.prepare(`
+      SELECT company, COUNT(*) as total, 
+        SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) as active
+      FROM jobs 
+      GROUP BY company
+    `).all();
+
+    // Build lookup map
+    const countsMap: Record<string, { total: number; active: number }> = {};
+    for (const row of jobCountsResult.results) {
+      const r = row as any;
+      const key = (r.company || '').toLowerCase().trim();
+      if (key) {
+        countsMap[key] = { total: r.total || 0, active: r.active || 0 };
+      }
+    }
+
+    // Map companies with counts
+    const companies = companiesResult.results.map((c: any) => {
+      const key = (c.name || '').toLowerCase().trim();
+      const counts = countsMap[key] || { total: 0, active: 0 };
+      return {
+        id: c.id,
+        name: c.name,
+        logoUrl: c.logo_url || '',
+        url: c.website || '',
+        description: c.description || '',
+        streetAddress: c.street_address || '',
+        area: c.area || '',
+        locality: c.locality || '',
+        district: c.district || '',
+        postalCode: c.postal_code || '',
+        postalArea: c.postal_area || '',
+        country: c.country || 'TZ',
+        industry: c.industry || '',
+        foundedYear: c.founded_year || '',
+        employeeCount: c.employee_count || '',
+        totalJobs: counts.total,
+        activeJobs: counts.active
+      };
+    });
 
     return new Response(JSON.stringify(companies), {
       headers: { 
@@ -60,8 +69,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       }
     });
   } catch (err) {
-    console.error('Companies API Error:', err);
-    return new Response(JSON.stringify({ error: 'Failed to load companies', details: err instanceof Error ? err.message : 'Unknown' }), {
+    return new Response(JSON.stringify({ error: 'Failed to load companies' }), {
       status: 500,
       headers: { 
         'Content-Type': 'application/json',
@@ -99,44 +107,24 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const id = 'comp-' + Date.now().toString(36) + Math.random().toString(36).substring(2, 4);
 
     await DB.prepare(`
-      INSERT INTO companies (
-        id, name, logo_url, website,
-        description, street_address, area, locality, district,
-        postal_code, postal_area, country, industry,
-        founded_year, employee_count
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO companies (id, name, logo_url, website, description, street_address, area, locality, district, postal_code, postal_area, country, industry, founded_year, employee_count)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
-      id, 
-      name, 
-      body.logoUrl || '', 
-      body.url || '',
-      body.description || '',
-      body.streetAddress || '',
-      body.area || '',
-      body.locality || '',
-      body.district || '',
-      body.postalCode || '',
-      body.postalArea || '',
-      body.country || 'TZ',
-      body.industry || '',
-      body.foundedYear || '',
-      body.employeeCount || ''
+      id, name, body.logoUrl || '', body.url || '',
+      body.description || '', body.streetAddress || '',
+      body.area || '', body.locality || '', body.district || '',
+      body.postalCode || '', body.postalArea || '', body.country || 'TZ',
+      body.industry || '', body.foundedYear || '', body.employeeCount || ''
     ).run();
 
     return new Response(JSON.stringify({
       id, name, logoUrl: body.logoUrl || '', url: body.url || '',
-      description: body.description || '', streetAddress: body.streetAddress || '',
-      area: body.area || '', locality: body.locality || '',
-      district: body.district || '', postalCode: body.postalCode || '',
-      postalArea: body.postalArea || '', country: body.country || 'TZ',
-      industry: body.industry || '', foundedYear: body.foundedYear || '',
-      employeeCount: body.employeeCount || '', totalJobs: 0, activeJobs: 0
+      totalJobs: 0, activeJobs: 0
     }), {
       status: 201,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
   } catch (err) {
-    console.error('Company creation error:', err);
     return new Response(JSON.stringify({ error: 'Failed to create company' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
@@ -168,10 +156,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       });
     }
 
-    const existing = await DB.prepare(
-      'SELECT id FROM companies WHERE id = ?'
-    ).bind(id).first();
-
+    const existing = await DB.prepare('SELECT id FROM companies WHERE id = ?').bind(id).first();
     if (!existing) {
       return new Response(JSON.stringify({ error: 'Company not found' }), {
         status: 404,
@@ -180,8 +165,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     }
 
     await DB.prepare(`
-      UPDATE companies SET
-        name = ?, logo_url = ?, website = ?, description = ?,
+      UPDATE companies SET name = ?, logo_url = ?, website = ?, description = ?,
         street_address = ?, area = ?, locality = ?, district = ?,
         postal_code = ?, postal_area = ?, country = ?, industry = ?,
         founded_year = ?, employee_count = ?
@@ -198,7 +182,6 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
   } catch (err) {
-    console.error('Company update error:', err);
     return new Response(JSON.stringify({ error: 'Failed to update company' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
@@ -220,28 +203,12 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
   }
 
   try {
-    const jobsResult = await DB.prepare(
-      'SELECT COUNT(*) as count FROM jobs WHERE company_id = ?'
-    ).bind(id).first();
-
-    if (jobsResult && (jobsResult as any).count > 0) {
-      return new Response(JSON.stringify({ 
-        error: 'Cannot delete company with existing jobs',
-        details: `This company has ${(jobsResult as any).count} job(s) associated with it.`
-      }), {
-        status: 409,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-      });
-    }
-
     await DB.prepare('DELETE FROM companies WHERE id = ?').bind(id).run();
-    
     return new Response(JSON.stringify({ success: true, deleted: id }), {
       status: 200,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
   } catch (err) {
-    console.error('Company delete error:', err);
     return new Response(JSON.stringify({ error: 'Failed to delete company' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
