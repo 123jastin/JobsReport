@@ -8,7 +8,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
 
   try {
-    // 🔥 First, get all companies
+    // 🔥 Get all companies
     const companiesResult = await DB.prepare(`
       SELECT 
         id, name, logo_url, website,
@@ -19,32 +19,31 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       ORDER BY name
     `).all();
 
-    // 🔥 Then get job counts per company (separate query)
-    const jobCountsResult = await DB.prepare(`
-      SELECT 
-        company, 
-        COUNT(*) as total_jobs,
-        SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) as active_jobs
-      FROM jobs 
-      GROUP BY company
-    `).all();
+    // 🔥 Get ALL jobs (for counting)
+    const jobsResult = await DB.prepare(
+      'SELECT company, is_active FROM jobs'
+    ).all();
 
-    // 🔥 Build a map of company name → job counts
-    const jobCountsMap: Record<string, { total: number; active: number }> = {};
-    for (const row of jobCountsResult.results) {
-      const companyName = (row as any).company?.toLowerCase().trim();
-      if (companyName) {
-        jobCountsMap[companyName] = {
-          total: (row as any).total_jobs || 0,
-          active: (row as any).active_jobs || 0
-        };
+    // 🔥 Count jobs per company manually
+    const countsMap: Record<string, { total: number; active: number }> = {};
+    for (const row of jobsResult.results) {
+      const j = row as any;
+      const name = (j.company || '').toLowerCase().trim();
+      if (!name) continue;
+      
+      if (!countsMap[name]) {
+        countsMap[name] = { total: 0, active: 0 };
+      }
+      countsMap[name].total++;
+      if (j.is_active === 1) {
+        countsMap[name].active++;
       }
     }
 
-    // 🔥 Map companies with job counts
+    // 🔥 Map companies with counts
     const companies = companiesResult.results.map((c: any) => {
-      const nameKey = c.name?.toLowerCase().trim();
-      const counts = jobCountsMap[nameKey] || { total: 0, active: 0 };
+      const nameKey = (c.name || '').toLowerCase().trim();
+      const counts = countsMap[nameKey] || { total: 0, active: 0 };
       
       return {
         id: c.id,
@@ -113,12 +112,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const id = 'comp-' + Date.now().toString(36) + Math.random().toString(36).substring(2, 4);
 
     await DB.prepare(`
-      INSERT INTO companies (
-        id, name, logo_url, website,
-        description, street_address, area, locality, district,
-        postal_code, postal_area, country, industry,
-        founded_year, employee_count
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO companies (id, name, logo_url, website, description, street_address, area, locality, district, postal_code, postal_area, country, industry, founded_year, employee_count)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       id, name, body.logoUrl || '', body.url || '',
       body.description || '', body.streetAddress || '',
@@ -171,10 +166,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       });
     }
 
-    const existing = await DB.prepare(
-      'SELECT id FROM companies WHERE id = ?'
-    ).bind(id).first();
-
+    const existing = await DB.prepare('SELECT id FROM companies WHERE id = ?').bind(id).first();
     if (!existing) {
       return new Response(JSON.stringify({ error: 'Company not found' }), {
         status: 404,
@@ -183,8 +175,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     }
 
     await DB.prepare(`
-      UPDATE companies SET
-        name = ?, logo_url = ?, website = ?, description = ?,
+      UPDATE companies SET name = ?, logo_url = ?, website = ?, description = ?,
         street_address = ?, area = ?, locality = ?, district = ?,
         postal_code = ?, postal_area = ?, country = ?, industry = ?,
         founded_year = ?, employee_count = ?
@@ -222,22 +213,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
   }
 
   try {
-    const jobsResult = await DB.prepare(
-      'SELECT COUNT(*) as count FROM jobs WHERE company_id = ?'
-    ).bind(id).first();
-
-    if (jobsResult && (jobsResult as any).count > 0) {
-      return new Response(JSON.stringify({ 
-        error: 'Cannot delete company with existing jobs',
-        details: `This company has ${(jobsResult as any).count} job(s) associated with it.`
-      }), {
-        status: 409,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-      });
-    }
-
     await DB.prepare('DELETE FROM companies WHERE id = ?').bind(id).run();
-    
     return new Response(JSON.stringify({ success: true, deleted: id }), {
       status: 200,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
