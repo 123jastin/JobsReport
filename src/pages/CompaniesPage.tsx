@@ -37,6 +37,7 @@ interface Job {
 }
 
 const COMPANIES_PER_PAGE = 12;
+const JOBS_PER_PAGE = 10;
 
 export default function CompaniesPage() {
   const { companyName } = useParams<{ companyName?: string }>();
@@ -48,6 +49,7 @@ export default function CompaniesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalActiveJobs, setTotalActiveJobs] = useState(0);
+  const [jobPage, setJobPage] = useState(1);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -62,13 +64,11 @@ export default function CompaniesPage() {
           const companiesList = Array.isArray(companiesData) ? companiesData : (companiesData.companies || []);
           setCompanies(companiesList);
           
-          // 🔥 Calculate total active jobs from companies data directly
           const totalActive = companiesList.reduce((sum: number, c: Company) => sum + (c.activeJobs || 0), 0);
           setTotalActiveJobs(totalActive);
           
           console.log('📊 Companies loaded:', companiesList.length);
           console.log('📊 Total active jobs from companies:', totalActive);
-          console.log('📊 Sample company:', companiesList[0]);
         }
 
         if (marketRes.ok) {
@@ -94,6 +94,7 @@ export default function CompaniesPage() {
       );
       if (found) {
         setSelectedCompany(found);
+        setJobPage(1);
         setTimeout(() => {
           window.scrollTo({ top: 300, behavior: 'smooth' });
         }, 100);
@@ -101,10 +102,13 @@ export default function CompaniesPage() {
     }
   }, [companyName, companies]);
 
-  // Reset page on search
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
+
+  useEffect(() => {
+    setJobPage(1);
+  }, [selectedCompany?.id]);
 
   const getCompanyJobs = (companyName: string) => {
     if (!companyName || jobs.length === 0) return [];
@@ -495,59 +499,124 @@ export default function CompaniesPage() {
             {/* Ad */}
             <AdBanner key={`company-${selectedCompany.id}`} slot="1373889473" />
 
-            {/* Company Jobs */}
-            <div>
-              <h3 className="text-lg font-bold text-white uppercase tracking-widest mb-4 flex items-center gap-3">
-                <div className="w-1.5 h-6 bg-blue-500"></div>
-                Job Openings ({getCompanyJobs(selectedCompany.name).length})
-              </h3>
+            {/* 🔥 Company Jobs with Pagination */}
+            {(() => {
+              const companyJobs = getCompanyJobs(selectedCompany.name);
+              const totalJobPages = Math.ceil(companyJobs.length / JOBS_PER_PAGE);
+              const paginatedJobs = companyJobs.slice(
+                (jobPage - 1) * JOBS_PER_PAGE,
+                jobPage * JOBS_PER_PAGE
+              );
 
-              {getCompanyJobs(selectedCompany.name).length === 0 ? (
-                <div className="text-center py-12 text-gray-500 text-sm font-mono">
-                  {jobs.length === 0 
-                    ? 'Loading job listings...' 
-                    : 'No job listings available for this company.'}
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {getCompanyJobs(selectedCompany.name).map((job, idx: number) => {
-                    const elements = [];
-                    elements.push(
-                      <Link
-                        key={job.id}
-                        to={`/market/${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${job.id}`}
-                        className={`block p-5 rounded-2xl border transition-all group ${job.active ? 'bg-white/[0.01] border-white/5 hover:bg-white/[0.03] hover:border-blue-500/30' : 'bg-white/[0.005] border-white/5 opacity-60'}`}
-                      >
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex items-center gap-2">
-                            <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${job.active ? 'bg-blue-500/10 text-blue-400' : 'bg-amber-500/10 text-amber-400'}`}>{job.active ? 'Active' : 'Expired'}</span>
-                            <span className="text-[10px] text-gray-500 font-mono">{job.role}</span>
+              return (
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-white uppercase tracking-widest flex items-center gap-3">
+                      <div className="w-1.5 h-6 bg-blue-500"></div>
+                      Job Openings ({companyJobs.length})
+                    </h3>
+                    {totalJobPages > 1 && (
+                      <span className="text-[10px] text-gray-500 font-mono">
+                        Page {jobPage} of {totalJobPages}
+                      </span>
+                    )}
+                  </div>
+
+                  {companyJobs.length === 0 ? (
+                    <div className="text-center py-12 text-gray-500 text-sm font-mono">
+                      No job listings available for this company.
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {paginatedJobs.map((job, idx: number) => {
+                          const elements = [];
+                          elements.push(
+                            <Link
+                              key={job.id}
+                              to={`/market/${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${job.id}`}
+                              className={`block p-5 rounded-2xl border transition-all group ${job.active ? 'bg-white/[0.01] border-white/5 hover:bg-white/[0.03] hover:border-blue-500/30' : 'bg-white/[0.005] border-white/5 opacity-60'}`}
+                            >
+                              <div className="flex items-start justify-between mb-3">
+                                <div className="flex items-center gap-2">
+                                  <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${job.active ? 'bg-blue-500/10 text-blue-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                                    {job.active ? 'Active' : 'Expired'}
+                                  </span>
+                                  <span className="text-[10px] text-gray-500 font-mono">{job.role}</span>
+                                </div>
+                              </div>
+                              <h4 className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors mb-2">{job.title}</h4>
+                              <div className="flex items-center gap-3 text-[11px] text-gray-500">
+                                <span className="flex items-center gap-1"><MapPin size={11} />{job.location || 'Remote'}</span>
+                                {job.salary && <span className="flex items-center gap-1 text-emerald-400 font-bold">{job.salary}</span>}
+                              </div>
+                              {job.expiresAt && !job.active && <div className="mt-2 text-[9px] text-amber-400 font-mono">Expired: {job.expiresAt}</div>}
+                            </Link>
+                          );
+                          
+                          // 🔥 Ad every 5 jobs (not intrusive)
+                          if ((idx + 1) % 5 === 0 && idx < paginatedJobs.length - 1) {
+                            const adNum = Math.floor((idx + 1) / 5) % 3;
+                            elements.push(
+                              adNum === 1 
+                                ? <InFeedAd key={`job-ad1-${idx}`} slot="1805968460" layoutKey="-h0-1a+31-4t+7z" idx={idx} />
+                                : adNum === 2 
+                                  ? <InFeedAd key={`job-ad2-${idx}`} slot="9872160747" layoutKey="-gh-1o+14-67+ka" idx={idx} />
+                                  : <InFeedAd key={`job-ad3-${idx}`} slot="5598749525" layoutKey="-gm-l+1-46+ex" idx={idx} />
+                            );
+                          }
+                          return elements;
+                        }).flat()}
+                      </div>
+
+                      {/* 🔥 Job Pagination Controls */}
+                      {totalJobPages > 1 && (
+                        <div className="flex items-center justify-center gap-2 pt-6">
+                          <button
+                            onClick={() => setJobPage(p => Math.max(1, p - 1))}
+                            disabled={jobPage === 1}
+                            className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-[10px] font-bold text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all uppercase tracking-wider flex items-center gap-1"
+                          >
+                            <ChevronLeft size={12} /> Prev
+                          </button>
+                          
+                          <div className="flex items-center gap-1">
+                            {Array.from({ length: totalJobPages }, (_, i) => i + 1)
+                              .filter(p => p === 1 || p === totalJobPages || Math.abs(p - jobPage) <= 1)
+                              .map((p, idx, arr) => (
+                                <div key={p} className="flex items-center gap-1">
+                                  {idx > 0 && arr[idx - 1] !== p - 1 && (
+                                    <span className="text-gray-600 px-0.5 text-[10px]">...</span>
+                                  )}
+                                  <button
+                                    onClick={() => setJobPage(p)}
+                                    className={`w-8 h-8 rounded-lg text-[10px] font-bold transition-all ${
+                                      jobPage === p
+                                        ? 'bg-blue-600 text-white'
+                                        : 'bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10'
+                                    }`}
+                                  >
+                                    {p}
+                                  </button>
+                                </div>
+                              ))
+                            }
                           </div>
+                          
+                          <button
+                            onClick={() => setJobPage(p => Math.min(totalJobPages, p + 1))}
+                            disabled={jobPage === totalJobPages}
+                            className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-[10px] font-bold text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all uppercase tracking-wider flex items-center gap-1"
+                          >
+                            Next <ChevronRight size={12} />
+                          </button>
                         </div>
-                        <h4 className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors mb-2">{job.title}</h4>
-                        <div className="flex items-center gap-3 text-[11px] text-gray-500">
-                          <span className="flex items-center gap-1"><MapPin size={11} />{job.location || 'Remote'}</span>
-                          {job.salary && <span className="flex items-center gap-1 text-emerald-400 font-bold">{job.salary}</span>}
-                        </div>
-                        {job.expiresAt && !job.active && <div className="mt-2 text-[9px] text-amber-400 font-mono">Expired: {job.expiresAt}</div>}
-                      </Link>
-                    );
-                    
-                    if ((idx + 1) % 3 === 0 && idx < getCompanyJobs(selectedCompany.name).length - 1) {
-                      const adNum = Math.floor((idx + 1) / 3) % 3;
-                      elements.push(
-                        adNum === 1 
-                          ? <InFeedAd key={`ad1-${idx}`} slot="1805968460" layoutKey="-h0-1a+31-4t+7z" idx={idx} />
-                          : adNum === 2 
-                            ? <InFeedAd key={`ad2-${idx}`} slot="9872160747" layoutKey="-gh-1o+14-67+ka" idx={idx} />
-                            : <InFeedAd key={`ad3-${idx}`} slot="5598749525" layoutKey="-gm-l+1-46+ex" idx={idx} />
-                      );
-                    }
-                    return elements;
-                  }).flat()}
+                      )}
+                    </>
+                  )}
                 </div>
-              )}
-            </div>
+              );
+            })()}
           </motion.div>
         ) : (
           /* Companies Grid with Pagination */
@@ -619,7 +688,7 @@ export default function CompaniesPage() {
               )}
             </div>
 
-            {/* 🔥 Pagination Controls */}
+            {/* 🔥 Company Grid Pagination */}
             {totalPages > 1 && (
               <div className="flex items-center justify-center gap-2 pt-8">
                 <button
