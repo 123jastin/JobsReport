@@ -8,14 +8,19 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
 
   try {
+    // 🔥 Join with jobs to get counts
     const result = await DB.prepare(`
       SELECT 
-        id, name, logo_url, website,
-        description, street_address, area, locality, district,
-        postal_code, postal_area, country, industry,
-        founded_year, employee_count
-      FROM companies 
-      ORDER BY name
+        c.id, c.name, c.logo_url, c.website,
+        c.description, c.street_address, c.area, c.locality, c.district,
+        c.postal_code, c.postal_area, c.country, c.industry,
+        c.founded_year, c.employee_count,
+        COUNT(j.id) as total_jobs,
+        SUM(CASE WHEN j.is_active = 1 THEN 1 ELSE 0 END) as active_jobs
+      FROM companies c
+      LEFT JOIN jobs j ON c.id = j.company_id
+      GROUP BY c.id
+      ORDER BY c.name
     `).all();
     
     const companies = result.results.map((c: any) => ({
@@ -33,7 +38,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       country: c.country || 'TZ',
       industry: c.industry || '',
       foundedYear: c.founded_year || '',
-      employeeCount: c.employee_count || ''
+      employeeCount: c.employee_count || '',
+      totalJobs: c.total_jobs || 0,
+      activeJobs: c.active_jobs || 0
     }));
 
     return new Response(JSON.stringify(companies), {
@@ -122,7 +129,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       country: body.country || 'TZ',
       industry: body.industry || '',
       foundedYear: body.foundedYear || '',
-      employeeCount: body.employeeCount || ''
+      employeeCount: body.employeeCount || '',
+      totalJobs: 0,
+      activeJobs: 0
     }), {
       status: 201,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
@@ -136,6 +145,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
 };
 
+// Keep onRequestPut and onRequestDelete unchanged
 export const onRequestPut: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
   const url = new URL(context.request.url);
@@ -160,7 +170,6 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       });
     }
 
-    // Check if company exists
     const existing = await DB.prepare(
       'SELECT id FROM companies WHERE id = ?'
     ).bind(id).first();
@@ -172,68 +181,27 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       });
     }
 
-    // Update company with all fields
     await DB.prepare(`
       UPDATE companies SET
-        name = ?,
-        logo_url = ?,
-        website = ?,
-        description = ?,
-        street_address = ?,
-        area = ?,
-        locality = ?,
-        district = ?,
-        postal_code = ?,
-        postal_area = ?,
-        country = ?,
-        industry = ?,
-        founded_year = ?,
-        employee_count = ?
+        name = ?, logo_url = ?, website = ?, description = ?,
+        street_address = ?, area = ?, locality = ?, district = ?,
+        postal_code = ?, postal_area = ?, country = ?, industry = ?,
+        founded_year = ?, employee_count = ?
       WHERE id = ?
     `).bind(
-      name,
-      body.logoUrl || '',
-      body.url || '',
-      body.description || '',
-      body.streetAddress || '',
-      body.area || '',
-      body.locality || '',
-      body.district || '',
-      body.postalCode || '',
-      body.postalArea || '',
-      body.country || 'TZ',
-      body.industry || '',
-      body.foundedYear || '',
-      body.employeeCount || '',
-      id
+      name, body.logoUrl || '', body.url || '', body.description || '',
+      body.streetAddress || '', body.area || '', body.locality || '', body.district || '',
+      body.postalCode || '', body.postalArea || '', body.country || 'TZ', body.industry || '',
+      body.foundedYear || '', body.employeeCount || '', id
     ).run();
 
-    return new Response(JSON.stringify({
-      id,
-      name,
-      logoUrl: body.logoUrl || '',
-      url: body.url || '',
-      description: body.description || '',
-      streetAddress: body.streetAddress || '',
-      area: body.area || '',
-      locality: body.locality || '',
-      district: body.district || '',
-      postalCode: body.postalCode || '',
-      postalArea: body.postalArea || '',
-      country: body.country || 'TZ',
-      industry: body.industry || '',
-      foundedYear: body.foundedYear || '',
-      employeeCount: body.employeeCount || ''
-    }), {
+    return new Response(JSON.stringify({ id, name, ...body }), {
       status: 200,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
   } catch (err) {
     console.error('Company update error:', err);
-    return new Response(JSON.stringify({ 
-      error: 'Failed to update company',
-      details: err instanceof Error ? err.message : 'Unknown error'
-    }), {
+    return new Response(JSON.stringify({ error: 'Failed to update company' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
@@ -254,7 +222,6 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
   }
 
   try {
-    // Check for associated jobs before deleting
     const jobsResult = await DB.prepare(
       'SELECT COUNT(*) as count FROM jobs WHERE company_id = ?'
     ).bind(id).first();
@@ -262,7 +229,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
     if (jobsResult && (jobsResult as any).count > 0) {
       return new Response(JSON.stringify({ 
         error: 'Cannot delete company with existing jobs',
-        details: `This company has ${(jobsResult as any).count} job(s) associated with it. Delete or reassign the jobs first.`
+        details: `This company has ${(jobsResult as any).count} job(s) associated with it.`
       }), {
         status: 409,
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
@@ -271,20 +238,13 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
 
     await DB.prepare('DELETE FROM companies WHERE id = ?').bind(id).run();
     
-    return new Response(JSON.stringify({ 
-      success: true, 
-      deleted: id,
-      message: 'Company deleted successfully'
-    }), {
+    return new Response(JSON.stringify({ success: true, deleted: id }), {
       status: 200,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
   } catch (err) {
     console.error('Company delete error:', err);
-    return new Response(JSON.stringify({ 
-      error: 'Failed to delete company',
-      details: err instanceof Error ? err.message : 'Unknown error'
-    }), {
+    return new Response(JSON.stringify({ error: 'Failed to delete company' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
