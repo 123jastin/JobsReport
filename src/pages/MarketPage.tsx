@@ -33,6 +33,7 @@ export default function MarketPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [totalJobs, setTotalJobs] = useState(0);
+  const [totalActiveJobs, setTotalActiveJobs] = useState(0);
   
   const [searchParams, setSearchParams] = useSearchParams();
   const initialRole = searchParams.get('role') || 'All';
@@ -61,6 +62,7 @@ export default function MarketPage() {
           setCompanies(Array.isArray(data.companies) ? data.companies : []);
           setRoles(['All', ...(Array.isArray(data.roles) ? data.roles : [])]);
           setTotalJobs(data.stats?.totalJobs || 0);
+          setTotalActiveJobs(data.stats?.totalJobs || 0);
         }
       } catch (err) {
         console.error("Error loading market:", err);
@@ -70,11 +72,11 @@ export default function MarketPage() {
     }
     loadMarketData();
     window.scrollTo(0, 0);
-  }, [currentPage]); // 🔥 Refetch when page changes
+  }, [currentPage]);
 
   // Reset to page 1 when filters change
   useEffect(() => {
-    if (currentPage !== 1) {
+    if (currentPage !== 1 && (searchQuery || selectedRole !== 'All' || selectedCountry !== 'Worldwide')) {
       navigate('/market', { replace: true });
     }
   }, [searchQuery, selectedRole, selectedCountry]);
@@ -327,8 +329,8 @@ export default function MarketPage() {
           </h1>
           <p className="text-sm text-gray-400 max-w-xl mt-2">
             {selectedCountry === 'Worldwide'
-              ? `Browse ${activeJobs.length} active job listings across ${uniqueRoles} categories from ${uniqueCompanies} companies worldwide.`
-              : `Browse ${activeJobs.length} active job listings in ${countryText} across ${uniqueRoles} categories from ${uniqueCompanies} companies.`}
+              ? `Browse ${totalActiveJobs} active job listings across ${uniqueRoles} categories from ${uniqueCompanies} companies worldwide.`
+              : `Browse ${totalActiveJobs} active job listings in ${countryText} across ${uniqueRoles} categories from ${uniqueCompanies} companies.`}
           </p>
         </div>
 
@@ -336,7 +338,8 @@ export default function MarketPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="p-4 rounded-2xl bg-white/[0.01] border border-white/5">
             <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Active Signals</p>
-            <p className="text-2xl font-mono text-white mt-1">{activeJobs.length}</p>
+            <p className="text-2xl font-mono text-white mt-1">{totalActiveJobs}</p>
+            <p className="text-[9px] text-gray-600 mt-0.5">{activeJobs.length} on this page</p>
           </div>
           <div className="p-4 rounded-2xl bg-white/[0.01] border border-white/5">
             <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Hiring Entities</p>
@@ -405,6 +408,17 @@ export default function MarketPage() {
                 <Globe size={32} className="text-gray-600 mx-auto mb-4" />
                 <p className="text-white font-bold text-sm">No Active Market Signals Found</p>
                 <p className="text-xs text-gray-500 mt-1">No verified job listings matching your telemetry filters.</p>
+                <button 
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSelectedRole('All');
+                    setSelectedCountry('Worldwide');
+                    navigate('/market');
+                  }}
+                  className="mt-4 px-4 py-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all"
+                >
+                  Reset Filters
+                </button>
               </motion.div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -434,9 +448,32 @@ export default function MarketPage() {
           </AnimatePresence>
         </div>
 
-        {/* 🔥 Pagination Controls */}
+        {/* 🔥 "See More Jobs" Button */}
+        {currentPage < totalPages && (
+          <div className="pt-4 space-y-4">
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              className="w-full py-4 rounded-2xl bg-gradient-to-r from-blue-600/20 to-violet-600/20 border border-blue-500/30 hover:border-blue-500/50 hover:from-blue-600/30 hover:to-violet-600/30 text-white font-bold text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-3 group"
+            >
+              <span>See More Jobs</span>
+              <div className="flex items-center gap-1">
+                <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
+              </div>
+            </button>
+            <p className="text-center text-[10px] text-gray-500 font-mono">
+              Showing page {currentPage} of {totalPages} • {totalActiveJobs} total jobs available
+            </p>
+          </div>
+        )}
+
+        {/* 🔥 Google Ad - After "See More Jobs" Button */}
+        {currentPage < totalPages && (
+          <AdBanner key={`load-more-ad-${currentPage}`} slot="5466053430" />
+        )}
+
+        {/* 🔥 Page Number Navigation */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 pt-6">
+          <div className="flex items-center justify-center gap-2 pt-2">
             <button
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={currentPage === 1}
