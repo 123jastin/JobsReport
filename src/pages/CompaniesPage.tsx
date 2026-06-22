@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Building2, Globe, MapPin, Briefcase, ExternalLink, ArrowRight, Search, Clock, Users } from 'lucide-react';
+import { Building2, Globe, MapPin, Briefcase, ExternalLink, ArrowRight, Search, Clock, Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import SEO from '../components/SEO';
 import AdBanner from '../components/AdBanner';
 
@@ -34,31 +34,39 @@ interface Job {
   expiresAt?: string;
 }
 
+const COMPANIES_PER_PAGE = 12;
+
 export default function CompaniesPage() {
+  const navigate = useNavigate();
+  const { companyName } = useParams<{ companyName?: string }>();
+  
   const [companies, setCompanies] = useState<Company[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  
-  const { companyName } = useParams<{ companyName?: string }>();
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalActiveJobs, setTotalActiveJobs] = useState(0);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
+        // 🔥 Fetch all jobs with high limit
         const [companiesRes, marketRes] = await Promise.all([
           fetch('/api/companies'),
-          fetch('/api/market')
+          fetch('/api/market?limit=200')
         ]);
 
         if (companiesRes.ok) {
           const companiesData = await companiesRes.json();
-          setCompanies(companiesData || []);
+          setCompanies(Array.isArray(companiesData) ? companiesData : []);
         }
 
         if (marketRes.ok) {
           const marketData = await marketRes.json();
-          setJobs(marketData.jobs || []);
+          const allJobs = marketData.jobs || [];
+          setJobs(allJobs);
+          setTotalActiveJobs(marketData.stats?.totalJobs || allJobs.filter((j: any) => j.active !== false).length);
         }
       } catch (err) {
         console.error('Failed to load companies:', err);
@@ -84,6 +92,11 @@ export default function CompaniesPage() {
     }
   }, [companyName, companies]);
 
+  // Reset page on search
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
   const getCompanyJobs = (companyName: string) => {
     return jobs.filter(job => 
       job.company.toLowerCase() === companyName.toLowerCase()
@@ -96,6 +109,12 @@ export default function CompaniesPage() {
 
   const filteredCompanies = companies.filter(company =>
     company.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const totalPages = Math.ceil(filteredCompanies.length / COMPANIES_PER_PAGE);
+  const paginatedCompanies = filteredCompanies.slice(
+    (currentPage - 1) * COMPANIES_PER_PAGE,
+    currentPage * COMPANIES_PER_PAGE
   );
 
   const getCompanySlug = (name: string) => name.toLowerCase().replace(/\s+/g, '-');
@@ -112,7 +131,6 @@ export default function CompaniesPage() {
     ? `https://jobsreport.online/companies/${getCompanySlug(selectedCompany.name)}`
     : 'https://jobsreport.online/companies';
 
-  // ✅ Clean Organization Schema (no JobPosting duplication, no invalid integers)
   const structuredData = selectedCompany ? {
     "@context": "https://schema.org",
     "@type": "Organization",
@@ -154,7 +172,7 @@ export default function CompaniesPage() {
     "description": pageDescription,
     "url": canonicalUrl,
     "numberOfItems": companies.length,
-    "itemListElement": companies.map((company, index) => ({
+    "itemListElement": companies.slice(0, 20).map((company, index) => ({
       "@type": "ListItem",
       "position": index + 1,
       "item": {
@@ -168,39 +186,39 @@ export default function CompaniesPage() {
     }))
   };
 
-  // In-Feed Ads
-  const InFeedAd1 = () => (
-    <div className="p-4 rounded-3xl border border-white/5" style={{ background: 'transparent' }}>
-      <ins className="adsbygoogle"
-        style={{ display: 'block', background: 'transparent' }}
-        data-ad-format="fluid"
-        data-ad-layout-key="-h0-1a+31-4t+7z"
-        data-ad-client="ca-pub-8155064094205693"
-        data-ad-slot="1805968460" />
-    </div>
-  );
+  // 🔥 In-Feed Ad with proper initialization
+  const InFeedAd = ({ slot, layoutKey, idx }: { slot: string; layoutKey: string; idx: number }) => {
+    const adRef = useRef<HTMLDivElement>(null);
 
-  const InFeedAd2 = () => (
-    <div className="p-4 rounded-3xl border border-white/5" style={{ background: 'transparent' }}>
-      <ins className="adsbygoogle"
-        style={{ display: 'block', background: 'transparent' }}
-        data-ad-format="fluid"
-        data-ad-layout-key="-gh-1o+14-67+ka"
-        data-ad-client="ca-pub-8155064094205693"
-        data-ad-slot="9872160747" />
-    </div>
-  );
+    useEffect(() => {
+      const timer = setTimeout(() => {
+        if (adRef.current) {
+          adRef.current.innerHTML = '';
+          const ins = document.createElement('ins');
+          ins.className = 'adsbygoogle';
+          ins.style.display = 'block';
+          ins.style.background = 'transparent';
+          ins.setAttribute('data-ad-format', 'fluid');
+          ins.setAttribute('data-ad-layout-key', layoutKey);
+          ins.setAttribute('data-ad-client', 'ca-pub-8155064094205693');
+          ins.setAttribute('data-ad-slot', slot);
+          adRef.current.appendChild(ins);
+          try {
+            (window.adsbygoogle = window.adsbygoogle || []).push({});
+          } catch (e) {
+            console.log('In-feed ad error:', e);
+          }
+        }
+      }, 200);
+      return () => clearTimeout(timer);
+    }, [slot, layoutKey]);
 
-  const InFeedAd3 = () => (
-    <div className="p-4 rounded-3xl border border-white/5" style={{ background: 'transparent' }}>
-      <ins className="adsbygoogle"
-        style={{ display: 'block', background: 'transparent' }}
-        data-ad-format="fluid"
-        data-ad-layout-key="-gm-l+1-46+ex"
-        data-ad-client="ca-pub-8155064094205693"
-        data-ad-slot="5598749525" />
-    </div>
-  );
+    return (
+      <div className="p-4 rounded-3xl border border-white/5" style={{ background: 'transparent' }}>
+        <div ref={adRef} />
+      </div>
+    );
+  };
 
   if (loading) {
     return (
@@ -254,12 +272,8 @@ export default function CompaniesPage() {
             <div className="flex items-center gap-2 text-sm">
               <Briefcase size={16} className="text-emerald-500" />
               <span className="text-gray-400">
-                <span className="text-white font-bold">
-                  {selectedCompany 
-                    ? getCompanyJobs(selectedCompany.name).filter(j => j.active).length 
-                    : jobs.filter(j => j.active !== false).length}
-                </span>
-                {selectedCompany ? ' Active Jobs' : ' Active Jobs'}
+                <span className="text-white font-bold">{totalActiveJobs}</span>
+                {' Active Jobs'}
               </span>
             </div>
           </div>
@@ -494,9 +508,11 @@ export default function CompaniesPage() {
                     if ((idx + 1) % 3 === 0 && idx < getCompanyJobs(selectedCompany.name).length - 1) {
                       const adNum = Math.floor((idx + 1) / 3) % 3;
                       elements.push(
-                        adNum === 1 ? <InFeedAd1 key={`ad1-${idx}`} /> :
-                        adNum === 2 ? <InFeedAd2 key={`ad2-${idx}`} /> :
-                        <InFeedAd3 key={`ad3-${idx}`} />
+                        adNum === 1 
+                          ? <InFeedAd key={`ad1-${idx}`} slot="1805968460" layoutKey="-h0-1a+31-4t+7z" idx={idx} />
+                          : adNum === 2 
+                            ? <InFeedAd key={`ad2-${idx}`} slot="9872160747" layoutKey="-gh-1o+14-67+ka" idx={idx} />
+                            : <InFeedAd key={`ad3-${idx}`} slot="5598749525" layoutKey="-gm-l+1-46+ex" idx={idx} />
                       );
                     }
                     return elements;
@@ -506,68 +522,116 @@ export default function CompaniesPage() {
             </div>
           </motion.div>
         ) : (
-          /* Companies Grid */
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredCompanies.map((company, idx: number) => {
-              const elements = [];
-              const companyJobs = getCompanyJobs(company.name);
-              const activeJobs = companyJobs.filter(j => j.active).length;
-              const companySlug = getCompanySlug(company.name);
-              
-              elements.push(
-                <motion.div key={company.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-                  <Link
-                    to={`/companies/${companySlug}`}
-                    className="p-6 bg-white/[0.01] border border-white/5 hover:border-blue-500/30 hover:bg-white/[0.02] rounded-3xl transition-all text-left group block"
-                  >
-                    <div className="flex items-center gap-4 mb-4">
-                      <div className="w-14 h-14 rounded-2xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
-                        {company.logoUrl ? (
-                          <img src={company.logoUrl} alt={company.name} className="w-full h-full object-cover rounded-2xl" referrerPolicy="no-referrer" />
-                        ) : (
-                          <div className="w-full h-full bg-gradient-to-br from-blue-600 to-violet-600 flex items-center justify-center text-white font-bold text-xl">{company.name.charAt(0)?.toUpperCase()}</div>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-base font-bold text-white group-hover:text-blue-400 transition-colors truncate">{company.name}</h3>
-                        {company.url && (
-                          <span className="text-[10px] text-gray-500 font-mono truncate block mt-1">
-                            {(() => { try { return new URL(company.url).hostname.replace('www.', ''); } catch { return ''; } })()}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between pt-4 border-t border-white/5">
-                      <div className="flex items-center gap-2">
-                        <Briefcase size={14} className="text-blue-400" />
-                        <span className="text-xs text-gray-400">
-                          <span className="text-white font-bold">{activeJobs}</span> active jobs
-                          {companyJobs.length > activeJobs && (
-                            <span className="text-gray-600 ml-1">({companyJobs.length} total)</span>
-                          )}
-                        </span>
-                      </div>
-                      <ArrowRight size={16} className="text-gray-600 group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
-                    </div>
-                  </Link>
-                </motion.div>
-              );
-              
-              if ((idx + 1) % 3 === 0 && idx < filteredCompanies.length - 1) {
-                const adNum = Math.floor((idx + 1) / 3) % 3;
+          /* Companies Grid with Pagination */
+          <div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {paginatedCompanies.map((company, idx: number) => {
+                const elements = [];
+                const companyJobs = getCompanyJobs(company.name);
+                const activeJobs = companyJobs.filter(j => j.active).length;
+                const companySlug = getCompanySlug(company.name);
+                
                 elements.push(
-                  adNum === 1 ? <InFeedAd1 key={`ad1-${idx}`} /> :
-                  adNum === 2 ? <InFeedAd2 key={`ad2-${idx}`} /> :
-                  <InFeedAd3 key={`ad3-${idx}`} />
+                  <motion.div key={company.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+                    <Link
+                      to={`/companies/${companySlug}`}
+                      className="p-6 bg-white/[0.01] border border-white/5 hover:border-blue-500/30 hover:bg-white/[0.02] rounded-3xl transition-all text-left group block"
+                    >
+                      <div className="flex items-center gap-4 mb-4">
+                        <div className="w-14 h-14 rounded-2xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
+                          {company.logoUrl ? (
+                            <img src={company.logoUrl} alt={company.name} className="w-full h-full object-cover rounded-2xl" referrerPolicy="no-referrer" />
+                          ) : (
+                            <div className="w-full h-full bg-gradient-to-br from-blue-600 to-violet-600 flex items-center justify-center text-white font-bold text-xl">{company.name.charAt(0)?.toUpperCase()}</div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-base font-bold text-white group-hover:text-blue-400 transition-colors truncate">{company.name}</h3>
+                          {company.url && (
+                            <span className="text-[10px] text-gray-500 font-mono truncate block mt-1">
+                              {(() => { try { return new URL(company.url).hostname.replace('www.', ''); } catch { return ''; } })()}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between pt-4 border-t border-white/5">
+                        <div className="flex items-center gap-2">
+                          <Briefcase size={14} className="text-blue-400" />
+                          <span className="text-xs text-gray-400">
+                            <span className="text-white font-bold">{activeJobs}</span> active jobs
+                            {companyJobs.length > activeJobs && (
+                              <span className="text-gray-600 ml-1">({companyJobs.length} total)</span>
+                            )}
+                          </span>
+                        </div>
+                        <ArrowRight size={16} className="text-gray-600 group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
+                      </div>
+                    </Link>
+                  </motion.div>
                 );
-              }
-              return elements;
-            }).flat()}
+                
+                if ((idx + 1) % 3 === 0 && idx < paginatedCompanies.length - 1) {
+                  const adNum = Math.floor((idx + 1) / 3) % 3;
+                  elements.push(
+                    adNum === 1 
+                      ? <InFeedAd key={`ad1-${idx}-${currentPage}`} slot="1805968460" layoutKey="-h0-1a+31-4t+7z" idx={idx} />
+                      : adNum === 2 
+                        ? <InFeedAd key={`ad2-${idx}-${currentPage}`} slot="9872160747" layoutKey="-gh-1o+14-67+ka" idx={idx} />
+                        : <InFeedAd key={`ad3-${idx}-${currentPage}`} slot="5598749525" layoutKey="-gm-l+1-46+ex" idx={idx} />
+                  );
+                }
+                return elements;
+              }).flat()}
 
-            {filteredCompanies.length === 0 && (
-              <div className="col-span-full text-center py-12">
-                <Building2 size={32} className="text-gray-600 mx-auto mb-4" />
-                <p className="text-gray-500 text-sm font-mono">{searchTerm ? 'No companies found matching your search.' : 'No companies listed yet.'}</p>
+              {filteredCompanies.length === 0 && (
+                <div className="col-span-full text-center py-12">
+                  <Building2 size={32} className="text-gray-600 mx-auto mb-4" />
+                  <p className="text-gray-500 text-sm font-mono">{searchTerm ? 'No companies found matching your search.' : 'No companies listed yet.'}</p>
+                </div>
+              )}
+            </div>
+
+            {/* 🔥 Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-2 pt-8">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all uppercase tracking-wider flex items-center gap-1"
+                >
+                  <ChevronLeft size={14} /> Prev
+                </button>
+                
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 2)
+                    .map((p, idx, arr) => (
+                      <div key={p} className="flex items-center gap-1">
+                        {idx > 0 && arr[idx - 1] !== p - 1 && (
+                          <span className="text-gray-600 px-1">...</span>
+                        )}
+                        <button
+                          onClick={() => setCurrentPage(p)}
+                          className={`w-10 h-10 rounded-xl text-xs font-bold transition-all ${
+                            currentPage === p
+                              ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20'
+                              : 'bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      </div>
+                    ))
+                  }
+                </div>
+                
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all uppercase tracking-wider flex items-center gap-1"
+                >
+                  Next <ChevronRight size={14} />
+                </button>
               </div>
             )}
           </div>
