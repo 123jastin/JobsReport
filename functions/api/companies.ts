@@ -8,6 +8,12 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
 
   try {
+    // 🔥 First, let's check what's in the jobs table
+    const jobsCheck = await DB.prepare(
+      'SELECT DISTINCT company_id FROM jobs WHERE is_active = 1 LIMIT 5'
+    ).all();
+    console.log('Company IDs in jobs:', jobsCheck.results);
+
     // 🔥 Join with jobs to get counts
     const result = await DB.prepare(`
       SELECT 
@@ -22,6 +28,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       GROUP BY c.id
       ORDER BY c.name
     `).all();
+    
+    console.log('Companies with counts:', result.results?.length);
+    console.log('Sample company:', result.results?.[0]);
     
     const companies = result.results.map((c: any) => ({
       id: c.id,
@@ -52,7 +61,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     });
   } catch (err) {
     console.error('Companies API Error:', err);
-    return new Response(JSON.stringify([]), {
+    return new Response(JSON.stringify({ error: 'Failed to load companies', details: err instanceof Error ? err.message : 'Unknown' }), {
       status: 500,
       headers: { 
         'Content-Type': 'application/json',
@@ -115,23 +124,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     ).run();
 
     return new Response(JSON.stringify({
-      id,
-      name,
-      logoUrl: body.logoUrl || '',
-      url: body.url || '',
-      description: body.description || '',
-      streetAddress: body.streetAddress || '',
-      area: body.area || '',
-      locality: body.locality || '',
-      district: body.district || '',
-      postalCode: body.postalCode || '',
-      postalArea: body.postalArea || '',
-      country: body.country || 'TZ',
-      industry: body.industry || '',
-      foundedYear: body.foundedYear || '',
-      employeeCount: body.employeeCount || '',
-      totalJobs: 0,
-      activeJobs: 0
+      id, name, logoUrl: body.logoUrl || '', url: body.url || '',
+      description: body.description || '', streetAddress: body.streetAddress || '',
+      area: body.area || '', locality: body.locality || '',
+      district: body.district || '', postalCode: body.postalCode || '',
+      postalArea: body.postalArea || '', country: body.country || 'TZ',
+      industry: body.industry || '', foundedYear: body.foundedYear || '',
+      employeeCount: body.employeeCount || '', totalJobs: 0, activeJobs: 0
     }), {
       status: 201,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
@@ -145,7 +144,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
 };
 
-// Keep onRequestPut and onRequestDelete unchanged
 export const onRequestPut: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
   const url = new URL(context.request.url);
