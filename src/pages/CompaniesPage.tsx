@@ -109,54 +109,9 @@ export default function CompaniesPage() {
   const getCompanyJobs = (companyName: string) => {
     if (!companyName || jobs.length === 0) return [];
     
-    const normalizedName = companyName.toLowerCase().trim();
-    
-    let matched = jobs.filter(job => 
-      (job.company || '').toLowerCase().trim() === normalizedName
-    );
-    
-    if (matched.length === 0) {
-      const stripSuffix = (name: string) => name
-        .replace(/\b(ltd|limited|inc|corp|corporation|llc|co|company|group|holdings|international|enterprise|enterprises|solutions|services|technologies|tech)\b\.?/gi, '')
-        .replace(/[^a-z0-9\s]/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-      
-      const nameClean = stripSuffix(normalizedName);
-      
-      matched = jobs.filter(job => {
-        const jc = (job.company || '').toLowerCase().trim();
-        const jcClean = stripSuffix(jc);
-        return jcClean === nameClean;
-      });
-    }
-    
-    if (matched.length === 0) {
-      matched = jobs.filter(job => {
-        const jc = (job.company || '').toLowerCase().trim();
-        return jc.includes(normalizedName) || normalizedName.includes(jc);
-      });
-    }
-    
-    if (matched.length === 0) {
-      const firstWord = normalizedName.split(' ')[0];
-      if (firstWord.length > 2) {
-        matched = jobs.filter(job => {
-          const jc = (job.company || '').toLowerCase().trim();
-          return jc.split(' ')[0] === firstWord;
-        });
-      }
-    }
-    
-    if (matched.length === 0) {
-      matched = jobs.filter(job => {
-        const jc = (job.company || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '');
-        const nc = normalizedName.replace(/[^a-z0-9]/g, '');
-        return jc === nc || jc.includes(nc) || nc.includes(jc);
-      });
-    }
-    
-    return matched.sort((a, b) => {
+    return jobs.filter(job => 
+      (job.company || '').toLowerCase().trim() === companyName.toLowerCase().trim()
+    ).sort((a, b) => {
       if (a.active && !b.active) return -1;
       if (!a.active && b.active) return 1;
       return 0;
@@ -351,13 +306,7 @@ export default function CompaniesPage() {
 
         {selectedCompany ? (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-            <button 
-              onClick={() => {
-                setSelectedCompany(null);
-                window.history.pushState(null, '', '/companies');
-              }} 
-              className="text-sm text-blue-500 hover:text-blue-400 font-bold uppercase tracking-wider flex items-center gap-2"
-            >
+            <button onClick={() => { setSelectedCompany(null); window.history.pushState(null, '', '/companies'); }} className="text-sm text-blue-500 hover:text-blue-400 font-bold uppercase tracking-wider flex items-center gap-2">
               ← Back to All Companies
             </button>
 
