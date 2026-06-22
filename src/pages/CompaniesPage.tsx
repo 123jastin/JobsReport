@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Building2, Globe, MapPin, Briefcase, ExternalLink, ArrowRight, Search, Clock, Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import SEO from '../components/SEO';
@@ -21,6 +21,8 @@ interface Company {
   industry?: string;
   foundedYear?: string;
   employeeCount?: string;
+  totalJobs?: number;
+  activeJobs?: number;
 }
 
 interface Job {
@@ -37,7 +39,6 @@ interface Job {
 const COMPANIES_PER_PAGE = 12;
 
 export default function CompaniesPage() {
-  const navigate = useNavigate();
   const { companyName } = useParams<{ companyName?: string }>();
   
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -51,7 +52,6 @@ export default function CompaniesPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // 🔥 Fetch all jobs with high limit
         const [companiesRes, marketRes] = await Promise.all([
           fetch('/api/companies'),
           fetch('/api/market?limit=200')
@@ -61,21 +61,21 @@ export default function CompaniesPage() {
           const companiesData = await companiesRes.json();
           const companiesList = Array.isArray(companiesData) ? companiesData : (companiesData.companies || []);
           setCompanies(companiesList);
+          
+          // 🔥 Calculate total active jobs from companies data directly
+          const totalActive = companiesList.reduce((sum: number, c: Company) => sum + (c.activeJobs || 0), 0);
+          setTotalActiveJobs(totalActive);
+          
           console.log('📊 Companies loaded:', companiesList.length);
+          console.log('📊 Total active jobs from companies:', totalActive);
+          console.log('📊 Sample company:', companiesList[0]);
         }
 
         if (marketRes.ok) {
           const marketData = await marketRes.json();
-          
-          // 🔥 Try multiple possible response structures
           const allJobs = marketData.jobs || marketData.activeJobs || [];
-          
           setJobs(allJobs);
-          setTotalActiveJobs(marketData.stats?.totalJobs || allJobs.filter((j: any) => j.active !== false).length);
-          
-          console.log('📊 Jobs loaded:', allJobs.length);
-          console.log('📊 Sample job:', allJobs[0]);
-          console.log('📊 Active jobs total:', marketData.stats?.totalJobs);
+          console.log('📊 Jobs loaded for detail view:', allJobs.length);
         }
       } catch (err) {
         console.error('Failed to load companies:', err);
@@ -114,12 +114,11 @@ export default function CompaniesPage() {
     return jobs.filter(job => {
       const jobCompany = (job.company || '').toLowerCase().trim();
       
-      // 🔥 Multiple matching strategies
       return (
-        jobCompany === normalizedName ||                           // Exact match
-        jobCompany.includes(normalizedName) ||                    // Partial match
-        normalizedName.includes(jobCompany) ||                    // Reverse partial
-        jobCompany.replace(/[^a-z0-9]/g, '') === normalizedName.replace(/[^a-z0-9]/g, '')  // Alphanumeric only
+        jobCompany === normalizedName ||
+        jobCompany.includes(normalizedName) ||
+        normalizedName.includes(jobCompany) ||
+        jobCompany.replace(/[^a-z0-9]/g, '') === normalizedName.replace(/[^a-z0-9]/g, '')
       );
     }).sort((a, b) => {
       if (a.active && !b.active) return -1;
@@ -145,7 +144,7 @@ export default function CompaniesPage() {
     : 'Companies & Employers | Browse Top Hiring Companies | JobsReport';
 
   const pageDescription = selectedCompany
-    ? `Browse ${getCompanyJobs(selectedCompany.name).length} job listings from ${selectedCompany.name}. Find career opportunities and vacancies at ${selectedCompany.name}.`
+    ? `Browse ${selectedCompany.activeJobs || getCompanyJobs(selectedCompany.name).length} job listings from ${selectedCompany.name}. Find career opportunities and vacancies at ${selectedCompany.name}.`
     : 'Browse top companies and employers actively hiring. Find job opportunities from leading organizations across various industries.';
 
   const canonicalUrl = selectedCompany
@@ -202,7 +201,7 @@ export default function CompaniesPage() {
         "url": company.url || `https://jobsreport.online/companies/${getCompanySlug(company.name)}`,
         "logo": company.logoUrl || undefined,
         "image": company.logoUrl || undefined,
-        "description": `${company.name} - ${getCompanyJobs(company.name).filter(j => j.active).length} active job(s) in ${company.industry || 'various industries'}.`
+        "description": `${company.name} - ${company.activeJobs || 0} active job(s) in ${company.industry || 'various industries'}.`
       }
     }))
   };
@@ -293,7 +292,11 @@ export default function CompaniesPage() {
             <div className="flex items-center gap-2 text-sm">
               <Briefcase size={16} className="text-emerald-500" />
               <span className="text-gray-400">
-                <span className="text-white font-bold">{totalActiveJobs}</span>
+                <span className="text-white font-bold">
+                  {selectedCompany 
+                    ? (selectedCompany.activeJobs || 0)
+                    : totalActiveJobs}
+                </span>
                 {' Active Jobs'}
               </span>
             </div>
@@ -348,10 +351,10 @@ export default function CompaniesPage() {
                   </div>
                   <div className="flex flex-wrap gap-4 text-xs text-gray-400">
                     <span>
-                      <span className="text-white font-bold">{getCompanyJobs(selectedCompany.name).filter(j => j.active).length}</span> active jobs
+                      <span className="text-white font-bold">{selectedCompany.activeJobs || 0}</span> active jobs
                     </span>
                     <span>
-                      <span className="text-white font-bold">{getCompanyJobs(selectedCompany.name).length}</span> total listings
+                      <span className="text-white font-bold">{selectedCompany.totalJobs || 0}</span> total listings
                     </span>
                     {selectedCompany.foundedYear && (
                       <span className="flex items-center gap-1">
@@ -500,7 +503,11 @@ export default function CompaniesPage() {
               </h3>
 
               {getCompanyJobs(selectedCompany.name).length === 0 ? (
-                <div className="text-center py-12 text-gray-500 text-sm font-mono">No job listings available for this company.</div>
+                <div className="text-center py-12 text-gray-500 text-sm font-mono">
+                  {jobs.length === 0 
+                    ? 'Loading job listings...' 
+                    : 'No job listings available for this company.'}
+                </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {getCompanyJobs(selectedCompany.name).map((job, idx: number) => {
@@ -548,8 +555,8 @@ export default function CompaniesPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {paginatedCompanies.map((company, idx: number) => {
                 const elements = [];
-                const companyJobs = getCompanyJobs(company.name);
-                const activeJobs = companyJobs.filter(j => j.active).length;
+                const activeJobs = company.activeJobs || 0;
+                const totalJobs = company.totalJobs || 0;
                 const companySlug = getCompanySlug(company.name);
                 
                 elements.push(
@@ -580,8 +587,8 @@ export default function CompaniesPage() {
                           <Briefcase size={14} className="text-blue-400" />
                           <span className="text-xs text-gray-400">
                             <span className="text-white font-bold">{activeJobs}</span> active jobs
-                            {companyJobs.length > activeJobs && (
-                              <span className="text-gray-600 ml-1">({companyJobs.length} total)</span>
+                            {totalJobs > activeJobs && (
+                              <span className="text-gray-600 ml-1">({totalJobs} total)</span>
                             )}
                           </span>
                         </div>
