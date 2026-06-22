@@ -8,39 +8,64 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
 
   try {
-    const result = await DB.prepare(`
+    // 🔥 First, get all companies
+    const companiesResult = await DB.prepare(`
       SELECT 
-        c.id, c.name, c.logo_url, c.website,
-        c.description, c.street_address, c.area, c.locality, c.district,
-        c.postal_code, c.postal_area, c.country, c.industry,
-        c.founded_year, c.employee_count,
-        COUNT(j.id) as total_jobs,
-        SUM(CASE WHEN j.is_active = 1 THEN 1 ELSE 0 END) as active_jobs
-      FROM companies c
-      LEFT JOIN jobs j ON LOWER(c.name) = LOWER(j.company)
-      GROUP BY c.id
-      ORDER BY c.name
+        id, name, logo_url, website,
+        description, street_address, area, locality, district,
+        postal_code, postal_area, country, industry,
+        founded_year, employee_count
+      FROM companies 
+      ORDER BY name
     `).all();
-    
-    const companies = result.results.map((c: any) => ({
-      id: c.id,
-      name: c.name,
-      logoUrl: c.logo_url || '',
-      url: c.website || '',
-      description: c.description || '',
-      streetAddress: c.street_address || '',
-      area: c.area || '',
-      locality: c.locality || '',
-      district: c.district || '',
-      postalCode: c.postal_code || '',
-      postalArea: c.postal_area || '',
-      country: c.country || 'TZ',
-      industry: c.industry || '',
-      foundedYear: c.founded_year || '',
-      employeeCount: c.employee_count || '',
-      totalJobs: c.total_jobs || 0,
-      activeJobs: c.active_jobs || 0
-    }));
+
+    // 🔥 Then get job counts per company (separate query)
+    const jobCountsResult = await DB.prepare(`
+      SELECT 
+        company, 
+        COUNT(*) as total_jobs,
+        SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) as active_jobs
+      FROM jobs 
+      GROUP BY company
+    `).all();
+
+    // 🔥 Build a map of company name → job counts
+    const jobCountsMap: Record<string, { total: number; active: number }> = {};
+    for (const row of jobCountsResult.results) {
+      const companyName = (row as any).company?.toLowerCase().trim();
+      if (companyName) {
+        jobCountsMap[companyName] = {
+          total: (row as any).total_jobs || 0,
+          active: (row as any).active_jobs || 0
+        };
+      }
+    }
+
+    // 🔥 Map companies with job counts
+    const companies = companiesResult.results.map((c: any) => {
+      const nameKey = c.name?.toLowerCase().trim();
+      const counts = jobCountsMap[nameKey] || { total: 0, active: 0 };
+      
+      return {
+        id: c.id,
+        name: c.name,
+        logoUrl: c.logo_url || '',
+        url: c.website || '',
+        description: c.description || '',
+        streetAddress: c.street_address || '',
+        area: c.area || '',
+        locality: c.locality || '',
+        district: c.district || '',
+        postalCode: c.postal_code || '',
+        postalArea: c.postal_area || '',
+        country: c.country || 'TZ',
+        industry: c.industry || '',
+        foundedYear: c.founded_year || '',
+        employeeCount: c.employee_count || '',
+        totalJobs: counts.total,
+        activeJobs: counts.active
+      };
+    });
 
     return new Response(JSON.stringify(companies), {
       headers: { 
