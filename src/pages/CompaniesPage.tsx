@@ -66,16 +66,12 @@ export default function CompaniesPage() {
           
           const totalActive = companiesList.reduce((sum: number, c: Company) => sum + (c.activeJobs || 0), 0);
           setTotalActiveJobs(totalActive);
-          
-          console.log('📊 Companies loaded:', companiesList.length);
-          console.log('📊 Total active jobs from companies:', totalActive);
         }
 
         if (marketRes.ok) {
           const marketData = await marketRes.json();
           const allJobs = marketData.jobs || marketData.activeJobs || [];
           setJobs(allJobs);
-          console.log('📊 Jobs loaded for detail view:', allJobs.length);
         }
       } catch (err) {
         console.error('Failed to load companies:', err);
@@ -115,16 +111,57 @@ export default function CompaniesPage() {
     
     const normalizedName = companyName.toLowerCase().trim();
     
-    return jobs.filter(job => {
-      const jobCompany = (job.company || '').toLowerCase().trim();
+    // 🔥 Try exact match first
+    let matched = jobs.filter(job => 
+      (job.company || '').toLowerCase().trim() === normalizedName
+    );
+    
+    // 🔥 If no exact match, try without common suffixes
+    if (matched.length === 0) {
+      const stripSuffix = (name: string) => name
+        .replace(/\b(ltd|limited|inc|corp|corporation|llc|co|company|group|holdings|international|enterprise|enterprises|solutions|services|technologies|tech)\b\.?/gi, '')
+        .replace(/[^a-z0-9\s]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
       
-      return (
-        jobCompany === normalizedName ||
-        jobCompany.includes(normalizedName) ||
-        normalizedName.includes(jobCompany) ||
-        jobCompany.replace(/[^a-z0-9]/g, '') === normalizedName.replace(/[^a-z0-9]/g, '')
-      );
-    }).sort((a, b) => {
+      const nameClean = stripSuffix(normalizedName);
+      
+      matched = jobs.filter(job => {
+        const jc = (job.company || '').toLowerCase().trim();
+        const jcClean = stripSuffix(jc);
+        return jcClean === nameClean;
+      });
+    }
+    
+    // 🔥 If still no match, try partial match
+    if (matched.length === 0) {
+      matched = jobs.filter(job => {
+        const jc = (job.company || '').toLowerCase().trim();
+        return jc.includes(normalizedName) || normalizedName.includes(jc);
+      });
+    }
+    
+    // 🔥 If still no match, try first word match
+    if (matched.length === 0) {
+      const firstWord = normalizedName.split(' ')[0];
+      if (firstWord.length > 2) {
+        matched = jobs.filter(job => {
+          const jc = (job.company || '').toLowerCase().trim();
+          return jc.split(' ')[0] === firstWord;
+        });
+      }
+    }
+    
+    // 🔥 Last resort: alphanumeric comparison
+    if (matched.length === 0) {
+      matched = jobs.filter(job => {
+        const jc = (job.company || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+        const nc = normalizedName.replace(/[^a-z0-9]/g, '');
+        return jc === nc || jc.includes(nc) || nc.includes(jc);
+      });
+    }
+    
+    return matched.sort((a, b) => {
       if (a.active && !b.active) return -1;
       if (!a.active && b.active) return 1;
       return 0;
@@ -148,7 +185,7 @@ export default function CompaniesPage() {
     : 'Companies & Employers | Browse Top Hiring Companies | JobsReport';
 
   const pageDescription = selectedCompany
-    ? `Browse ${selectedCompany.activeJobs || getCompanyJobs(selectedCompany.name).length} job listings from ${selectedCompany.name}. Find career opportunities and vacancies at ${selectedCompany.name}.`
+    ? `Browse ${selectedCompany.activeJobs || 0} job listings from ${selectedCompany.name}. Find career opportunities and vacancies at ${selectedCompany.name}.`
     : 'Browse top companies and employers actively hiring. Find job opportunities from leading organizations across various industries.';
 
   const canonicalUrl = selectedCompany
@@ -379,7 +416,6 @@ export default function CompaniesPage() {
 
             {/* Company Details Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Location */}
               {(selectedCompany.streetAddress || selectedCompany.area || selectedCompany.locality || 
                 selectedCompany.district || selectedCompany.postalCode || selectedCompany.country) && (
                 <div className="p-6 bg-white/[0.01] border border-white/10 rounded-3xl">
@@ -438,7 +474,6 @@ export default function CompaniesPage() {
                 </div>
               )}
 
-              {/* Business Info */}
               {(selectedCompany.url || selectedCompany.industry || selectedCompany.foundedYear || 
                 selectedCompany.employeeCount) && (
                 <div className="p-6 bg-white/[0.01] border border-white/10 rounded-3xl">
@@ -449,12 +484,7 @@ export default function CompaniesPage() {
                     {selectedCompany.url && (
                       <div className="flex items-center gap-2 text-sm">
                         <span className="text-gray-500 text-xs font-mono uppercase w-16 shrink-0">Website</span>
-                        <a 
-                          href={selectedCompany.url} 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          className="text-blue-400 hover:text-blue-300 flex items-center gap-1.5 transition-colors"
-                        >
+                        <a href={selectedCompany.url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 flex items-center gap-1.5 transition-colors">
                           <Globe size={14} />
                           {(() => { try { return new URL(selectedCompany.url).hostname.replace('www.', ''); } catch { return 'Company Website'; } })()}
                           <ExternalLink size={12} />
@@ -484,7 +514,6 @@ export default function CompaniesPage() {
               )}
             </div>
 
-            {/* Company Description */}
             {selectedCompany.description && (
               <div className="p-6 bg-white/[0.01] border border-white/10 rounded-3xl">
                 <h3 className="text-xs font-extrabold text-amber-400 uppercase tracking-widest flex items-center gap-2 mb-3">
@@ -496,7 +525,6 @@ export default function CompaniesPage() {
               </div>
             )}
 
-            {/* Ad */}
             <AdBanner key={`company-${selectedCompany.id}`} slot="1373889473" />
 
             {/* 🔥 Company Jobs with Pagination */}
@@ -554,7 +582,6 @@ export default function CompaniesPage() {
                             </Link>
                           );
                           
-                          // 🔥 Ad every 5 jobs (not intrusive)
                           if ((idx + 1) % 5 === 0 && idx < paginatedJobs.length - 1) {
                             const adNum = Math.floor((idx + 1) / 5) % 3;
                             elements.push(
@@ -569,7 +596,6 @@ export default function CompaniesPage() {
                         }).flat()}
                       </div>
 
-                      {/* 🔥 Job Pagination Controls */}
                       {totalJobPages > 1 && (
                         <div className="flex items-center justify-center gap-2 pt-6">
                           <button
@@ -619,7 +645,6 @@ export default function CompaniesPage() {
             })()}
           </motion.div>
         ) : (
-          /* Companies Grid with Pagination */
           <div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {paginatedCompanies.map((company, idx: number) => {
@@ -688,7 +713,6 @@ export default function CompaniesPage() {
               )}
             </div>
 
-            {/* 🔥 Company Grid Pagination */}
             {totalPages > 1 && (
               <div className="flex items-center justify-center gap-2 pt-8">
                 <button
@@ -737,10 +761,3 @@ export default function CompaniesPage() {
             )}
           </div>
         )}
-
-        {/* Footer Ad */}
-        <AdBanner key="companies-footer" slot="5466053430" />
-      </div>
-    </>
-  );
-}
