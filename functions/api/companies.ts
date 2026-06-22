@@ -8,13 +8,6 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
 
   try {
-    // 🔥 First, let's check what's in the jobs table
-    const jobsCheck = await DB.prepare(
-      'SELECT DISTINCT company_id FROM jobs WHERE is_active = 1 LIMIT 5'
-    ).all();
-    console.log('Company IDs in jobs:', jobsCheck.results);
-
-    // 🔥 Join with jobs to get counts
     const result = await DB.prepare(`
       SELECT 
         c.id, c.name, c.logo_url, c.website,
@@ -24,13 +17,10 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         COUNT(j.id) as total_jobs,
         SUM(CASE WHEN j.is_active = 1 THEN 1 ELSE 0 END) as active_jobs
       FROM companies c
-      LEFT JOIN jobs j ON c.id = j.company_id
+      LEFT JOIN jobs j ON LOWER(c.name) = LOWER(j.company)
       GROUP BY c.id
       ORDER BY c.name
     `).all();
-    
-    console.log('Companies with counts:', result.results?.length);
-    console.log('Sample company:', result.results?.[0]);
     
     const companies = result.results.map((c: any) => ({
       id: c.id,
@@ -60,8 +50,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       }
     });
   } catch (err) {
-    console.error('Companies API Error:', err);
-    return new Response(JSON.stringify({ error: 'Failed to load companies', details: err instanceof Error ? err.message : 'Unknown' }), {
+    return new Response(JSON.stringify({ error: 'Failed to load companies' }), {
       status: 500,
       headers: { 
         'Content-Type': 'application/json',
@@ -106,21 +95,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         founded_year, employee_count
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
-      id, 
-      name, 
-      body.logoUrl || '', 
-      body.url || '',
-      body.description || '',
-      body.streetAddress || '',
-      body.area || '',
-      body.locality || '',
-      body.district || '',
-      body.postalCode || '',
-      body.postalArea || '',
-      body.country || 'TZ',
-      body.industry || '',
-      body.foundedYear || '',
-      body.employeeCount || ''
+      id, name, body.logoUrl || '', body.url || '',
+      body.description || '', body.streetAddress || '',
+      body.area || '', body.locality || '', body.district || '',
+      body.postalCode || '', body.postalArea || '', body.country || 'TZ',
+      body.industry || '', body.foundedYear || '', body.employeeCount || ''
     ).run();
 
     return new Response(JSON.stringify({
@@ -136,7 +115,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
   } catch (err) {
-    console.error('Company creation error:', err);
     return new Response(JSON.stringify({ error: 'Failed to create company' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
@@ -198,7 +176,6 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
   } catch (err) {
-    console.error('Company update error:', err);
     return new Response(JSON.stringify({ error: 'Failed to update company' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
@@ -241,7 +218,6 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
   } catch (err) {
-    console.error('Company delete error:', err);
     return new Response(JSON.stringify({ error: 'Failed to delete company' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
