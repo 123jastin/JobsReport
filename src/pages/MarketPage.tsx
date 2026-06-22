@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Building2, Search, TrendingUp, Clock, Globe,
-  RefreshCw, Filter, ArrowUpRight
+  RefreshCw, Filter, ArrowUpRight, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { RawJob, Company } from '../types';
-import { Link, useSearchParams, useParams } from 'react-router-dom';
+import { Link, useSearchParams, useParams, useNavigate } from 'react-router-dom';
 import SEO from '../components/SEO';
 import AdBanner from '../components/AdBanner';
 import { useCountry } from '../context/CountryContext';
@@ -18,19 +18,29 @@ const getJobSlug = (job: RawJob): string => {
   return `/market/${titleSlug}-${job.id}`;
 };
 
+const JOBS_PER_PAGE = 15;
+
 export default function MarketPage() {
+  const navigate = useNavigate();
+  const { page: pageParam, query } = useParams<{ page?: string; query?: string }>();
+  
+  // 🔥 Get current page from URL
+  const currentPage = pageParam ? parseInt(pageParam) : 1;
+  
   const [jobs, setJobs] = useState<RawJob[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [roles, setRoles] = useState<string[]>(['All']);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [totalJobs, setTotalJobs] = useState(0);
   
   const [searchParams, setSearchParams] = useSearchParams();
   const initialRole = searchParams.get('role') || 'All';
   const [selectedRole, setSelectedRole] = useState<string>(initialRole);
   
   const { selectedCountry, setSelectedCountry, currentFlag } = useCountry();
-  const { query } = useParams<{ query?: string }>();
+
+  const totalPages = Math.ceil(totalJobs / JOBS_PER_PAGE);
 
   useEffect(() => {
     if (query) {
@@ -39,15 +49,18 @@ export default function MarketPage() {
     }
   }, [query]);
 
+  // 🔥 Fetch data when page changes
   useEffect(() => {
     async function loadMarketData() {
+      setLoading(true);
       try {
-        const response = await fetch('/api/market');
+        const response = await fetch(`/api/market?limit=${JOBS_PER_PAGE}&page=${currentPage}`);
         if (response.ok) {
           const data = await response.json();
           setJobs(Array.isArray(data.activeJobs) ? data.activeJobs : (Array.isArray(data.jobs) ? data.jobs : []));
           setCompanies(Array.isArray(data.companies) ? data.companies : []);
           setRoles(['All', ...(Array.isArray(data.roles) ? data.roles : [])]);
+          setTotalJobs(data.stats?.totalJobs || 0);
         }
       } catch (err) {
         console.error("Error loading market:", err);
@@ -56,7 +69,15 @@ export default function MarketPage() {
       }
     }
     loadMarketData();
-  }, []);
+    window.scrollTo(0, 0);
+  }, [currentPage]); // 🔥 Refetch when page changes
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    if (currentPage !== 1) {
+      navigate('/market', { replace: true });
+    }
+  }, [searchQuery, selectedRole, selectedCountry]);
 
   useEffect(() => {
     const roleParam = searchParams.get('role');
@@ -72,6 +93,14 @@ export default function MarketPage() {
     setSearchParams(newParams);
   };
 
+  const handlePageChange = (page: number) => {
+    if (page === 1) {
+      navigate('/market');
+    } else {
+      navigate(`/market/page/${page}`);
+    }
+  };
+
   const getCompanyLogo = (companyName: string) => {
     const foundCo = companies.find(c => 
       c.name.toLowerCase() === companyName.toLowerCase()
@@ -79,42 +108,33 @@ export default function MarketPage() {
     return foundCo?.logoUrl;
   };
 
-  const filteredJobs = jobs.filter(job => {
-    const matchesSearch = 
-      job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      job.company.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesRole = selectedRole === 'All' || job.role === selectedRole;
-    const matchesCountry = selectedCountry === 'Worldwide' || 
-                           job.country?.toLowerCase() === selectedCountry.toLowerCase();
-    return matchesSearch && matchesRole && matchesCountry;
-  });
-
-  const activeJobs = filteredJobs.filter(j => j.active !== false);
-  const uniqueCompanies = Array.from(new Set(filteredJobs.map(j => j.company))).length;
+  const activeJobs = jobs.filter(j => j.active !== false);
+  const uniqueCompanies = Array.from(new Set(activeJobs.map(j => j.company))).length;
   const uniqueRoles = roles.filter(r => r !== 'All').length;
 
   const countryText = selectedCountry === 'Worldwide' ? '' : selectedCountry;
   const roleText = selectedRole !== 'All' ? selectedRole : '';
 
-  const pageTitle = selectedCountry === 'Worldwide'
-    ? roleText 
-      ? `${roleText} Jobs | Find ${roleText} Vacancies Worldwide | JobsReport`
-      : 'Browse All Jobs | Latest Job Vacancies & Opportunities | JobsReport'
-    : roleText
-      ? `${roleText} Jobs in ${countryText} | ${roleText} Vacancies ${countryText} | JobsReport`
-      : `Jobs in ${countryText} | Latest ${countryText} Vacancies & Careers | JobsReport`;
+  const pageTitle = currentPage > 1
+    ? `Browse Jobs - Page ${currentPage} | JobsReport`
+    : selectedCountry === 'Worldwide'
+      ? roleText 
+        ? `${roleText} Jobs | Find ${roleText} Vacancies Worldwide | JobsReport`
+        : 'Browse All Jobs | Latest Job Vacancies & Opportunities | JobsReport'
+      : roleText
+        ? `${roleText} Jobs in ${countryText} | ${roleText} Vacancies ${countryText} | JobsReport`
+        : `Jobs in ${countryText} | Latest ${countryText} Vacancies & Careers | JobsReport`;
 
-  const pageDescription = selectedCountry === 'Worldwide'
-    ? `Browse ${activeJobs.length} active job listings across ${uniqueRoles} categories from ${uniqueCompanies} companies worldwide.`
-    : `Browse ${activeJobs.length} active job listings in ${countryText} across ${uniqueRoles} categories from ${uniqueCompanies} companies.`;
+  const pageDescription = `Browse ${activeJobs.length} active job listings${currentPage > 1 ? ` (Page ${currentPage})` : ''} across ${uniqueRoles} categories from ${uniqueCompanies} companies.`;
 
   const pageKeywords = selectedCountry === 'Worldwide'
     ? `jobs, job vacancies, career opportunities, find jobs, ${roleText || 'all'} jobs, latest jobs`
     : `jobs in ${countryText}, ${countryText} jobs, ${countryText} vacancies, ${roleText ? `${roleText} jobs ${countryText}, ` : ''}find jobs ${countryText}`;
 
-  const canonicalUrl = selectedCountry === 'Worldwide'
-    ? 'https://jobsreport.online/market'
-    : `https://jobsreport.online/market?country=${countryText.toLowerCase().replace(/\s+/g, '-')}`;
+  // 🔥 Self-canonical URL for each page
+  const canonicalUrl = currentPage > 1
+    ? `https://jobsreport.online/market/page/${currentPage}`
+    : 'https://jobsreport.online/market';
 
   const collectionPageSchema = {
     "@context": "https://schema.org",
@@ -145,44 +165,64 @@ export default function MarketPage() {
         "@type": "ListItem", "position": 2, "name": `Jobs in ${selectedCountry}`,
         "item": `https://jobsreport.online/country/${selectedCountry.toLowerCase().replace(/\s+/g, '-')}`
       }] : []),
-      { "@type": "ListItem", "position": selectedCountry !== 'Worldwide' ? 3 : 2,
-        "name": selectedRole !== 'All' ? `${selectedRole} Jobs` : 'All Jobs', "item": canonicalUrl }
+      ...(currentPage > 1 ? [{
+        "@type": "ListItem", "position": selectedCountry !== 'Worldwide' ? 3 : 2,
+        "name": "All Jobs",
+        "item": "https://jobsreport.online/market"
+      }, {
+        "@type": "ListItem", "position": selectedCountry !== 'Worldwide' ? 4 : 3,
+        "name": `Page ${currentPage}`,
+        "item": canonicalUrl
+      }] : [{
+        "@type": "ListItem", "position": selectedCountry !== 'Worldwide' ? 3 : 2,
+        "name": selectedRole !== 'All' ? `${selectedRole} Jobs` : 'All Jobs',
+        "item": canonicalUrl
+      }])
     ]
   };
 
-  // 🔥 In-Feed Ad #1
-  const InFeedAd1 = ({ index }: { index: number }) => (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0, transition: { delay: Math.min(index * 0.04, 0.4) } }}
-      className="p-4 rounded-3xl border border-white/5 transition-all duration-300"
-      style={{ background: 'transparent' }}
-    >
-      <ins className="adsbygoogle"
-        style={{ display: 'block', background: 'transparent' }}
-        data-ad-format="fluid"
-        data-ad-layout-key="-h0-1a+31-4t+7z"
-        data-ad-client="ca-pub-8155064094205693"
-        data-ad-slot="1805968460" />
-    </motion.div>
-  );
+  // 🔥 In-Feed Ad component
+  const InFeedAd = ({ slot, layoutKey, index }: { slot: string; layoutKey: string; index: number }) => {
+    const adRef = useRef<HTMLDivElement>(null);
 
-  // 🔥 In-Feed Ad #2
-  const InFeedAd2 = ({ index }: { index: number }) => (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0, transition: { delay: Math.min(index * 0.04, 0.4) } }}
-      className="p-4 rounded-3xl border border-white/5 transition-all duration-300"
-      style={{ background: 'transparent' }}
-    >
-      <ins className="adsbygoogle"
-        style={{ display: 'block', background: 'transparent' }}
-        data-ad-format="fluid"
-        data-ad-layout-key="-gh-1o+14-67+ka"
-        data-ad-client="ca-pub-8155064094205693"
-        data-ad-slot="9872160747" />
-    </motion.div>
-  );
+    useEffect(() => {
+      const timer = setTimeout(() => {
+        if (adRef.current) {
+          adRef.current.innerHTML = '';
+          
+          const ins = document.createElement('ins');
+          ins.className = 'adsbygoogle';
+          ins.style.display = 'block';
+          ins.style.background = 'transparent';
+          ins.setAttribute('data-ad-format', 'fluid');
+          ins.setAttribute('data-ad-layout-key', layoutKey);
+          ins.setAttribute('data-ad-client', 'ca-pub-8155064094205693');
+          ins.setAttribute('data-ad-slot', slot);
+          
+          adRef.current.appendChild(ins);
+          
+          try {
+            (window.adsbygoogle = window.adsbygoogle || []).push({});
+          } catch (e) {
+            console.log('In-feed ad error:', e);
+          }
+        }
+      }, 200);
+
+      return () => clearTimeout(timer);
+    }, [slot, layoutKey]);
+
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0, transition: { delay: Math.min(index * 0.04, 0.4) } }}
+        className="p-4 rounded-3xl border border-white/5 transition-all duration-300"
+        style={{ background: 'transparent' }}
+      >
+        <div ref={adRef} />
+      </motion.div>
+    );
+  };
 
   // 🔥 Job Card Component
   const JobCard = ({ job, idx }: { job: RawJob; idx: number }) => {
@@ -320,16 +360,7 @@ export default function MarketPage() {
               type="text" 
               placeholder="Search title or company..."
               value={searchQuery}
-              onChange={(e) => {
-                const value = e.target.value;
-                setSearchQuery(value);
-                if (value) {
-                  const cleanQuery = value.trim().toLowerCase().replace(/\s+/g, '-');
-                  window.history.replaceState(null, '', `/market/search/${encodeURIComponent(cleanQuery)}`);
-                } else {
-                  window.history.replaceState(null, '', '/market');
-                }
-              }}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-white/5 border border-white/10 rounded-2xl pl-11 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors font-mono"
             />
           </div>
@@ -350,17 +381,22 @@ export default function MarketPage() {
           </div>
         </div>
 
-        {/* 🔥 ALL Job Cards with In-Feed Ads */}
+        {/* 🔥 Job Cards with In-Feed Ads */}
         <div className="space-y-3">
           <div className="flex items-center justify-between text-xs text-gray-500 px-1">
             <span className="flex items-center gap-2">
               <Filter size={12} className="text-blue-500" />
-              STREAMING {filteredJobs.length} VERIFIED MARKET SIGNALS
+              STREAMING {activeJobs.length} VERIFIED MARKET SIGNALS
             </span>
+            {totalPages > 1 && (
+              <span className="text-[10px] font-mono">
+                Page {currentPage} of {totalPages}
+              </span>
+            )}
           </div>
 
           <AnimatePresence mode="popLayout">
-            {filteredJobs.length === 0 ? (
+            {activeJobs.length === 0 ? (
               <motion.div 
                 initial={{ opacity: 0, scale: 0.98 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -369,35 +405,26 @@ export default function MarketPage() {
                 <Globe size={32} className="text-gray-600 mx-auto mb-4" />
                 <p className="text-white font-bold text-sm">No Active Market Signals Found</p>
                 <p className="text-xs text-gray-500 mt-1">No verified job listings matching your telemetry filters.</p>
-                <button 
-                  onClick={() => {
-                    setSearchQuery('');
-                    setSelectedRole('All');
-                    setSelectedCountry('Worldwide');
-                    window.history.replaceState(null, '', '/market');
-                  }}
-                  className="mt-4 px-4 py-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all"
-                >
-                  Reset Filters
-                </button>
               </motion.div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {filteredJobs.map((job, idx) => {
+                {activeJobs.map((job, idx) => {
                   const elements = [];
-                  
-                  // Add job card
                   elements.push(<JobCard key={job.id || idx} job={job} idx={idx} />);
                   
-                  // 🔥 Add alternating in-feed ads every 3 jobs
-                  if ((idx + 1) % 3 === 0 && idx < filteredJobs.length - 1) {
+                  if ((idx + 1) % 3 === 0 && idx < activeJobs.length - 1) {
                     const adNumber = Math.floor((idx + 1) / 3);
-                    // Alternate between Ad #1 and Ad #2
-                    elements.push(
-                      adNumber % 2 === 1 
-                        ? <InFeedAd1 key={`ad1-${idx}`} index={idx + 1} />
-                        : <InFeedAd2 key={`ad2-${idx}`} index={idx + 1} />
-                    );
+                    const adKey = `infeed-${idx}-${currentPage}`;
+                    
+                    if (adNumber % 2 === 1) {
+                      elements.push(
+                        <InFeedAd key={adKey} slot="1805968460" layoutKey="-h0-1a+31-4t+7z" index={idx + 1} />
+                      );
+                    } else {
+                      elements.push(
+                        <InFeedAd key={adKey} slot="9872160747" layoutKey="-gh-1o+14-67+ka" index={idx + 1} />
+                      );
+                    }
                   }
                   
                   return elements;
@@ -407,8 +434,52 @@ export default function MarketPage() {
           </AnimatePresence>
         </div>
 
+        {/* 🔥 Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 pt-6">
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all uppercase tracking-wider flex items-center gap-1"
+            >
+              <ChevronLeft size={14} /> Prev
+            </button>
+            
+            <div className="flex items-center gap-1">
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 2)
+                .map((p, idx, arr) => (
+                  <div key={p} className="flex items-center gap-1">
+                    {idx > 0 && arr[idx - 1] !== p - 1 && (
+                      <span className="text-gray-600 px-1">...</span>
+                    )}
+                    <button
+                      onClick={() => handlePageChange(p)}
+                      className={`w-10 h-10 rounded-xl text-xs font-bold transition-all ${
+                        currentPage === p
+                          ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20'
+                          : 'bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  </div>
+                ))
+              }
+            </div>
+            
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all uppercase tracking-wider flex items-center gap-1"
+            >
+              Next <ChevronRight size={14} />
+            </button>
+          </div>
+        )}
+
         {/* Footer Ad */}
-        <AdBanner key="market-footer" slot="5466053430" />
+        <AdBanner key={`market-footer-${currentPage}`} slot="5466053430" />
 
         {/* Admin Link */}
         <div className="p-6 rounded-3xl bg-gradient-to-r from-blue-950/20 to-violet-950/20 border border-blue-500/10 flex flex-col md:flex-row items-center justify-between gap-4">
