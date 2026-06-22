@@ -29,29 +29,66 @@ export default function JobDetailPage() {
   useEffect(() => {
     async function loadJob() {
       try {
-        const res = await fetch('/api/market');
+        const res = await fetch('/api/market?limit=200');
         if (res.ok) {
           const data = await res.json();
-          setAllJobs(data.jobs || []);
-          const jobIdMatch = jobId?.match(/job-([a-z0-9]+)$/i);
-          const extractedId = jobIdMatch ? `job-${jobIdMatch[1]}` : jobId;
-          let found = data.jobs?.find((j: any) => j.id === extractedId);
-          if (!found && jobId) {
-            found = data.jobs?.find((j: any) => 
-              jobId.includes(j.id) || j.id.includes(extractedId || '')
-            );
+          const allJobsList = data.jobs || [];
+          setAllJobs(allJobsList);
+          
+          // 🔥 Extract ID from URL slug using multiple strategies
+          let found = null;
+          
+          for (const j of allJobsList) {
+            // Build the job's expected slug
+            const jobSlug = j.slug || `${j.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${j.id}`;
+            
+            // Strategy 1: Exact slug match
+            if (jobSlug === jobId) {
+              found = j;
+              break;
+            }
+            
+            // Strategy 2: URL contains job ID (e.g., "job-abc123")
+            if (jobId && j.id && jobId.includes(j.id)) {
+              found = j;
+              break;
+            }
+            
+            // Strategy 3: Extract ID from end of URL and match
+            const idMatch = jobId?.match(/-([a-z0-9]+)$/i);
+            if (idMatch && j.id === idMatch[1]) {
+              found = j;
+              break;
+            }
+            
+            // Strategy 4: Match by title (slugified)
+            const slugTitle = jobId?.replace(/-[a-z0-9]+$/i, '').replace(/-/g, ' ').trim();
+            if (slugTitle && j.title?.toLowerCase() === slugTitle.toLowerCase()) {
+              found = j;
+              break;
+            }
           }
+          
+          // 🔥 If found, enrich with company website
           if (found && data.companies) {
             const company = data.companies.find(
               (c: any) => c.name?.toLowerCase() === found.company?.toLowerCase()
             );
             if (company?.url) found.companyWebsite = company.url;
           }
+          
           setJob(found || null);
-          if (found) document.title = `${found.title} - ${found.company} | JobsReport`;
+          if (found) {
+            document.title = `${found.title} - ${found.company} | JobsReport`;
+          } else {
+            console.warn('⚠️ Job not found for URL:', jobId);
+          }
         }
-      } catch (err) { console.error('Failed to load job:', err); }
-      finally { setLoading(false); }
+      } catch (err) { 
+        console.error('Failed to load job:', err); 
+      } finally { 
+        setLoading(false); 
+      }
     }
     if (jobId) loadJob();
     window.scrollTo(0, 0);
@@ -86,9 +123,15 @@ export default function JobDetailPage() {
           title="Job Not Found | JobsReport"
           description="This job listing may have been removed or expired. Browse other job opportunities on JobsReport."
         />
-        <h2 className="text-2xl font-bold text-white mb-4">Job Not Found</h2>
-        <p className="text-gray-400 mb-6">This listing may have been removed or expired.</p>
-        <Link to="/market" className="text-blue-500 hover:underline font-bold uppercase tracking-wider text-sm">← Back to Market</Link>
+        <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mb-4">
+          <AlertCircle size={24} className="text-red-400" />
+        </div>
+        <h2 className="text-2xl font-bold text-white mb-2">Job Not Found</h2>
+        <p className="text-gray-400 mb-6 max-w-md">This listing may have been removed or expired. Browse other active opportunities below.</p>
+        <div className="flex gap-3">
+          <Link to="/market" className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-sm uppercase tracking-wider transition-colors">← Back to Market</Link>
+          <Link to="/" className="px-6 py-3 bg-white/5 hover:bg-white/10 text-gray-300 font-bold rounded-xl text-sm uppercase tracking-wider transition-colors">Go Home</Link>
+        </div>
       </div>
     );
   }
