@@ -25,13 +25,12 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
   const url = new URL(context.request.url);
   
-  // 🔥 Pagination support
-  const limit = Math.min(parseInt(url.searchParams.get('limit') || '20'), 50);
+  // 🔥 Pagination support — max 200 for full job list
+  const limit = Math.min(parseInt(url.searchParams.get('limit') || '20'), 200);
   const page = Math.max(parseInt(url.searchParams.get('page') || '1'), 1);
   const offset = (page - 1) * limit;
 
   try {
-    // 🔥 Run ALL queries in parallel — includes total count
     const [
       totalResult,
       currenciesResult,
@@ -41,7 +40,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       categoriesResult,
       workplaceResult
     ] = await Promise.all([
-      DB.prepare('SELECT COUNT(*) as total FROM jobs WHERE is_active = 1').all(), // 🔥 TOTAL ACTIVE JOBS
+      DB.prepare('SELECT COUNT(*) as total FROM jobs WHERE is_active = 1').all(),
       DB.prepare('SELECT code, name, symbol, flag FROM currencies ORDER BY name').all(),
       DB.prepare(`
         SELECT 
@@ -67,10 +66,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       DB.prepare("SELECT DISTINCT workplace_type FROM jobs WHERE workplace_type != '' AND is_active = 1").all()
     ]);
 
-    // 🔥 Get total active jobs count
     const totalActiveJobsCount = totalResult.results[0]?.total || 0;
 
-    // 🔥 Build currencies map
     const currenciesMap: Record<string, {symbol: string, name: string, flag: string}> = {};
     const currenciesList: any[] = [];
     
@@ -79,10 +76,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       currenciesList.push({ code: c.code, symbol: c.symbol, name: c.name, flag: c.flag || '' });
     }
 
-    // 🔥 Get all job IDs for image batch query
     const jobIds = jobsResult.results.map((j: any) => j.id);
     
-    // 🔥 Single query for ALL images — no loop!
     let allImages: Record<number, any[]> = {};
     if (jobIds.length > 0) {
       const placeholders = jobIds.map(() => '?').join(',');
@@ -106,7 +101,6 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       }
     }
 
-    // 🔥 Map jobs without N+1 queries
     const jobs = jobsResult.results.map((job: any) => {
       const currencyCode = job.salary_currency || 'TZS';
       const currencyInfo = currenciesMap[currencyCode] || { symbol: currencyCode, name: currencyCode };
@@ -157,7 +151,6 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     const jobCategories = categoriesResult.results.map((c: any) => c.job_category);
     const workplaceTypes = workplaceResult.results.map((w: any) => w.workplace_type);
 
-    // 🔥 Cache for 30 seconds
     const response = new Response(JSON.stringify({
       jobs,
       activeJobs,
@@ -167,8 +160,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       jobCategories,
       workplaceTypes,
       stats: {
-        totalJobs: totalActiveJobsCount,  // 🔥 ALL active jobs in database
-        activeJobs: activeJobs.length,     // Jobs on this page
+        totalJobs: totalActiveJobsCount,
+        activeJobs: activeJobs.length,
         totalCompanies: companies.length,
         totalRoles: roles.length
       }
