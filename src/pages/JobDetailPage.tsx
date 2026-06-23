@@ -17,17 +17,34 @@ export default function JobDetailPage() {
   useEffect(() => {
     async function loadJob() {
       try {
+        // Extract job ID from URL: "workshop-superintendent-kinondoni-job-mqng36f30mvo"
+        // Find "job-" pattern
+        const idMatch = jobId?.match(/(job-[a-z0-9]+)/i);
+        const extractedId = idMatch ? idMatch[1] : jobId;
+        
+        // Try direct job API first
+        const directRes = await fetch(`/api/job/${extractedId}`);
+        if (directRes.ok) {
+          const jobData = await directRes.json();
+          if (jobData && !jobData.error) {
+            setJob(jobData);
+            document.title = `${jobData.title} - ${jobData.company} | JobsReport`;
+            setLoading(false);
+            return;
+          }
+        }
+        
+        // Fallback: search in market API
         const res = await fetch('/api/market?limit=200');
         if (res.ok) {
           const data = await res.json();
           const allJobs = data.jobs || data.activeJobs || [];
           
-          // 🔥 Match by slug OR by ID in URL
           const found = allJobs.find((j: any) => {
-            return j.slug === jobId ||                     // Exact slug match
-                   jobId?.includes(j.id) ||                // URL contains job ID
-                   j.slug?.includes(jobId || '') ||        // Slug contains URL
-                   jobId?.endsWith(j.id);                  // URL ends with job ID
+            return j.slug === jobId ||
+                   jobId?.includes(j.id) ||
+                   j.id === extractedId ||
+                   jobId?.endsWith(j.id);
           });
           
           setJob(found || null);
@@ -75,22 +92,19 @@ export default function JobDetailPage() {
     <div className="min-h-screen bg-black text-white">
       <SEO
         title={`${job.title} - ${job.company} | JobsReport`}
-        description={`${job.title} at ${job.company} in ${job.location || 'Tanzania'}. ${job.role || ''}.`}
+        description={`${job.title} at ${job.company} in ${job.location || 'Tanzania'}.`}
         canonicalUrl={jobUrl}
-        ogTitle={`${job.title} - ${job.company}`}
-        ogUrl={jobUrl}
       />
 
       <div className="sticky top-0 z-40 bg-black/95 backdrop-blur border-b border-white/5">
-        <div className="flex items-center justify-between px-4 h-14">
+        <div className="flex items-center px-4 h-14">
           <Link to="/market" className="flex items-center gap-2 text-gray-400 hover:text-white">
             <ArrowLeft size={18} /><span className="text-xs font-bold uppercase tracking-wider">Market</span>
           </Link>
-          {isExpired && <span className="px-3 py-1 rounded-full bg-red-500/10 text-red-400 text-[10px] font-bold uppercase">Expired</span>}
         </div>
       </div>
 
-      <div className="px-4 py-6 border-b border-white/5">
+      <div className="px-4 py-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 rounded-xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
             {job.logoUrl ? <img src={job.logoUrl} alt={job.company} className="w-full h-full object-cover rounded-xl" />
@@ -98,7 +112,7 @@ export default function JobDetailPage() {
           </div>
           <div>
             <span className="text-sm font-bold text-white">{job.company}</span>
-            {job.companyWebsite && <a href={job.companyWebsite} target="_blank" rel="noopener noreferrer" className="text-[11px] text-blue-400 block"><Globe size={11} className="inline" /> Website <ExternalLink size={10} className="inline" /></a>}
+            {job.companyWebsite && <a href={job.companyWebsite} target="_blank" rel="noopener noreferrer" className="text-[11px] text-blue-400 block">Website <ExternalLink size={10} className="inline" /></a>}
           </div>
         </div>
         <h1 className="text-xl md:text-2xl font-bold text-white leading-tight">{job.title}</h1>
@@ -114,8 +128,7 @@ export default function JobDetailPage() {
         {hasWhatsApp && !isExpired ? (
           <a href={`https://wa.me/${job.whatsapp_number.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hello, I am interested in the ${job.title} position`)}`}
             target="_blank" rel="noopener noreferrer"
-            className="w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 text-white">
-            💬 Apply via WhatsApp</a>
+            className="w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 text-white">💬 Apply via WhatsApp</a>
         ) : isExpired ? (
           <button disabled className="w-full py-3.5 rounded-xl font-bold text-sm bg-red-500/10 text-red-400 cursor-not-allowed">🚫 Application Closed</button>
         ) : job.url ? (
@@ -127,7 +140,7 @@ export default function JobDetailPage() {
 
       {job.description && (
         <div className="px-4 py-6 border-b border-white/5">
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2"><FileText size={16} className="text-blue-400" /> Job Description</h3>
+          <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4"><FileText size={16} className="text-blue-400 inline mr-2" />Job Description</h3>
           <div className="text-stone-300 text-sm leading-relaxed space-y-4" dangerouslySetInnerHTML={{ __html: job.description }} />
         </div>
       )}
