@@ -26,33 +26,40 @@ export default function JobDetailPage() {
     (job.expiresAt && new Date(job.expiresAt) < new Date())
   ) : false;
 
-  useEffect(() => {
-    async function loadJob() {
-      try {
-        const idMatch = jobId?.match(/(job-[a-z0-9]+)/i);
-        const extractedId = idMatch ? idMatch[1] : '';
-        
-        if (extractedId) {
-          const res = await fetch(`/api/job-detail/${extractedId}`);
-          if (res.ok) {
-            const jobData = await res.json();
-            if (jobData && !jobData.error) {
-              setJob(jobData);
-              setAllJobs(jobData.relatedJobs || []);
-              document.title = `${jobData.title} - ${jobData.company} | JobsReport`;
-              setLoading(false);
-              return;
-            }
+useEffect(() => {
+  async function loadJob() {
+    try {
+      // Get the job ID from the end of the URL
+      // URL: /market/workshop-superintendent-kinondoni-job-mqng36f30mvo
+      const segments = jobId?.split('-') || [];
+      // Find where "job" starts
+      const jobIndex = segments.findIndex(s => s === 'job');
+      // Take everything from "job" onwards
+      const extractedId = jobIndex >= 0 ? segments.slice(jobIndex).join('-') : '';
+      
+      if (extractedId) {
+        const res = await fetch(`/api/job-detail/${extractedId}`);
+        if (res.ok) {
+          const jobData = await res.json();
+          if (jobData && !jobData.error) {
+            setJob(jobData);
+            setAllJobs(jobData.relatedJobs || []);
+            document.title = `${jobData.title} - ${jobData.company} | JobsReport`;
+            setLoading(false);
+            return;
           }
         }
-        
-        setJob(null);
-      } catch (err) {} finally { setLoading(false); }
-    }
-    if (jobId) loadJob();
-    window.scrollTo(0, 0);
-  }, [jobId]);
-
+      }
+      
+      setJob(null);
+    } catch (err) {} finally { setLoading(false); }
+  }
+  if (jobId) loadJob();
+  window.scrollTo(0, 0);
+}, [jobId]);
+  
+  
+  
   const getRelatedJobs = () => {
     if (!job || allJobs.length === 0) return [];
     return allJobs.filter(j => j.id !== job.id).slice(0, 6);
