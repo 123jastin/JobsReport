@@ -29,7 +29,6 @@ export default function JobDetailPage() {
   useEffect(() => {
     async function loadJob() {
       try {
-        // Extract job ID from URL
         const idMatch = jobId?.match(/(job-[a-z0-9]+)/i);
         const extractedId = idMatch ? idMatch[1] : '';
         
@@ -38,9 +37,7 @@ export default function JobDetailPage() {
           if (res.ok) {
             const jobData = await res.json();
             if (jobData && !jobData.error) {
-              // 🔥 Set the main job
               setJob(jobData);
-              // 🔥 Set related jobs for the related jobs section
               setAllJobs(jobData.relatedJobs || []);
               document.title = `${jobData.title} - ${jobData.company} | JobsReport`;
               setLoading(false);
@@ -57,7 +54,6 @@ export default function JobDetailPage() {
   }, [jobId]);
 
   const getRelatedJobs = () => {
-    // 🔥 Use relatedJobs from API directly
     if (!job || allJobs.length === 0) return [];
     return allJobs.filter(j => j.id !== job.id).slice(0, 6);
   };
@@ -104,6 +100,15 @@ export default function JobDetailPage() {
 
   const seoDescription = `${job.title} at ${job.company} in ${job.location || 'Tanzania'}. ${job.role || ''}. ${job.salary ? 'Salary: ' + job.salary + '. ' : ''}${isExpired ? 'This job has expired. ' : 'Apply now! '}Find more jobs on JobsReport.`;
 
+  const imageObjects = hasFiles ? job.images.map((img: any) => ({
+    "@type": "ImageObject",
+    "url": img.url,
+    "thumbnailUrl": img.thumbnail || img.url,
+    "name": img.seoTitle || img.name || `${job.title} Attachment`,
+    "description": img.seoDescription || `Attachment for ${job.title} at ${job.company}`,
+    "caption": img.caption || img.name || `${job.title} - Attachment`
+  })) : [];
+
   const jobPostingSchema = isExpired ? null : {
     "@context": "https://schema.org",
     "@type": "JobPosting",
@@ -122,6 +127,7 @@ export default function JobDetailPage() {
     "jobBenefits": Array.isArray(job.benefits) && job.benefits.length > 0 ? job.benefits.join(', ') : undefined,
     "industry": job.industry || undefined,
     "occupationalCategory": job.job_category || job.role || undefined,
+    "image": imageObjects.length > 0 ? imageObjects : (job.logoUrl || undefined),
     "url": jobUrl
   };
 
@@ -141,6 +147,17 @@ export default function JobDetailPage() {
     "description": `This job posting for ${job.title} at ${job.company} has expired.`,
     "url": jobUrl
   } : null;
+
+  // 🔥 Background download function
+  const triggerBackgroundDownload = (url: string, filename: string) => {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -249,7 +266,7 @@ export default function JobDetailPage() {
         <a href={`mailto:jjovinatha@gmail.com?subject=Report%20Job&body=Please%20review%20this%20listing%3A%20${encodeURIComponent(jobUrl)}`} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 text-[10px] font-bold uppercase tracking-wider transition-all flex-shrink-0"><Flag size={11} />Report</a>
       </div>
 
-      {/* ATTACHMENTS */}
+      {/* ATTACHMENTS - Preview + Background Download */}
       {hasFiles && (
         <div className="px-4 py-6 border-b border-white/5">
           <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
@@ -259,14 +276,27 @@ export default function JobDetailPage() {
             {job.images.map((img: any, index: number) => {
               const isPDF = img.type === 'pdf' || img.name?.toLowerCase().endsWith('.pdf');
               const isDoc = img.type === 'document';
+              const filename = img.name || `attachment-${index + 1}`;
+              
               return (
-                <div key={index} onClick={() => { setViewerFiles(job.images); setViewerIndex(index); setViewerOpen(true); }} className="flex-shrink-0 w-24 h-24 md:w-full md:aspect-square rounded-xl overflow-hidden border border-white/5 bg-slate-900/50 cursor-pointer active:scale-95 transition-transform">
+                <div 
+                  key={index} 
+                  onClick={() => { 
+                    // 🔥 Open preview as before
+                    setViewerFiles(job.images); 
+                    setViewerIndex(index); 
+                    setViewerOpen(true);
+                    // 🔥 Also trigger background download
+                    triggerBackgroundDownload(img.url, filename);
+                  }} 
+                  className="flex-shrink-0 w-24 h-24 md:w-full md:aspect-square rounded-xl overflow-hidden border border-white/5 bg-slate-900/50 cursor-pointer active:scale-95 transition-transform"
+                >
                   {isPDF ? (
                     <div className="w-full h-full flex flex-col items-center justify-center bg-red-900/20 p-2"><span className="text-lg font-black text-red-400">PDF</span><span className="text-[7px] text-gray-400 mt-0.5 text-center truncate w-full">{img.name?.substring(0, 12)}</span></div>
                   ) : isDoc ? (
                     <div className="w-full h-full flex flex-col items-center justify-center bg-blue-900/20 p-2"><span className="text-lg font-black text-blue-400">DOC</span></div>
                   ) : (
-                    <img src={img.thumbnail || img.url} alt={img.seoTitle || img.name || 'Attachment'} className="w-full h-full object-cover" loading="lazy" />
+                    <img src={img.thumbnail || img.url} alt={img.seoTitle || img.name || `Attachment ${index + 1}`} className="w-full h-full object-cover" loading="lazy" />
                   )}
                 </div>
               );
@@ -307,7 +337,6 @@ export default function JobDetailPage() {
 
       <AdBanner key={`ad2-${jobId}`} slot="1373889473" />
 
-      {/* RELATED JOBS */}
       {relatedJobs.length > 0 && (
         <div className="px-4 py-8 border-t border-white/5">
           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Briefcase size={18} className="text-blue-500" />{isExpired ? 'Similar Active Jobs' : 'Related Jobs'}</h3>
@@ -344,6 +373,7 @@ export default function JobDetailPage() {
 
       <div className="h-20" />
 
+      {/* FULLSCREEN VIEWER - Same as before */}
       {viewerOpen && viewerFiles.length > 0 && (
         <div className="fixed inset-0 z-50 bg-black flex flex-col">
           <div className="flex items-center justify-between px-4 h-14 bg-black/90 shrink-0">
