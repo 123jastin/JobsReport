@@ -9,34 +9,13 @@ import ReportCard from '../components/ReportCard';
 import { useCountry } from '../context/CountryContext';
 import { getIconForRole } from '../lib/roleIcons';
 
-// Icon mapping
 const ICON_COMPONENTS: Record<string, any> = {
-  'code': Code,
-  'bar-chart': BarChart3,
-  'calculator': Calculator,
-  'palette': Palette,
-  'headphones': Headphones,
-  'users': Users,
-  'shield': Shield,
-  'truck': Truck,
-  'stethoscope': Stethoscope,
-  'trending-up': TrendingUp,
-  'briefcase': Briefcase,
-  'book-open': BookOpen,
-  'building': Building2,
-  'zap': Zap,
-  'settings': Settings,
-  'scale': Scale,
-  'leaf': Leaf,
-  'utensils': Utensils,
+  'code': Code, 'bar-chart': BarChart3, 'calculator': Calculator, 'palette': Palette,
+  'headphones': Headphones, 'users': Users, 'shield': Shield, 'truck': Truck,
+  'stethoscope': Stethoscope, 'trending-up': TrendingUp, 'briefcase': Briefcase,
+  'book-open': BookOpen, 'building': Building2, 'zap': Zap, 'settings': Settings,
+  'scale': Scale, 'leaf': Leaf, 'utensils': Utensils,
 };
-
-interface Role {
-  id: string;
-  name: string;
-  slug: string;
-  created_at: string;
-}
 
 export default function HomePage() {
   const [trends, setTrends] = useState<any[]>([]);
@@ -44,7 +23,7 @@ export default function HomePage() {
   const [displayJobs, setDisplayJobs] = useState<any[]>([]);
   const [allActiveJobs, setAllActiveJobs] = useState<any[]>([]);
   const [spotlightCompanies, setSpotlightCompanies] = useState<string[]>([]);
-  const [roles, setRoles] = useState<Role[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAllCategories, setShowAllCategories] = useState(false);
   const { selectedCountry, setSelectedCountry, currentFlag, countriesList } = useCountry();
@@ -75,10 +54,10 @@ export default function HomePage() {
     const fetchDashboardData = async () => {
       try {
         const countryParam = selectedCountry === 'Worldwide' ? '' : selectedCountry;
-        const [homeRes, marketRes, rolesRes] = await Promise.all([
+        const [homeRes, marketRes, categoriesRes] = await Promise.all([
           fetch(`/api/home?country=${encodeURIComponent(countryParam)}`),
-          fetch(`/api/market?country=${encodeURIComponent(countryParam)}`),
-          fetch('/api/roles')
+          fetch(`/api/market?limit=5`),
+          fetch('/api/categories')
         ]);
         
         if (homeRes.ok) {
@@ -95,13 +74,11 @@ export default function HomePage() {
           setDisplayJobs(activeJobs.slice(0, 5));
         }
 
-        if (rolesRes.ok) {
-          const rolesData = await rolesRes.json();
-          setRoles(Array.isArray(rolesData) ? rolesData : []);
+        if (categoriesRes.ok) {
+          const categoriesData = await categoriesRes.json();
+          setCategories(Array.isArray(categoriesData) ? categoriesData : []);
         }
-      } catch (err) {
-        console.error("Failed to load dashboard:", err);
-      } finally {
+      } catch (err) {} finally {
         setLoading(false);
       }
     };
@@ -109,18 +86,9 @@ export default function HomePage() {
     fetchDashboardData();
   }, [selectedCountry]);
 
-  const rolesWithCounts = roles.map(role => {
-    const jobCount = allActiveJobs.filter((j: any) => 
-      j.role?.toLowerCase() === role.name.toLowerCase()
-    ).length;
-    return { ...role, jobCount };
-  }).sort((a, b) => b.jobCount - a.jobCount);
-
   const visibleCategories = showAllCategories 
-    ? rolesWithCounts 
-    : rolesWithCounts.slice(0, INITIAL_CATEGORIES_COUNT);
-  
-  const hiddenCount = rolesWithCounts.length - INITIAL_CATEGORIES_COUNT;
+    ? categories 
+    : categories.slice(0, INITIAL_CATEGORIES_COUNT);
 
   const structuredData = {
     "@context": "https://schema.org",
@@ -149,19 +117,13 @@ export default function HomePage() {
     "logo": {
       "@type": "ImageObject",
       "url": "https://media.jobsreport.online/file_0000000084b47243aec7e8cf3cbeb6bd.png",
-      "width": 112,
-      "height": 112
+      "width": 112, "height": 112
     },
     "description": "JobsReport aggregates real-time job market data to help you find the best career opportunities.",
     "foundingDate": "2025",
     "areaServed": "Worldwide",
     "sameAs": ["https://www.facebook.com/J2Accessories"],
-    "contactPoint": {
-      "@type": "ContactPoint",
-      "contactType": "customer support",
-      "email": "jjovinatha@gmail.com",
-      "telephone": "+255616069692"
-    }
+    "contactPoint": { "@type": "ContactPoint", "contactType": "customer support", "email": "jjovinatha@gmail.com", "telephone": "+255616069692" }
   };
 
   const topReports = reports.slice(0, 3);
@@ -172,9 +134,7 @@ export default function HomePage() {
         <SEO title={seoTitle} description={seoDescription} />
         <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
           <RefreshCw size={24} className="text-blue-500 animate-spin" />
-          <span className="text-[10px] font-mono text-gray-500 tracking-widest uppercase">
-            Compiling Live Market Intelligence...
-          </span>
+          <span className="text-[10px] font-mono text-gray-500 tracking-widest uppercase">Compiling Live Market Intelligence...</span>
         </div>
       </>
     );
@@ -182,73 +142,34 @@ export default function HomePage() {
 
   return (
     <>
-      <SEO
-        title={seoTitle}
-        description={seoDescription}
-        keywords={seoKeywords}
-        canonicalUrl={canonicalUrl}
-        ogTitle={seoTitle}
-        ogDescription={seoDescription}
-        ogUrl={canonicalUrl}
-        structuredData={[structuredData, organizationSchema]}
-      />
+      <SEO title={seoTitle} description={seoDescription} keywords={seoKeywords} canonicalUrl={canonicalUrl}
+        ogTitle={seoTitle} ogDescription={seoDescription} ogUrl={canonicalUrl}
+        structuredData={[structuredData, organizationSchema]} />
 
       <div className="space-y-12">
         {/* Hero Section */}
         <section className="py-8 md:py-16">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="max-w-3xl"
-          >
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-3xl">
             <div className="flex items-center gap-2 text-blue-500 font-bold text-xs uppercase tracking-widest mb-6">
               <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
               Real-time Talent Intelligence
             </div>
-            
             <h1 className="text-4xl md:text-7xl font-black text-white mb-6 leading-tight tracking-tighter">
               {selectedCountry === 'Worldwide' ? (
-                <>
-                  Find Your Next<br />
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-500 via-blue-500 to-emerald-500">
-                    Career Opportunity.
-                  </span>
-                </>
+                <>Find Your Next<br /><span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-500 via-blue-500 to-emerald-500">Career Opportunity.</span></>
               ) : (
-                <>
-                  Jobs in {selectedCountry}<br />
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-500 via-blue-500 to-emerald-500">
-                    {currentFlag} Latest Vacancies.
-                  </span>
-                </>
+                <>Jobs in {selectedCountry}<br /><span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-500 via-blue-500 to-emerald-500">{currentFlag} Latest Vacancies.</span></>
               )}
             </h1>
-            
             <p className="text-gray-400 text-lg md:text-2xl leading-relaxed max-w-2xl">
               {selectedCountry === 'Worldwide'
                 ? 'Insight-first job discovery. We aggregate real-time market data to show you where the demand is actually shifting.'
                 : `Find the latest jobs and career opportunities in ${selectedCountry}. Browse verified vacancies from top employers hiring in ${selectedCountry}.`}
             </p>
-            
             <div className="flex gap-6 mt-8">
-              <div className="flex items-center gap-2 text-sm">
-                <Zap size={16} className="text-blue-500" />
-                <span className="text-gray-400">
-                  <span className="text-white font-bold">{roles.length}</span> Job Categories
-                </span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <BarChart3 size={16} className="text-emerald-500" />
-                <span className="text-gray-400">
-                  <span className="text-white font-bold">{reports.length}</span> Market Reports
-                </span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <Building2 size={16} className="text-violet-500" />
-                <span className="text-gray-400">
-                  <span className="text-white font-bold">{allActiveJobs.length}</span> Active Jobs
-                </span>
-              </div>
+              <div className="flex items-center gap-2 text-sm"><Zap size={16} className="text-blue-500" /><span className="text-gray-400"><span className="text-white font-bold">{categories.length}</span> Job Categories</span></div>
+              <div className="flex items-center gap-2 text-sm"><BarChart3 size={16} className="text-emerald-500" /><span className="text-gray-400"><span className="text-white font-bold">{reports.length}</span> Market Reports</span></div>
+              <div className="flex items-center gap-2 text-sm"><Building2 size={16} className="text-violet-500" /><span className="text-gray-400"><span className="text-white font-bold">{allActiveJobs.length}</span> Active Jobs</span></div>
             </div>
           </motion.div>
         </section>
@@ -258,99 +179,63 @@ export default function HomePage() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-lg font-bold text-white uppercase tracking-widest flex items-center gap-3">
-                <div className="w-1.5 h-6 bg-gradient-to-b from-blue-500 to-violet-500"></div>
-                Job Categories
+                <div className="w-1.5 h-6 bg-gradient-to-b from-blue-500 to-violet-500"></div>Job Categories
               </h2>
               <p className="text-xs text-gray-500 mt-1 font-mono">
                 {showAllCategories 
-                  ? `Showing all ${rolesWithCounts.length} categories` 
-                  : `Top ${Math.min(INITIAL_CATEGORIES_COUNT, rolesWithCounts.length)} of ${rolesWithCounts.length} categories`}
+                  ? `Showing all ${categories.length} categories` 
+                  : `Top ${Math.min(INITIAL_CATEGORIES_COUNT, categories.length)} of ${categories.length} categories`}
               </p>
             </div>
-            {rolesWithCounts.length > INITIAL_CATEGORIES_COUNT && (
-              <button
-                onClick={() => setShowAllCategories(!showAllCategories)}
-                className="flex items-center gap-1.5 text-[10px] text-blue-500 hover:text-blue-400 font-bold uppercase tracking-wider transition-colors group"
-              >
+            {categories.length > INITIAL_CATEGORIES_COUNT && (
+              <button onClick={() => setShowAllCategories(!showAllCategories)}
+                className="flex items-center gap-1.5 text-[10px] text-blue-500 hover:text-blue-400 font-bold uppercase tracking-wider transition-colors group">
                 {showAllCategories ? (
-                  <>
-                    Show Less
-                    <ChevronDown size={14} className="rotate-180 group-hover:-translate-y-0.5 transition-transform" />
-                  </>
+                  <><span>Show Less</span><ChevronDown size={14} className="rotate-180" /></>
                 ) : (
-                  <>
-                    See More ({hiddenCount} more)
-                    <ChevronDown size={14} className="group-hover:translate-y-0.5 transition-transform" />
-                  </>
+                  <><span>See More ({categories.length - INITIAL_CATEGORIES_COUNT} more)</span><ChevronDown size={14} /></>
                 )}
               </button>
             )}
           </div>
           
-          {rolesWithCounts.length === 0 ? (
+          {categories.length === 0 ? (
             <div className="text-center py-12 text-gray-500 text-sm font-mono">No job categories available yet.</div>
           ) : (
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={showAllCategories ? 'expanded' : 'collapsed'}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"
-              >
-                {visibleCategories.map((role, index) => {
-                  const iconName = getIconForRole(role.name, role.slug);
-                  const IconComponent = ICON_COMPONENTS[iconName] || Briefcase;
-                  const roleSlug = role.slug || role.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-                  
-                  return (
-                    <motion.div
-                      key={role.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.03, duration: 0.2 }}
-                    >
-                      <Link
-                        to={`/role/${roleSlug}`}
-                        className="group p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-blue-500/30 transition-all h-full flex flex-col"
-                      >
-                        <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                          <IconComponent size={20} className="text-blue-400" />
-                        </div>
-                        <h3 className="text-sm font-bold text-white mb-1 group-hover:text-blue-400 transition-colors truncate">
-                          {role.name}
-                        </h3>
-                        <p className="text-[10px] text-gray-500 font-mono uppercase tracking-wider mt-auto">
-                          {role.jobCount > 0 ? (
-                            <span><span className="text-white font-bold">{role.jobCount}</span> job{role.jobCount !== 1 ? 's' : ''}</span>
-                          ) : 'View jobs'}
-                        </p>
-                      </Link>
-                    </motion.div>
-                  );
-                })}
-              </motion.div>
-            </AnimatePresence>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              {visibleCategories.map((cat, index) => {
+                const iconName = getIconForRole(cat.name, cat.slug);
+                const IconComponent = ICON_COMPONENTS[iconName] || Briefcase;
+                return (
+                  <motion.div key={cat.slug} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.03, duration: 0.2 }}>
+                    <Link to={`/category/${cat.slug}`}
+                      className="group p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-blue-500/30 transition-all h-full flex flex-col">
+                      <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                        <IconComponent size={20} className="text-blue-400" />
+                      </div>
+                      <h3 className="text-sm font-bold text-white mb-1 group-hover:text-blue-400 transition-colors truncate">{cat.name}</h3>
+                      <p className="text-[10px] text-gray-500 font-mono uppercase tracking-wider mt-auto">
+                        <span><span className="text-white font-bold">{cat.activeCount || cat.count || 0}</span> active job{(cat.activeCount || cat.count) !== 1 ? 's' : ''}</span>
+                      </p>
+                    </Link>
+                  </motion.div>
+                );
+              })}
+            </div>
           )}
 
-          {rolesWithCounts.length > INITIAL_CATEGORIES_COUNT && (
+          {categories.length > INITIAL_CATEGORIES_COUNT && (
             <div className="mt-4 text-center">
-              <button
-                onClick={() => setShowAllCategories(!showAllCategories)}
-                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-white/[0.02] border border-white/10 hover:bg-white/[0.05] hover:border-blue-500/30 text-xs font-bold text-gray-400 hover:text-white uppercase tracking-wider transition-all group"
-              >
-                {showAllCategories ? (
-                  <><span>Show Less</span><ChevronDown size={14} className="rotate-180" /></>
-                ) : (
-                  <><span>See All {rolesWithCounts.length} Categories</span><ChevronDown size={14} /></>
-                )}
+              <button onClick={() => setShowAllCategories(!showAllCategories)}
+                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-white/[0.02] border border-white/10 hover:bg-white/[0.05] hover:border-blue-500/30 text-xs font-bold text-gray-400 hover:text-white uppercase tracking-wider transition-all group">
+                {showAllCategories ? <><span>Show Less</span><ChevronDown size={14} className="rotate-180" /></>
+                  : <><span>See All {categories.length} Categories</span><ChevronDown size={14} /></>}
               </button>
             </div>
           )}
         </section>
 
-        {/* AD #1 - After Categories */}
         <AdBanner key="home-ad-1" slot="4550717155" />
 
         {/* Top 5 Jobs */}
@@ -358,8 +243,7 @@ export default function HomePage() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-lg font-bold text-white uppercase tracking-widest flex items-center gap-3">
-                <div className="w-1.5 h-6 bg-blue-500"></div>
-                Latest Opportunities
+                <div className="w-1.5 h-6 bg-blue-500"></div>Latest Opportunities
               </h2>
               <p className="text-xs text-gray-500 mt-1 font-mono">
                 {selectedCountry === 'Worldwide'
@@ -381,8 +265,8 @@ export default function HomePage() {
                   className="block p-4 bg-white/[0.01] border border-white/5 rounded-2xl hover:bg-white/[0.03] transition-all group">
                   <div className="flex items-start gap-3">
                     <div className="w-10 h-10 rounded-xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
-                      {job.logoUrl ? <img src={job.logoUrl} alt={job.company} className="w-full h-full object-cover rounded-xl" /> :
-                        <div className="w-full h-full bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400">{job.company?.charAt(0)?.toUpperCase()||'?'}</div>}
+                      {job.logoUrl ? <img src={job.logoUrl} alt={job.company} className="w-full h-full object-cover rounded-xl" />
+                        : <div className="w-full h-full bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400">{job.company?.charAt(0)?.toUpperCase()||'?'}</div>}
                     </div>
                     <div className="flex-1 min-w-0">
                       <span className="px-1.5 py-0.5 rounded text-[7px] font-bold bg-blue-500/10 text-blue-400 uppercase">{job.role||'General'}</span>
@@ -478,13 +362,11 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* AD #2 - After Spotlight */}
         <AdBanner key="home-ad-2" slot="1373889473" />
 
-        {/* 🔥 Footer Links Section - Below Weekly Spotlight */}
+        {/* Footer Links */}
         <section>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 p-6 rounded-3xl bg-white/[0.01] border border-white/5">
-            {/* Quick Links */}
             <div>
               <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3">Quick Links</h4>
               <ul className="space-y-2">
@@ -494,8 +376,6 @@ export default function HomePage() {
                 <li><Link to="/regions" className="text-[10px] text-gray-500 hover:text-blue-400 transition-colors">Job Regions</Link></li>
               </ul>
             </div>
-
-            {/* Legal */}
             <div>
               <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3">Legal</h4>
               <ul className="space-y-2">
@@ -504,38 +384,17 @@ export default function HomePage() {
                 <li><Link to="/disclaimer" className="text-[10px] text-gray-500 hover:text-blue-400 transition-colors">Disclaimer</Link></li>
               </ul>
             </div>
-
-            {/* Connect */}
             <div>
               <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3">Connect</h4>
               <ul className="space-y-2">
-                <li>
-                  <a href="https://whatsapp.com/channel/0029VaEGsli6LwHnfhKhO81k" target="_blank" rel="noopener noreferrer" 
-                    className="text-[10px] text-gray-500 hover:text-emerald-400 transition-colors flex items-center gap-1.5">
-                    <MessageCircle size={10} /> WhatsApp Channel
-                  </a>
-                </li>
-                <li>
-                  <a href="https://www.facebook.com/J2Accessories" target="_blank" rel="noopener noreferrer"
-                    className="text-[10px] text-gray-500 hover:text-blue-400 transition-colors flex items-center gap-1.5">
-                    <Flag size={10} /> Facebook Page
-                  </a>
-                </li>
-                <li>
-                  <a href="mailto:jjovinatha@gmail.com"
-                    className="text-[10px] text-gray-500 hover:text-violet-400 transition-colors flex items-center gap-1.5">
-                    <FileText size={10} /> Email Us
-                  </a>
-                </li>
+                <li><a href="https://whatsapp.com/channel/0029VaEGsli6LwHnfhKhO81k" target="_blank" rel="noopener noreferrer" className="text-[10px] text-gray-500 hover:text-emerald-400 transition-colors flex items-center gap-1.5"><MessageCircle size={10} /> WhatsApp Channel</a></li>
+                <li><a href="https://www.facebook.com/J2Accessories" target="_blank" rel="noopener noreferrer" className="text-[10px] text-gray-500 hover:text-blue-400 transition-colors flex items-center gap-1.5"><Flag size={10} /> Facebook Page</a></li>
+                <li><a href="mailto:jjovinatha@gmail.com" className="text-[10px] text-gray-500 hover:text-violet-400 transition-colors flex items-center gap-1.5"><FileText size={10} /> Email Us</a></li>
               </ul>
             </div>
-
-            {/* About */}
             <div>
               <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3">JobsReport.online</h4>
-              <p className="text-[10px] text-gray-500 leading-relaxed">
-                Real-time job market intelligence platform. Helping job seekers discover employment opportunities across Tanzania and beyond.
-              </p>
+              <p className="text-[10px] text-gray-500 leading-relaxed">Real-time job market intelligence platform. Helping job seekers discover employment opportunities across Tanzania and beyond.</p>
               <p className="text-[9px] text-gray-600 mt-2 font-mono">© 2026 JobsReport</p>
             </div>
           </div>
