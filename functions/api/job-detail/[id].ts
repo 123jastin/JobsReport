@@ -49,16 +49,39 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
     const job = jobResult.results[0] as any;
 
-    // GET IMAGES
+    // 🔥 GET IMAGES with SEO-optimized naming
     const imagesResult = await DB.prepare(
       'SELECT url, thumbnail_url, name, type, seo_title, seo_description FROM job_images WHERE job_id = ? ORDER BY sort_order'
     ).bind(job.id).all();
-    const images = (imagesResult.results || []).map((img: any) => ({
-      url: img.url, thumbnail: img.thumbnail_url || img.url, name: img.name,
-      type: img.type || 'image', seoTitle: img.seo_title || img.name || '', seoDescription: img.seo_description || ''
-    }));
+    
+    const photoTitles = [
+      `Official Recruitment Poster for ${job.title} at ${job.company}`,
+      `${job.title} Vacancy Advertisement - ${job.company} Tanzania`,
+      `Employment Notice for ${job.title} - ${job.company}`,
+      `Career Opportunity Poster - ${job.title} at ${job.company}`
+    ];
+    
+    const images = (imagesResult.results || []).map((img: any, index: number) => {
+      const isPDF = img.type === 'pdf' || (img.name || '').toLowerCase().endsWith('.pdf');
+      
+      return {
+        url: img.url,
+        thumbnail: img.thumbnail_url || img.url,
+        name: isPDF 
+          ? `${job.role} Job Flyer - ${job.company} - ${job.city || job.location || 'Tanzania'}`
+          : photoTitles[index % photoTitles.length],
+        type: img.type || 'image',
+        seoTitle: isPDF 
+          ? `${job.role} Job Flyer - ${job.company} - ${job.city || job.location || 'Tanzania'}`
+          : photoTitles[index % photoTitles.length],
+        seoDescription: isPDF 
+          ? `Official job flyer for the ${job.title} position at ${job.company} in ${job.location || 'Tanzania'}. Download for full details about this ${job.role || 'job'} opportunity.`
+          : `Recruitment advertisement for the ${job.title} role at ${job.company}. ${job.role ? `Category: ${job.role}. ` : ''}Location: ${job.location || 'Tanzania'}. View job details and apply on JobsReport.`,
+        caption: `${job.title} at ${job.company} - ${isPDF ? 'Job Flyer' : `Attachment ${index + 1}`}`
+      };
+    });
 
-    // GET RELATED JOBS
+    // 🔥 GET RELATED JOBS
     const relatedResult = await DB.prepare(`
       SELECT j.id, j.title, r.name as role, c.name as company, c.logo_url, j.location,
         j.salary, j.salary_min, j.salary_max, j.salary_currency, j.posted_at, j.expires_at, j.is_active
