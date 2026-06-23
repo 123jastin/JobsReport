@@ -29,7 +29,7 @@ export default function JobDetailPage() {
   useEffect(() => {
     async function loadJob() {
       try {
-        // Extract job ID from URL: /market/workshop-superintendent-kinondoni-job-mqng36f30mvo
+        // Extract job ID from URL
         const idMatch = jobId?.match(/(job-[a-z0-9]+)/i);
         const extractedId = idMatch ? idMatch[1] : '';
         
@@ -38,7 +38,9 @@ export default function JobDetailPage() {
           if (res.ok) {
             const jobData = await res.json();
             if (jobData && !jobData.error) {
+              // 🔥 Set the main job
               setJob(jobData);
+              // 🔥 Set related jobs for the related jobs section
               setAllJobs(jobData.relatedJobs || []);
               document.title = `${jobData.title} - ${jobData.company} | JobsReport`;
               setLoading(false);
@@ -47,20 +49,7 @@ export default function JobDetailPage() {
           }
         }
         
-        // Fallback: search in market API
-        const marketRes = await fetch('/api/market?limit=200');
-        if (marketRes.ok) {
-          const data = await marketRes.json();
-          const allJobsList = data.jobs || [];
-          setAllJobs(allJobsList);
-          
-          let found = allJobsList.find((j: any) => j.slug === jobId);
-          if (!found) found = allJobsList.find((j: any) => jobId?.includes(j.id));
-          if (!found && extractedId) found = allJobsList.find((j: any) => j.id === extractedId);
-          
-          setJob(found || null);
-          if (found) document.title = `${found.title} - ${found.company} | JobsReport`;
-        }
+        setJob(null);
       } catch (err) {} finally { setLoading(false); }
     }
     if (jobId) loadJob();
@@ -68,9 +57,9 @@ export default function JobDetailPage() {
   }, [jobId]);
 
   const getRelatedJobs = () => {
+    // 🔥 Use relatedJobs from API directly
     if (!job || allJobs.length === 0) return [];
-    const related = allJobs.filter(j => j.id !== job.id);
-    return related.slice(0, 6);
+    return allJobs.filter(j => j.id !== job.id).slice(0, 6);
   };
 
   const relatedJobs = getRelatedJobs();
@@ -181,17 +170,7 @@ export default function JobDetailPage() {
           </Link>
           <div className="flex items-center gap-3">
             {isExpired && <span className="px-3 py-1 rounded-full bg-red-500/10 text-red-400 text-[10px] font-bold uppercase tracking-wider">Expired</span>}
-            <button 
-              onClick={() => { 
-                if (navigator.share) {
-                  navigator.share({ title: job.title, url: window.location.href });
-                } else {
-                  navigator.clipboard.writeText(window.location.href);
-                }
-              }} 
-              className="p-2 hover:bg-white/5 rounded-full transition-colors"
-              aria-label="Share job"
-            >
+            <button onClick={() => { if (navigator.share) { navigator.share({ title: job.title, url: window.location.href }); } else { navigator.clipboard.writeText(window.location.href); } }} className="p-2 hover:bg-white/5 rounded-full transition-colors" aria-label="Share job">
               <Share2 size={18} className="text-gray-400" />
             </button>
           </div>
@@ -270,9 +249,12 @@ export default function JobDetailPage() {
         <a href={`mailto:jjovinatha@gmail.com?subject=Report%20Job&body=Please%20review%20this%20listing%3A%20${encodeURIComponent(jobUrl)}`} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 text-[10px] font-bold uppercase tracking-wider transition-all flex-shrink-0"><Flag size={11} />Report</a>
       </div>
 
+      {/* ATTACHMENTS */}
       {hasFiles && (
         <div className="px-4 py-6 border-b border-white/5">
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2"><Eye size={16} className="text-blue-400" /> Attachments ({job.images.length})</h3>
+          <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
+            <Eye size={16} className="text-blue-400" /> Attachments ({job.images.length})
+          </h3>
           <div className="flex md:grid md:grid-cols-4 gap-2 overflow-x-auto scrollbar-none">
             {job.images.map((img: any, index: number) => {
               const isPDF = img.type === 'pdf' || img.name?.toLowerCase().endsWith('.pdf');
@@ -309,18 +291,11 @@ export default function JobDetailPage() {
         <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4">Job Details</h3>
         <div className="space-y-3">
           {[
-            ['Status', isExpired ? 'Expired' : 'Active'],
-            ['Company', job.company],
-            ['Location', job.location || 'Remote'],
-            ['Role', job.role],
-            ['Salary', salaryDisplay ? `${currencyFlag} ${salaryDisplay}` : 'Not specified'],
-            ['Category', job.job_category || 'General'],
-            ['Employment Type', job.employment_type === 'FULL_TIME' ? 'Full Time' : (job.employment_type || 'Full Time')],
-            ['Workplace', job.workplace_type || 'Onsite'],
-            ['Education', job.education_level || 'Any'],
-            ['Experience', job.experience_months ? `${job.experience_months} months` : 'Not specified'],
-            ['Posted', job.postedAt || 'Recent'],
-            ['Signal ID', `JR-${job.id?.slice(0, 8).toUpperCase()}`]
+            ['Status', isExpired ? 'Expired' : 'Active'], ['Company', job.company], ['Location', job.location || 'Remote'], ['Role', job.role],
+            ['Salary', salaryDisplay ? `${currencyFlag} ${salaryDisplay}` : 'Not specified'], ['Category', job.job_category || 'General'],
+            ['Employment Type', job.employment_type === 'FULL_TIME' ? 'Full Time' : (job.employment_type || 'Full Time')], ['Workplace', job.workplace_type || 'Onsite'],
+            ['Education', job.education_level || 'Any'], ['Experience', job.experience_months ? `${job.experience_months} months` : 'Not specified'],
+            ['Posted', job.postedAt || 'Recent'], ['Signal ID', `JR-${job.id?.slice(0, 8).toUpperCase()}`]
           ].map(([label, value]) => (
             <div key={label as string} className="flex justify-between items-center py-2 border-b border-white/[0.03]">
               <span className="text-xs text-gray-500">{label}</span>
@@ -332,6 +307,7 @@ export default function JobDetailPage() {
 
       <AdBanner key={`ad2-${jobId}`} slot="1373889473" />
 
+      {/* RELATED JOBS */}
       {relatedJobs.length > 0 && (
         <div className="px-4 py-8 border-t border-white/5">
           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Briefcase size={18} className="text-blue-500" />{isExpired ? 'Similar Active Jobs' : 'Related Jobs'}</h3>
