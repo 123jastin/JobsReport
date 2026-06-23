@@ -25,35 +25,47 @@ export default function JobDetailPage() {
     (job.expiresAt && new Date(job.expiresAt) < new Date())
   ) : false;
 
-  useEffect(() => {
-    async function loadJob() {
-      try {
-        // 🔥 Fetch all jobs to find the matching one
-        const res = await fetch('/api/market?limit=200');
-        if (res.ok) {
-          const data = await res.json();
-          const allJobs = data.jobs || data.activeJobs || [];
-          
-          // 🔥 Find job by matching the URL slug
-          let found = allJobs.find((j: any) => {
-            const slug = j.slug || `${j.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${j.id}`;
-            return slug === jobId || jobId?.includes(j.id) || j.id === jobId;
-          });
-          
-          setJob(found || null);
-          if (found) {
-            document.title = `${found.title} - ${found.company} | JobsReport`;
-          }
+useEffect(() => {
+  async function loadJob() {
+    try {
+      const res = await fetch('/api/market?limit=200');
+      if (res.ok) {
+        const data = await res.json();
+        const allJobs = data.jobs || data.activeJobs || [];
+        
+        let found = null;
+        
+        // Strategy 1: Exact slug match
+        found = allJobs.find((j: any) => j.slug === jobId);
+        
+        // Strategy 2: URL ends with job ID
+        if (!found) {
+          found = allJobs.find((j: any) => jobId?.endsWith(j.id));
         }
-      } catch (err) {
-        // Silent fail
-      } finally {
-        setLoading(false);
+        
+        // Strategy 3: Job ID is somewhere in the URL
+        if (!found) {
+          found = allJobs.find((j: any) => jobId?.includes(j.id));
+        }
+        
+        setJob(found || null);
+        if (found) {
+          document.title = `${found.title} - ${found.company} | JobsReport`;
+        }
       }
+    } catch (err) {
+      // Silent
+    } finally {
+      setLoading(false);
     }
-    if (jobId) loadJob();
-    window.scrollTo(0, 0);
-  }, [jobId]);
+  }
+  if (jobId) loadJob();
+  window.scrollTo(0, 0);
+}, [jobId]);
+  
+  
+  
+  
 
   if (loading) {
     return (
