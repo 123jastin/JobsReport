@@ -11,8 +11,14 @@ import AdBanner from '../components/AdBanner';
 import { useCountry } from '../context/CountryContext';
 
 const getJobSlug = (job: RawJob): string => {
-  if ((job as any).slug) return `/market/${(job as any).slug}`;
-  const titleSlug = job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  // 🔥 Use API slug if available, otherwise generate
+  if ((job as any).slug) {
+    return `/market/${(job as any).slug}`;
+  }
+  const titleSlug = job.title
+    ?.toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
   return `/market/${titleSlug}-${job.id}`;
 };
 
@@ -20,13 +26,9 @@ const JOBS_PER_PAGE = 15;
 
 export default function MarketPage() {
   const navigate = useNavigate();
-  const { page: pageParam, query, categorySlug, roleSlug } = useParams<{ 
-    page?: string; query?: string; categorySlug?: string; roleSlug?: string;
-  }>();
+  const { page: pageParam, query } = useParams<{ page?: string; query?: string }>();
   
   const currentPage = pageParam ? parseInt(pageParam) : 1;
-  const categoryFromPath = categorySlug ? categorySlug.replace(/-/g, ' ') : '';
-  const roleFromPath = roleSlug ? roleSlug.replace(/-/g, ' ') : '';
   
   const [jobs, setJobs] = useState<RawJob[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -46,7 +48,8 @@ export default function MarketPage() {
 
   useEffect(() => {
     if (query) {
-      setSearchQuery(decodeURIComponent(query).replace(/-/g, ' '));
+      const decodedQuery = decodeURIComponent(query).replace(/-/g, ' ');
+      setSearchQuery(decodedQuery);
     }
   }, [query]);
 
@@ -63,7 +66,9 @@ export default function MarketPage() {
           setTotalJobs(data.stats?.totalJobs || 0);
           setTotalActiveJobs(data.stats?.totalJobs || 0);
         }
-      } catch (err) {} finally { setLoading(false); }
+      } catch (err) {} finally {
+        setLoading(false);
+      }
     }
     loadMarketData();
     window.scrollTo(0, 0);
@@ -77,7 +82,8 @@ export default function MarketPage() {
 
   useEffect(() => {
     const roleParam = searchParams.get('role');
-    setSelectedRole(roleParam || 'All');
+    if (roleParam) setSelectedRole(roleParam);
+    else setSelectedRole('All');
   }, [searchParams]);
 
   const handleRoleSelect = (role: string) => {
@@ -89,71 +95,56 @@ export default function MarketPage() {
   };
 
   const handlePageChange = (page: number) => {
-    const basePath = categoryFromPath ? `/category/${categorySlug}` : roleFromPath ? `/role/${roleSlug}` : '/market';
-    if (page === 1) navigate(basePath);
-    else navigate(`${basePath}/page/${page}`);
+    if (page === 1) navigate('/market');
+    else navigate(`/market/page/${page}`);
   };
 
   const getCompanyLogo = (companyName: string) => {
-    return companies.find(c => c.name.toLowerCase() === companyName.toLowerCase())?.logoUrl;
+    const foundCo = companies.find(c => c.name.toLowerCase() === companyName.toLowerCase());
+    return foundCo?.logoUrl;
   };
 
-  // 🔥 Filter: category/role from URL + search + role dropdown + country
-  const activeJobs = jobs.filter(j => {
-    if (j.active === false) return false;
-    if (categoryFromPath && !(j.job_category || '').toLowerCase().includes(categoryFromPath.toLowerCase())) return false;
-    if (roleFromPath && !(j.role || '').toLowerCase().includes(roleFromPath.toLowerCase())) return false;
-    if (searchQuery && !j.title.toLowerCase().includes(searchQuery.toLowerCase()) && !j.company.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    if (selectedRole !== 'All' && j.role !== selectedRole) return false;
-    if (selectedCountry !== 'Worldwide' && (j.country || '').toLowerCase() !== selectedCountry.toLowerCase()) return false;
-    return true;
-  });
-
+  const activeJobs = jobs.filter(j => j.active !== false);
   const uniqueCompanies = Array.from(new Set(activeJobs.map(j => j.company))).length;
   const uniqueRoles = roles.filter(r => r !== 'All').length;
 
   const countryText = selectedCountry === 'Worldwide' ? '' : selectedCountry;
   const roleText = selectedRole !== 'All' ? selectedRole : '';
 
-  const pageTitle = categoryFromPath
-    ? `${categoryFromPath} Jobs | Browse ${categoryFromPath} Vacancies | JobsReport`
-    : roleFromPath
-      ? `${roleFromPath} Jobs | Find ${roleFromPath} Vacancies | JobsReport`
-      : currentPage > 1
-        ? `Browse Jobs - Page ${currentPage} | JobsReport`
-        : selectedCountry === 'Worldwide'
-          ? roleText ? `${roleText} Jobs | Find ${roleText} Vacancies Worldwide | JobsReport` : 'Browse All Jobs | Latest Job Vacancies & Opportunities | JobsReport'
-          : roleText ? `${roleText} Jobs in ${countryText} | ${roleText} Vacancies ${countryText} | JobsReport` : `Jobs in ${countryText} | Latest ${countryText} Vacancies & Careers | JobsReport`;
+  const pageTitle = currentPage > 1
+    ? `Browse Jobs - Page ${currentPage} | JobsReport`
+    : selectedCountry === 'Worldwide'
+      ? roleText ? `${roleText} Jobs | Find ${roleText} Vacancies Worldwide | JobsReport`
+        : 'Browse All Jobs | Latest Job Vacancies & Opportunities | JobsReport'
+      : roleText ? `${roleText} Jobs in ${countryText} | ${roleText} Vacancies ${countryText} | JobsReport`
+        : `Jobs in ${countryText} | Latest ${countryText} Vacancies & Careers | JobsReport`;
 
-  const pageDescription = `Browse ${activeJobs.length} active ${categoryFromPath || roleFromPath || ''} job listings${currentPage > 1 ? ` (Page ${currentPage})` : ''} across ${uniqueRoles} categories from ${uniqueCompanies} companies.`;
+  const pageDescription = `Browse ${activeJobs.length} active job listings${currentPage > 1 ? ` (Page ${currentPage})` : ''} across ${uniqueRoles} categories from ${uniqueCompanies} companies.`;
 
-  const pageKeywords = categoryFromPath
-    ? `${categoryFromPath.toLowerCase()} jobs, ${categoryFromPath.toLowerCase()} vacancies, ${categoryFromPath.toLowerCase()} careers`
-    : roleFromPath
-      ? `${roleFromPath.toLowerCase()} jobs, ${roleFromPath.toLowerCase()} vacancies`
-      : selectedCountry === 'Worldwide'
-        ? `jobs, job vacancies, career opportunities, find jobs, ${roleText || 'all'} jobs, latest jobs`
-        : `jobs in ${countryText}, ${countryText} jobs, ${countryText} vacancies`;
+  const pageKeywords = selectedCountry === 'Worldwide'
+    ? `jobs, job vacancies, career opportunities, find jobs, ${roleText || 'all'} jobs, latest jobs`
+    : `jobs in ${countryText}, ${countryText} jobs, ${countryText} vacancies, ${roleText ? `${roleText} jobs ${countryText}, ` : ''}find jobs ${countryText}`;
 
-  const canonicalUrl = categoryFromPath
-    ? `https://jobsreport.online/category/${categorySlug}`
-    : roleFromPath
-      ? `https://jobsreport.online/role/${roleSlug}`
-      : currentPage > 1
-        ? `https://jobsreport.online/market/page/${currentPage}`
-        : 'https://jobsreport.online/market';
+  const canonicalUrl = currentPage > 1
+    ? `https://jobsreport.online/market/page/${currentPage}`
+    : 'https://jobsreport.online/market';
 
   const collectionPageSchema = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
-    "name": pageTitle, "description": pageDescription, "url": canonicalUrl,
+    "name": pageTitle,
+    "description": pageDescription,
+    "url": canonicalUrl,
     "isPartOf": { "@type": "WebSite", "name": "JobsReport", "url": "https://jobsreport.online" },
-    "about": categoryFromPath ? { "@type": "Thing", "name": categoryFromPath } : selectedCountry !== 'Worldwide' ? { "@type": "Place", "name": selectedCountry } : undefined,
+    "about": selectedCountry !== 'Worldwide' ? { "@type": "Place", "name": selectedCountry } : undefined,
     "mainEntity": {
-      "@type": "ItemList", "numberOfItems": activeJobs.length,
+      "@type": "ItemList",
+      "numberOfItems": activeJobs.length,
       "itemListElement": activeJobs.slice(0, 20).map((job, index) => ({
-        "@type": "ListItem", "position": index + 1,
-        "url": `https://jobsreport.online${getJobSlug(job)}`, "name": job.title
+        "@type": "ListItem",
+        "position": index + 1,
+        "url": `https://jobsreport.online${getJobSlug(job)}`,
+        "name": job.title
       }))
     }
   };
@@ -163,10 +154,20 @@ export default function MarketPage() {
     "@type": "BreadcrumbList",
     "itemListElement": [
       { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://jobsreport.online" },
-      ...(categoryFromPath ? [{ "@type": "ListItem", "position": 2, "name": `${categoryFromPath} Jobs`, "item": canonicalUrl }]
-        : roleFromPath ? [{ "@type": "ListItem", "position": 2, "name": `${roleFromPath} Jobs`, "item": canonicalUrl }]
-        : selectedCountry !== 'Worldwide' ? [{ "@type": "ListItem", "position": 2, "name": `Jobs in ${selectedCountry}`, "item": `https://jobsreport.online/country/${selectedCountry.toLowerCase().replace(/\s+/g, '-')}` }] : []),
-      ...(currentPage > 1 && !categoryFromPath && !roleFromPath ? [{ "@type": "ListItem", "position": selectedCountry !== 'Worldwide' ? 3 : 2, "name": `Page ${currentPage}`, "item": canonicalUrl }] : [])
+      ...(selectedCountry !== 'Worldwide' ? [{
+        "@type": "ListItem", "position": 2, "name": `Jobs in ${selectedCountry}`,
+        "item": `https://jobsreport.online/country/${selectedCountry.toLowerCase().replace(/\s+/g, '-')}`
+      }] : []),
+      ...(currentPage > 1 ? [{
+        "@type": "ListItem", "position": selectedCountry !== 'Worldwide' ? 3 : 2,
+        "name": "All Jobs", "item": "https://jobsreport.online/market"
+      }, {
+        "@type": "ListItem", "position": selectedCountry !== 'Worldwide' ? 4 : 3,
+        "name": `Page ${currentPage}`, "item": canonicalUrl
+      }] : [{
+        "@type": "ListItem", "position": selectedCountry !== 'Worldwide' ? 3 : 2,
+        "name": selectedRole !== 'All' ? `${selectedRole} Jobs` : 'All Jobs', "item": canonicalUrl
+      }])
     ]
   };
 
@@ -250,21 +251,24 @@ export default function MarketPage() {
       <div className="space-y-8 pb-12">
         <div>
           <div className="flex items-center gap-2 text-xs font-bold text-blue-500 uppercase tracking-[0.2em] mb-2 font-mono">
-            <TrendingUp size={14} /> {categoryFromPath ? `${categoryFromPath.toUpperCase()} CATEGORY` : selectedCountry === 'Worldwide' ? 'GLOBAL' : `${selectedCountry.toUpperCase()} REGIONAL`} MARKET TELEMETRY
+            <TrendingUp size={14} /> {selectedCountry === 'Worldwide' ? 'GLOBAL' : `${selectedCountry.toUpperCase()} REGIONAL`} MARKET TELEMETRY
           </div>
           <h1 className="text-4xl md:text-5xl font-black text-white tracking-widest leading-none uppercase">
-            {categoryFromPath ? `${categoryFromPath} Jobs` : roleFromPath ? `${roleFromPath} Jobs` : selectedCountry === 'Worldwide' ? roleText ? `${roleText} Jobs` : 'Live Job Market' : roleText ? `${roleText} Jobs in ${countryText}` : `Jobs in ${countryText}`} {currentFlag}
+            {selectedCountry === 'Worldwide' ? roleText ? `${roleText} Jobs` : 'Live Job Market'
+              : roleText ? `${roleText} Jobs in ${countryText}` : `Jobs in ${countryText}`} {currentFlag}
           </h1>
           <p className="text-sm text-gray-400 max-w-xl mt-2">
-            Browse {activeJobs.length} active {categoryFromPath || roleFromPath || ''} job listings across {uniqueCompanies} companies.
+            {selectedCountry === 'Worldwide'
+              ? `Browse ${totalActiveJobs} active job listings across ${uniqueRoles} categories from ${uniqueCompanies} companies worldwide.`
+              : `Browse ${totalActiveJobs} active job listings in ${countryText} across ${uniqueRoles} categories from ${uniqueCompanies} companies.`}
           </p>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="p-4 rounded-2xl bg-white/[0.01] border border-white/5">
             <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Active Signals</p>
-            <p className="text-2xl font-mono text-white mt-1">{activeJobs.length}</p>
-            <p className="text-[9px] text-gray-600 mt-0.5">on this page</p>
+            <p className="text-2xl font-mono text-white mt-1">{totalActiveJobs}</p>
+            <p className="text-[9px] text-gray-600 mt-0.5">{activeJobs.length} on this page</p>
           </div>
           <div className="p-4 rounded-2xl bg-white/[0.01] border border-white/5">
             <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Hiring Entities</p>
@@ -309,8 +313,8 @@ export default function MarketPage() {
                 className="p-12 text-center bg-white/[0.01] rounded-[2rem] border border-dashed border-white/10">
                 <Globe size={32} className="text-gray-600 mx-auto mb-4" />
                 <p className="text-white font-bold text-sm">No Active Market Signals Found</p>
-                <p className="text-xs text-gray-500 mt-1">No verified job listings matching your filters.</p>
-                <button onClick={() => { setSearchQuery(''); setSelectedRole('All'); setSelectedCountry('Worldwide'); navigate(categoryFromPath ? `/category/${categorySlug}` : roleFromPath ? `/role/${roleSlug}` : '/market'); }}
+                <p className="text-xs text-gray-500 mt-1">No verified job listings matching your telemetry filters.</p>
+                <button onClick={() => { setSearchQuery(''); setSelectedRole('All'); setSelectedCountry('Worldwide'); navigate('/market'); }}
                   className="mt-4 px-4 py-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all">Reset Filters</button>
               </motion.div>
             ) : (
@@ -321,7 +325,11 @@ export default function MarketPage() {
                   if ((idx + 1) % 3 === 0 && idx < activeJobs.length - 1) {
                     const adNumber = Math.floor((idx + 1) / 3);
                     const adKey = `infeed-${idx}-${currentPage}`;
-                    elements.push(<InFeedAd key={adKey} slot={adNumber % 2 === 1 ? "1805968460" : "9872160747"} layoutKey={adNumber % 2 === 1 ? "-h0-1a+31-4t+7z" : "-gh-1o+14-67+ka"} index={idx + 1} />);
+                    if (adNumber % 2 === 1) {
+                      elements.push(<InFeedAd key={adKey} slot="1805968460" layoutKey="-h0-1a+31-4t+7z" index={idx + 1} />);
+                    } else {
+                      elements.push(<InFeedAd key={adKey} slot="9872160747" layoutKey="-gh-1o+14-67+ka" index={idx + 1} />);
+                    }
                   }
                   return elements;
                 }).flat()}
@@ -336,7 +344,7 @@ export default function MarketPage() {
               className="w-full py-4 rounded-2xl bg-gradient-to-r from-blue-600/20 to-violet-600/20 border border-blue-500/30 hover:border-blue-500/50 hover:from-blue-600/30 hover:to-violet-600/30 text-white font-bold text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-3 group">
               <span>See More Jobs</span><ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
             </button>
-            <p className="text-center text-[10px] text-gray-500 font-mono">Showing page {currentPage} of {totalPages} • {activeJobs.length} jobs on this page</p>
+            <p className="text-center text-[10px] text-gray-500 font-mono">Showing page {currentPage} of {totalPages} • {totalActiveJobs} total jobs available</p>
           </div>
         )}
 
