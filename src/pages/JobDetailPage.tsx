@@ -34,7 +34,7 @@ export default function JobDetailPage() {
         const extractedId = idMatch ? idMatch[1] : '';
         
         if (extractedId) {
-          const res = await fetch(`/api/job/${extractedId}`);
+          const res = await fetch(`/api/job-detail/${extractedId}`);
           if (res.ok) {
             const jobData = await res.json();
             if (jobData && !jobData.error) {
