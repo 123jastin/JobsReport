@@ -11,7 +11,6 @@ import AdBanner from '../components/AdBanner';
 import { useCountry } from '../context/CountryContext';
 
 const getJobSlug = (job: RawJob): string => {
-  // 🔥 Use API slug if available, otherwise generate
   if ((job as any).slug) {
     return `/market/${(job as any).slug}`;
   }
@@ -26,7 +25,11 @@ const JOBS_PER_PAGE = 15;
 
 export default function MarketPage() {
   const navigate = useNavigate();
-  const { page: pageParam, query } = useParams<{ page?: string; query?: string }>();
+  const { page: pageParam, query, categorySlug } = useParams<{ 
+    page?: string; 
+    query?: string; 
+    categorySlug?: string;
+  }>();
   
   const currentPage = pageParam ? parseInt(pageParam) : 1;
   
@@ -95,8 +98,9 @@ export default function MarketPage() {
   };
 
   const handlePageChange = (page: number) => {
-    if (page === 1) navigate('/market');
-    else navigate(`/market/page/${page}`);
+    const basePath = categorySlug ? `/category/${categorySlug}` : '/market';
+    if (page === 1) navigate(basePath);
+    else navigate(`${basePath}/page/${page}`);
   };
 
   const getCompanyLogo = (companyName: string) => {
@@ -104,30 +108,39 @@ export default function MarketPage() {
     return foundCo?.logoUrl;
   };
 
+  // 🔥 Simple filter - shows all active jobs
   const activeJobs = jobs.filter(j => j.active !== false);
+  
   const uniqueCompanies = Array.from(new Set(activeJobs.map(j => j.company))).length;
   const uniqueRoles = roles.filter(r => r !== 'All').length;
 
   const countryText = selectedCountry === 'Worldwide' ? '' : selectedCountry;
   const roleText = selectedRole !== 'All' ? selectedRole : '';
+  const categoryText = categorySlug ? categorySlug.replace(/-/g, ' ') : '';
 
-  const pageTitle = currentPage > 1
-    ? `Browse Jobs - Page ${currentPage} | JobsReport`
-    : selectedCountry === 'Worldwide'
-      ? roleText ? `${roleText} Jobs | Find ${roleText} Vacancies Worldwide | JobsReport`
-        : 'Browse All Jobs | Latest Job Vacancies & Opportunities | JobsReport'
-      : roleText ? `${roleText} Jobs in ${countryText} | ${roleText} Vacancies ${countryText} | JobsReport`
-        : `Jobs in ${countryText} | Latest ${countryText} Vacancies & Careers | JobsReport`;
+  const pageTitle = categoryText
+    ? `${categoryText} Jobs | Browse ${categoryText} Vacancies | JobsReport`
+    : currentPage > 1
+      ? `Browse Jobs - Page ${currentPage} | JobsReport`
+      : selectedCountry === 'Worldwide'
+        ? roleText ? `${roleText} Jobs | Find ${roleText} Vacancies Worldwide | JobsReport`
+          : 'Browse All Jobs | Latest Job Vacancies & Opportunities | JobsReport'
+        : roleText ? `${roleText} Jobs in ${countryText} | ${roleText} Vacancies ${countryText} | JobsReport`
+          : `Jobs in ${countryText} | Latest ${countryText} Vacancies & Careers | JobsReport`;
 
   const pageDescription = `Browse ${activeJobs.length} active job listings${currentPage > 1 ? ` (Page ${currentPage})` : ''} across ${uniqueRoles} categories from ${uniqueCompanies} companies.`;
 
-  const pageKeywords = selectedCountry === 'Worldwide'
-    ? `jobs, job vacancies, career opportunities, find jobs, ${roleText || 'all'} jobs, latest jobs`
-    : `jobs in ${countryText}, ${countryText} jobs, ${countryText} vacancies, ${roleText ? `${roleText} jobs ${countryText}, ` : ''}find jobs ${countryText}`;
+  const pageKeywords = categoryText
+    ? `${categoryText.toLowerCase()} jobs, ${categoryText.toLowerCase()} vacancies, ${categoryText.toLowerCase()} careers`
+    : selectedCountry === 'Worldwide'
+      ? `jobs, job vacancies, career opportunities, find jobs, ${roleText || 'all'} jobs, latest jobs`
+      : `jobs in ${countryText}, ${countryText} jobs, ${countryText} vacancies`;
 
-  const canonicalUrl = currentPage > 1
-    ? `https://jobsreport.online/market/page/${currentPage}`
-    : 'https://jobsreport.online/market';
+  const canonicalUrl = categorySlug
+    ? `https://jobsreport.online/category/${categorySlug}`
+    : currentPage > 1
+      ? `https://jobsreport.online/market/page/${currentPage}`
+      : 'https://jobsreport.online/market';
 
   const collectionPageSchema = {
     "@context": "https://schema.org",
@@ -136,7 +149,7 @@ export default function MarketPage() {
     "description": pageDescription,
     "url": canonicalUrl,
     "isPartOf": { "@type": "WebSite", "name": "JobsReport", "url": "https://jobsreport.online" },
-    "about": selectedCountry !== 'Worldwide' ? { "@type": "Place", "name": selectedCountry } : undefined,
+    "about": categoryText ? { "@type": "Thing", "name": categoryText } : undefined,
     "mainEntity": {
       "@type": "ItemList",
       "numberOfItems": activeJobs.length,
@@ -154,20 +167,21 @@ export default function MarketPage() {
     "@type": "BreadcrumbList",
     "itemListElement": [
       { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://jobsreport.online" },
-      ...(selectedCountry !== 'Worldwide' ? [{
-        "@type": "ListItem", "position": 2, "name": `Jobs in ${selectedCountry}`,
-        "item": `https://jobsreport.online/country/${selectedCountry.toLowerCase().replace(/\s+/g, '-')}`
-      }] : []),
-      ...(currentPage > 1 ? [{
-        "@type": "ListItem", "position": selectedCountry !== 'Worldwide' ? 3 : 2,
-        "name": "All Jobs", "item": "https://jobsreport.online/market"
-      }, {
-        "@type": "ListItem", "position": selectedCountry !== 'Worldwide' ? 4 : 3,
-        "name": `Page ${currentPage}`, "item": canonicalUrl
-      }] : [{
-        "@type": "ListItem", "position": selectedCountry !== 'Worldwide' ? 3 : 2,
-        "name": selectedRole !== 'All' ? `${selectedRole} Jobs` : 'All Jobs', "item": canonicalUrl
-      }])
+      ...(categoryText ? [
+        { "@type": "ListItem", "position": 2, "name": `${categoryText} Jobs`, "item": canonicalUrl }
+      ] : [
+        ...(selectedCountry !== 'Worldwide' ? [{
+          "@type": "ListItem", "position": 2, "name": `Jobs in ${selectedCountry}`,
+          "item": `https://jobsreport.online/country/${selectedCountry.toLowerCase().replace(/\s+/g, '-')}`
+        }] : []),
+        ...(currentPage > 1 ? [{
+          "@type": "ListItem", "position": selectedCountry !== 'Worldwide' ? 3 : 2,
+          "name": `Page ${currentPage}`, "item": canonicalUrl
+        }] : [{
+          "@type": "ListItem", "position": selectedCountry !== 'Worldwide' ? 3 : 2,
+          "name": selectedRole !== 'All' ? `${selectedRole} Jobs` : 'All Jobs', "item": canonicalUrl
+        }])
+      ])
     ]
   };
 
@@ -251,16 +265,13 @@ export default function MarketPage() {
       <div className="space-y-8 pb-12">
         <div>
           <div className="flex items-center gap-2 text-xs font-bold text-blue-500 uppercase tracking-[0.2em] mb-2 font-mono">
-            <TrendingUp size={14} /> {selectedCountry === 'Worldwide' ? 'GLOBAL' : `${selectedCountry.toUpperCase()} REGIONAL`} MARKET TELEMETRY
+            <TrendingUp size={14} /> {categoryText ? `${categoryText.toUpperCase()} CATEGORY` : selectedCountry === 'Worldwide' ? 'GLOBAL' : `${selectedCountry.toUpperCase()} REGIONAL`} MARKET TELEMETRY
           </div>
           <h1 className="text-4xl md:text-5xl font-black text-white tracking-widest leading-none uppercase">
-            {selectedCountry === 'Worldwide' ? roleText ? `${roleText} Jobs` : 'Live Job Market'
-              : roleText ? `${roleText} Jobs in ${countryText}` : `Jobs in ${countryText}`} {currentFlag}
+            {categoryText ? `${categoryText} Jobs` : selectedCountry === 'Worldwide' ? roleText ? `${roleText} Jobs` : 'Live Job Market' : roleText ? `${roleText} Jobs in ${countryText}` : `Jobs in ${countryText}`} {currentFlag}
           </h1>
           <p className="text-sm text-gray-400 max-w-xl mt-2">
-            {selectedCountry === 'Worldwide'
-              ? `Browse ${totalActiveJobs} active job listings across ${uniqueRoles} categories from ${uniqueCompanies} companies worldwide.`
-              : `Browse ${totalActiveJobs} active job listings in ${countryText} across ${uniqueRoles} categories from ${uniqueCompanies} companies.`}
+            Browse {activeJobs.length} active job listings across {uniqueCompanies} companies.
           </p>
         </div>
 
@@ -313,8 +324,8 @@ export default function MarketPage() {
                 className="p-12 text-center bg-white/[0.01] rounded-[2rem] border border-dashed border-white/10">
                 <Globe size={32} className="text-gray-600 mx-auto mb-4" />
                 <p className="text-white font-bold text-sm">No Active Market Signals Found</p>
-                <p className="text-xs text-gray-500 mt-1">No verified job listings matching your telemetry filters.</p>
-                <button onClick={() => { setSearchQuery(''); setSelectedRole('All'); setSelectedCountry('Worldwide'); navigate('/market'); }}
+                <p className="text-xs text-gray-500 mt-1">No verified job listings matching your filters.</p>
+                <button onClick={() => { setSearchQuery(''); setSelectedRole('All'); setSelectedCountry('Worldwide'); navigate(categorySlug ? `/category/${categorySlug}` : '/market'); }}
                   className="mt-4 px-4 py-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all">Reset Filters</button>
               </motion.div>
             ) : (
@@ -325,11 +336,7 @@ export default function MarketPage() {
                   if ((idx + 1) % 3 === 0 && idx < activeJobs.length - 1) {
                     const adNumber = Math.floor((idx + 1) / 3);
                     const adKey = `infeed-${idx}-${currentPage}`;
-                    if (adNumber % 2 === 1) {
-                      elements.push(<InFeedAd key={adKey} slot="1805968460" layoutKey="-h0-1a+31-4t+7z" index={idx + 1} />);
-                    } else {
-                      elements.push(<InFeedAd key={adKey} slot="9872160747" layoutKey="-gh-1o+14-67+ka" index={idx + 1} />);
-                    }
+                    elements.push(<InFeedAd key={adKey} slot={adNumber % 2 === 1 ? "1805968460" : "9872160747"} layoutKey={adNumber % 2 === 1 ? "-h0-1a+31-4t+7z" : "-gh-1o+14-67+ka"} index={idx + 1} />);
                   }
                   return elements;
                 }).flat()}
