@@ -4,43 +4,165 @@ type Env = {
   DB: D1Database;
 };
 
-// PUT /api/jobs/:id
-export const onRequestPut: PagesFunction<Env> = async (context) => {
+function formatSalary(job: any, currencies: Record<string, {symbol: string, name: string}>): string {
+  const currency = job.salary_currency || 'TZS';
+  const currencyInfo = currencies[currency] || { symbol: currency, name: currency };
+  const symbol = currencyInfo.symbol;
+  
+  const min = job.salary_min ? Number(job.salary_min).toLocaleString() : '';
+  const max = job.salary_max ? Number(job.salary_max).toLocaleString() : '';
+  
+  if (min && max) return `${symbol} ${min} - ${max}`;
+  if (min) return `${symbol} ${min}+`;
+  if (max) return `${symbol} Up to ${max}`;
+  
+  if (job.salary && job.salary.trim()) return `${symbol} ${job.salary}`;
+  
+  return '';
+}
+
+export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
-  const { id } = context.params;
+  const url = new URL(context.request.url);
+  const parts = url.pathname.split('/');
+  const id = parts[parts.length - 1];
 
   try {
-    const body: any = await context.request.json();
+    // 🔥 Get currencies
+    const currenciesResult = await DB.prepare('SELECT code, name, symbol, flag FROM currencies ORDER BY name').all();
+    const currenciesMap: Record<string, {symbol: string, name: string, flag: string}> = {};
     
-    await DB.prepare('UPDATE jobs SET is_active = ? WHERE id = ?')
-      .bind(body.active ? 1 : 0, id)
-      .run();
+    for (const c of currenciesResult.results) {
+      currenciesMap[c.code] = { symbol: c.symbol, name: c.name, flag: c.flag || '' };
+    }
 
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { 'Content-Type': 'application/json' }
+    // 🔥 Get the job
+    const jobResult = await DB.prepare(`
+      SELECT 
+        j.id, j.title, j.description,
+        j.job_category, j.industry, j.employment_type, j.workplace_type,
+        j.education_level, j.experience_months, j.skills, j.benefits,
+        j.salary_min, j.salary_max, j.salary_currency,
+        j.street_address, j.city, j.region, j.postcode, j.canonical_url,
+        j.whatsapp_number, j.application_instructions,
+        r.name as role,
+        c.name as company, c.id as company_id, c.logo_url, c.website,
+        c.description as company_description,
+        j.location, j.apply_url, j.salary,
+        j.posted_at, j.expires_at, j.is_active
+      FROM jobs j
+      JOIN roles r ON j.role_id = r.id
+      JOIN companies c ON j.company_id = c.id
+      WHERE j.id = ?
+    `).bind(id).all();
+
+    if (jobResult.results.length === 0) {
+      return new Response(JSON.stringify({ error: 'Job not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      });
+    }
+
+    const job = jobResult.results[0] as any;
+
+    // 🔥 Get images
+    const imagesResult = await DB.prepare(
+      'SELECT url, thumbnail_url, name, type, seo_title, seo_description FROM job_images WHERE job_id = ? ORDER BY sort_order'
+    ).bind(job.id).all();
+    
+    const images = (imagesResult.results || []).map((img: any) => ({
+      url: img.url,
+      thumbnail: img.thumbnail_url || img.url,
+      name: img.name,
+      type: img.type || 'image',
+      seoTitle: img.seo_title || img.name || '',
+      seoDescription: img.seo_description || ''
+    }));
+
+    // 🔥 Get related jobs (same role or company, excluding current)
+    const relatedResult = await DB.prepare(`
+      SELECT 
+        j.id, j.title, r.name as role,
+        c.name as company, c.logo_url,
+        j.location, j.salary, j.salary_min, j.salary_max, j.salary_currency,
+        j.posted_at, j.expires_at, j.is_active
+      FROM jobs j
+      JOIN roles r ON j.role_id = r.id
+      JOIN companies c ON j.company_id = c.id
+      WHERE j.id != ? AND (r.name = ? OR c.name = ?) AND j.is_active = 1
+      ORDER BY j.posted_at DESC
+      LIMIT 6
+    `).bind(job.id, job.role, job.company).all();
+
+    const relatedJobs = relatedResult.results.map((rj: any) => {
+      const currencyCode = rj.salary_currency || 'TZS';
+      const currencyInfo = currenciesMap[currencyCode] || { symbol: currencyCode, name: currencyCode };
+      
+      return {
+        id: rj.id,
+        title: rj.title,
+        role: rj.role,
+        company: rj.company,
+        logoUrl: rj.logo_url || '',
+        location: rj.location || 'Remote',
+        salary: rj.salary || (rj.salary_min ? formatSalary(rj, currenciesMap) : ''),
+        slug: `${rj.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${rj.id}`,
+        active: rj.is_active === 1,
+        expiresAt: rj.expires_at
+      };
     });
+
+    const currencyCode = job.salary_currency || 'TZS';
+    const currencyInfo = currenciesMap[currencyCode] || { symbol: currencyCode, name: currencyCode };
+
+    return new Response(JSON.stringify({
+      id: job.id,
+      title: job.title,
+      description: job.description || '',
+      role: job.role,
+      company: job.company,
+      companyId: job.company_id,
+      logoUrl: job.logo_url || '',
+      companyWebsite: job.website || '',
+      companyDescription: job.company_description || '',
+      location: job.location || 'Remote',
+      url: job.apply_url,
+      salary: formatSalary(job, currenciesMap),
+      salary_min: job.salary_min,
+      salary_max: job.salary_max,
+      salary_currency: currencyCode,
+      salary_currency_symbol: currencyInfo.symbol,
+      salary_currency_name: currencyInfo.name,
+      salary_currency_flag: currencyInfo.flag || '',
+      job_category: job.job_category || 'Other',
+      industry: job.industry || '',
+      employment_type: job.employment_type || 'FULL_TIME',
+      workplace_type: job.workplace_type || 'Onsite',
+      education_level: job.education_level || 'Any',
+      experience_months: job.experience_months || 0,
+      skills: (() => { try { return JSON.parse(job.skills || '[]'); } catch { return []; } })(),
+      benefits: (() => { try { return JSON.parse(job.benefits || '[]'); } catch { return []; } })(),
+      street_address: job.street_address || '',
+      city: job.city || '',
+      region: job.region || '',
+      postcode: job.postcode || '',
+      canonical_url: job.canonical_url || '',
+      slug: `${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${job.id}`,
+      postedAt: job.posted_at,
+      expiresAt: job.expires_at,
+      active: job.is_active === 1,
+      whatsapp_number: job.whatsapp_number || '',
+      application_instructions: job.application_instructions || '',
+      images: images,
+      relatedJobs: relatedJobs
+    }), {
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+    });
+
   } catch (err) {
-    return new Response(JSON.stringify({ error: 'Update failed' }), {
+    return new Response(JSON.stringify({ error: 'Failed to load job' }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-};
-
-// DELETE /api/jobs/:id
-export const onRequestDelete: PagesFunction<Env> = async (context) => {
-  const { DB } = context.env;
-  const { id } = context.params;
-
-  try {
-    await DB.prepare('DELETE FROM jobs WHERE id = ?').bind(id).run();
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
-  } catch (err) {
-    return new Response(JSON.stringify({ error: 'Delete failed' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
   }
 };
