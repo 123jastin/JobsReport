@@ -18,17 +18,28 @@ export default function CategoryPage() {
   useEffect(() => {
     async function loadJobs() {
       setLoading(true);
+      setPage(1);
       try {
         const res = await fetch(`/api/market?limit=200`);
         if (res.ok) {
           const data = await res.json();
           const allJobs = data.jobs || data.activeJobs || [];
-          // Filter by category
+          
+          const searchCat = categoryName.toLowerCase().trim();
+          
           const filtered = allJobs.filter((j: any) => {
             if (j.active === false) return false;
-            const jobCat = (j.job_category || '').toLowerCase();
-            return jobCat.includes(categoryName.toLowerCase());
+            const jobCat = (j.job_category || '').toLowerCase().trim();
+            
+            // 🔥 Multiple matching strategies
+            return (
+              jobCat === searchCat ||                              // Exact match
+              jobCat.includes(searchCat) ||                        // Job cat contains search
+              searchCat.includes(jobCat) ||                        // Search contains job cat
+              jobCat.replace(/[^a-z0-9]/g, '') === searchCat.replace(/[^a-z0-9]/g, '')  // Alphanumeric match
+            );
           });
+          
           setJobs(filtered);
         }
       } catch (err) {} finally { setLoading(false); }
