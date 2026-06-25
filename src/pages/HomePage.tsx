@@ -147,7 +147,6 @@ export default function HomePage() {
         structuredData={[structuredData, organizationSchema]} />
 
       <div className="space-y-12">
-        {/* Hero Section */}
         <section className="py-8 md:py-16">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-3xl">
             <div className="flex items-center gap-2 text-blue-500 font-bold text-xs uppercase tracking-widest mb-6">
@@ -174,7 +173,6 @@ export default function HomePage() {
           </motion.div>
         </section>
 
-        {/* Job Categories */}
         <section>
           <div className="flex items-center justify-between mb-6">
             <div>
@@ -238,7 +236,6 @@ export default function HomePage() {
 
         <AdBanner key="home-ad-1" slot="4550717155" />
 
-        {/* Top 5 Jobs */}
         <section>
           <div className="flex items-center justify-between mb-6">
             <div>
@@ -261,7 +258,7 @@ export default function HomePage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {displayJobs.map((job: any) => (
-                <Link key={job.id} to={`/market/${job.slug || job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${job.id}`}
+                <Link key={job.id} to={`/market/${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${job.id}`}
                   className="block p-4 bg-white/[0.01] border border-white/5 rounded-2xl hover:bg-white/[0.03] transition-all group">
                   <div className="flex items-start gap-3">
                     <div className="w-10 h-10 rounded-xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
@@ -284,7 +281,6 @@ export default function HomePage() {
           )}
         </section>
 
-        {/* Top 3 Reports */}
         {topReports.length > 0 && (
           <section>
             <div className="flex items-center justify-between mb-6">
@@ -304,7 +300,6 @@ export default function HomePage() {
           </section>
         )}
 
-        {/* Explore Jobs by Country */}
         <section>
           <div className="flex items-center mb-6">
             <div>
@@ -333,7 +328,6 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Weekly Spotlight */}
         <section id="companies-section">
           <div className="p-8 rounded-3xl bg-white/[0.01] border border-white/10 relative overflow-hidden">
             <div className="relative z-10">
@@ -364,7 +358,6 @@ export default function HomePage() {
 
         <AdBanner key="home-ad-2" slot="1373889473" />
 
-        {/* Footer Links */}
         <section>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 p-6 rounded-3xl bg-white/[0.01] border border-white/5">
             <div>
