@@ -43,7 +43,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         r.name as role, c.name as company, c.logo_url, c.website,
         j.location, j.apply_url, j.salary, j.posted_at, j.expires_at, j.is_active
       FROM jobs j JOIN roles r ON j.role_id = r.id JOIN companies c ON j.company_id = c.id
-      WHERE LOWER(j.job_category) = LOWER(?) AND j.is_active = 1
+      WHERE LOWER(TRIM(j.job_category)) = LOWER(TRIM(?)) AND j.is_active = 1
       ORDER BY j.posted_at DESC
       LIMIT 100
     `).bind(category).all();
@@ -59,7 +59,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         salary_min: job.salary_min, salary_max: job.salary_max,
         salary_currency: cc, salary_currency_symbol: ci.symbol,
         salary_currency_name: ci.name, salary_currency_flag: ci.flag || '',
-        job_category: job.job_category || 'Other', employment_type: job.employment_type || 'FULL_TIME',
+        job_category: (job.job_category || 'Other').trim(), employment_type: job.employment_type || 'FULL_TIME',
         workplace_type: job.workplace_type || 'Onsite',
         whatsapp_number: job.whatsapp_number || '',
         application_instructions: job.application_instructions || '',
