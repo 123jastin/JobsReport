@@ -56,7 +56,8 @@ export default function App() {
                 <Route path="/companies/:companyName" element={<CompaniesPage />} />
                 <Route path="/companies" element={<CompaniesPage />} />
 
-                {/* 🎯 Category Pages - Standalone (won't affect MarketPage) */}
+                {/* 🎯 Category Pages - With optional country filter */}
+                <Route path="/category/:categorySlug/:countrySlug" element={<CategoryPage />} />
                 <Route path="/category/:categorySlug" element={<CategoryPage />} />
 
                 {/* 🎯 Role Pages - OLD (Keep for Google) */}
