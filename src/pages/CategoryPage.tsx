@@ -1,39 +1,60 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Building2, MapPin, Clock, ArrowLeft, Briefcase } from 'lucide-react';
+import { Building2, MapPin, Clock, ArrowLeft, Briefcase, Globe } from 'lucide-react';
 import SEO from '../components/SEO';
 import AdBanner from '../components/AdBanner';
 
 const JOBS_PER_PAGE = 10;
 
 export default function CategoryPage() {
-  const { categorySlug } = useParams<{ categorySlug: string }>();
+  const { categorySlug, countrySlug } = useParams<{ categorySlug: string; countrySlug?: string }>();
   const [jobs, setJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   
   const categoryName = categorySlug?.replace(/-/g, ' ') || '';
+  const countryName = countrySlug ? countrySlug.replace(/-/g, ' ') : '';
 
-useEffect(() => {
-  async function loadJobs() {
-    setLoading(true);
-    setPage(1);
-    try {
-      const res = await fetch(`/api/category-jobs?category=${encodeURIComponent(categoryName)}`);
-      if (res.ok) {
-        const data = await res.json();
-        setJobs(data.jobs || []);
-      }
-    } catch (err) {} finally { setLoading(false); }
-  }
-  if (categorySlug) loadJobs();
-}, [categorySlug]);
-  
-  
+  useEffect(() => {
+    async function loadJobs() {
+      setLoading(true);
+      setPage(1);
+      try {
+        const res = await fetch(`/api/category-jobs?category=${encodeURIComponent(categoryName)}`);
+        if (res.ok) {
+          const data = await res.json();
+          let filtered = data.jobs || [];
+          
+          if (countryName) {
+            filtered = filtered.filter((j: any) => {
+              const loc = (j.location || '').toLowerCase();
+              const ctry = countryName.toLowerCase();
+              return loc.includes(ctry);
+            });
+          }
+          
+          setJobs(filtered);
+        }
+      } catch (err) {} finally { setLoading(false); }
+    }
+    if (categorySlug) loadJobs();
+  }, [categorySlug, countrySlug]);
 
   const totalPages = Math.ceil(jobs.length / JOBS_PER_PAGE);
   const paginatedJobs = jobs.slice((page - 1) * JOBS_PER_PAGE, page * JOBS_PER_PAGE);
+
+  const seoTitle = countryName
+    ? `${categoryName} Jobs in ${countryName} | Browse ${categoryName} Vacancies ${countryName} | JobsReport`
+    : `${categoryName} Jobs | Browse ${categoryName} Vacancies | JobsReport`;
+
+  const seoDescription = countryName
+    ? `Browse ${jobs.length} ${categoryName.toLowerCase()} job listings in ${countryName}. Find the latest ${categoryName.toLowerCase()} vacancies and career opportunities in ${countryName} on JobsReport.`
+    : `Browse ${jobs.length} ${categoryName.toLowerCase()} job listings worldwide. Find the latest ${categoryName.toLowerCase()} vacancies and career opportunities on JobsReport.`;
+
+  const canonicalUrl = countryName
+    ? `https://jobsreport.online/category/${categorySlug}/${countrySlug}`
+    : `https://jobsreport.online/category/${categorySlug}`;
 
   if (loading) {
     return (
@@ -45,11 +66,8 @@ useEffect(() => {
 
   return (
     <>
-      <SEO
-        title={`${categoryName} Jobs | Browse ${categoryName} Vacancies | JobsReport`}
-        description={`Browse ${jobs.length} ${categoryName.toLowerCase()} job listings. Find the latest ${categoryName.toLowerCase()} vacancies and career opportunities on JobsReport.`}
-        canonicalUrl={`https://jobsreport.online/category/${categorySlug}`}
-      />
+      <SEO title={seoTitle} description={seoDescription} canonicalUrl={canonicalUrl}
+        ogTitle={seoTitle} ogDescription={seoDescription} ogUrl={canonicalUrl} />
 
       <div className="min-h-screen bg-black text-white space-y-6 pb-12">
         <div className="flex items-center gap-2 pt-6">
@@ -61,17 +79,50 @@ useEffect(() => {
 
         <div>
           <h1 className="text-3xl md:text-4xl font-black text-white uppercase tracking-wider">
-            {categoryName} Jobs
+            {countryName ? `${categoryName} Jobs in ${countryName}` : `${categoryName} Jobs`}
           </h1>
           <p className="text-gray-400 text-sm mt-2">
-            Browse {jobs.length} active {categoryName.toLowerCase()} job listings
+            {countryName 
+              ? `Browse ${jobs.length} ${categoryName.toLowerCase()} jobs in ${countryName}`
+              : `Browse ${jobs.length} ${categoryName.toLowerCase()} jobs worldwide`}
           </p>
+          
+          {/* Country quick filters */}
+          <div className="flex gap-2 mt-4 flex-wrap">
+            <Link to={`/category/${categorySlug}`}
+              className={`text-xs px-3 py-1.5 rounded-full font-bold uppercase tracking-wider transition-all ${!countryName ? 'bg-blue-600 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'}`}>
+              🌍 All
+            </Link>
+            {['Tanzania', 'Kenya', 'Uganda', 'Rwanda'].map(country => {
+              const cSlug = country.toLowerCase().replace(/\s+/g, '-');
+              const flag = country === 'Tanzania' ? '🇹🇿' : country === 'Kenya' ? '🇰🇪' : country === 'Uganda' ? '🇺🇬' : '🇷🇼';
+              return (
+                <Link key={country} to={`/category/${categorySlug}/${cSlug}`}
+                  className={`text-xs px-3 py-1.5 rounded-full font-bold uppercase tracking-wider transition-all ${countryName.toLowerCase() === country.toLowerCase() ? 'bg-emerald-600 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'}`}>
+                  {flag} {country}
+                </Link>
+              );
+            })}
+          </div>
         </div>
 
-        <AdBanner key={`cat-top-${categorySlug}`} slot="4550717155" />
+        <AdBanner key={`cat-top-${categorySlug}-${countrySlug || 'all'}`} slot="4550717155" />
 
         {jobs.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">No jobs found in this category.</div>
+          <div className="text-center py-12 text-gray-500">
+            <Globe size={32} className="text-gray-600 mx-auto mb-3" />
+            <p className="text-white font-bold text-sm">No jobs found</p>
+            <p className="text-xs mt-1">
+              {countryName 
+                ? `No ${categoryName.toLowerCase()} jobs available in ${countryName}.` 
+                : `No ${categoryName.toLowerCase()} jobs available.`}
+            </p>
+            {countryName && (
+              <Link to={`/category/${categorySlug}`} className="inline-block mt-3 text-blue-400 hover:text-blue-300 text-xs font-bold">
+                View all {categoryName} jobs worldwide →
+              </Link>
+            )}
+          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {paginatedJobs.map((job, idx) => (
@@ -113,7 +164,7 @@ useEffect(() => {
           </div>
         )}
 
-        <AdBanner key={`cat-bottom-${categorySlug}`} slot="1373889473" />
+        <AdBanner key={`cat-bottom-${categorySlug}-${countrySlug || 'all'}`} slot="1373889473" />
       </div>
     </>
   );
