@@ -17,6 +17,7 @@ import RegionPage from './pages/RegionPage';
 import ReportDetailPage from './pages/ReportDetailPage';
 import ReportsPage from './pages/ReportsPage';
 import MarketPage from './pages/MarketPage';
+import CategoryPage from './pages/CategoryPage';
 import JobDetailPage from './pages/JobDetailPage';
 import AdminPage from './pages/AdminPage';
 import AboutUsPage from './pages/AboutUsPage';
@@ -35,10 +36,7 @@ export default function App() {
       <CareerRedirectProvider>
         <AuthProvider>
           <Router>
-            {/* 🔥 GA pageview tracking on every route change */}
             <RouteTracker />
-            
-            {/* 🔥 Refresh vignette Auto Ads on every route change */}
             <AutoAdsRefresh />
             
             <Layout>
@@ -46,11 +44,11 @@ export default function App() {
                 {/* 🏠 Homepage */}
                 <Route path="/" element={<HomePage />} />
 
-                {/* 🌍 Country Pages - SEO Indexable */}
+                {/* 🌍 Country Pages */}
                 <Route path="/country/:slug" element={<CountryPage />} />
                 <Route path="/jobs-in/:slug" element={<CountryPage />} />
 
-                {/* 📍 Regions Pages - SEO Indexable */}
+                {/* 📍 Regions Pages */}
                 <Route path="/regions" element={<RegionsPage />} />
                 <Route path="/country/:countrySlug/region/:regionSlug" element={<RegionPage />} />
 
@@ -58,19 +56,19 @@ export default function App() {
                 <Route path="/companies/:companyName" element={<CompaniesPage />} />
                 <Route path="/companies" element={<CompaniesPage />} />
 
-                {/* 🎯 Category Pages - NEW (SEO Indexable) */}
-                <Route path="/category/:categorySlug" element={<MarketPage />} />
+                {/* 🎯 Category Pages - Standalone (won't affect MarketPage) */}
+                <Route path="/category/:categorySlug" element={<CategoryPage />} />
 
-                {/* 🎯 Role Pages - OLD (Keep for Google indexed URLs) */}
+                {/* 🎯 Role Pages - OLD (Keep for Google) */}
                 <Route path="/role/:roleSlug" element={<MarketPage />} />
 
-                {/* 📊 Market Routes — 🔥 ORDER MATTERS: specific routes BEFORE dynamic :jobId */}
+                {/* 📊 Market Routes */}
                 <Route path="/market/search/:query" element={<MarketPage />} />
                 <Route path="/market/page/:page" element={<MarketPage />} />
                 <Route path="/market/:jobId" element={<JobDetailPage />} />
                 <Route path="/market" element={<MarketPage />} />
 
-                {/* 📰 Reports - Country-specific indexable pages */}
+                {/* 📰 Reports */}
                 <Route path="/reports/:country" element={<ReportsPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
                 <Route path="/report/:slug" element={<ReportDetailPage />} />
@@ -91,7 +89,6 @@ export default function App() {
               </Routes>
             </Layout>
             
-            {/* 🔥 Manual sticky bottom anchor ad — Slot 6727401898 */}
             <AnchorAd />
           </Router>
         </AuthProvider>
