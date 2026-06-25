@@ -1,3 +1,4 @@
+
 import { PagesFunction } from '@cloudflare/workers-types';
 
 type Env = {
@@ -10,12 +11,12 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   try {
     const result = await DB.prepare(`
       SELECT 
-        job_category as name,
+        TRIM(job_category) as name,
         COUNT(*) as count,
         SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) as active_count
       FROM jobs 
-      WHERE job_category != '' AND job_category != 'Other'
-      GROUP BY job_category
+      WHERE TRIM(job_category) != '' AND TRIM(job_category) != 'Other'
+      GROUP BY TRIM(job_category)
       ORDER BY active_count DESC
     `).all();
 
