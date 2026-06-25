@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Building2, MapPin, ArrowLeft, Briefcase, Globe } from 'lucide-react';
 import SEO from '../components/SEO';
@@ -9,14 +9,31 @@ import { useCountry } from '../context/CountryContext';
 const JOBS_PER_PAGE = 10;
 
 export default function CategoryPage() {
-  const { categorySlug } = useParams<{ categorySlug: string }>();
+  const { categorySlug, countrySlug } = useParams<{ categorySlug: string; countrySlug?: string }>();
   const { selectedCountry } = useCountry();
+  const navigate = useNavigate();
   const [jobs, setJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   
   const categoryName = categorySlug?.replace(/-/g, ' ') || '';
-  const isWorldwide = selectedCountry === 'Worldwide';
+  
+  // Country from URL takes priority, otherwise use selected country
+  const countryName = countrySlug 
+    ? countrySlug.replace(/-/g, ' ') 
+    : (selectedCountry !== 'Worldwide' ? selectedCountry : '');
+  
+  const isWorldwide = !countryName;
+
+  // When user changes country in header, update URL
+  useEffect(() => {
+    if (selectedCountry !== 'Worldwide' && !countrySlug) {
+      const countrySlugParam = selectedCountry.toLowerCase().replace(/\s+/g, '-');
+      navigate(`/category/${categorySlug}/${countrySlugParam}`, { replace: true });
+    } else if (selectedCountry === 'Worldwide' && countrySlug) {
+      navigate(`/category/${categorySlug}`, { replace: true });
+    }
+  }, [selectedCountry, categorySlug, countrySlug]);
 
   useEffect(() => {
     async function loadJobs() {
@@ -28,11 +45,10 @@ export default function CategoryPage() {
           const data = await res.json();
           let filtered = data.jobs || [];
           
-          // Filter by selected country
           if (!isWorldwide) {
             filtered = filtered.filter((j: any) => {
               const loc = (j.location || '').toLowerCase();
-              const ctry = selectedCountry.toLowerCase();
+              const ctry = countryName.toLowerCase();
               return loc.includes(ctry);
             });
           }
@@ -42,20 +58,22 @@ export default function CategoryPage() {
       } catch (err) {} finally { setLoading(false); }
     }
     if (categorySlug) loadJobs();
-  }, [categorySlug, selectedCountry]);
+  }, [categorySlug, countryName]);
 
   const totalPages = Math.ceil(jobs.length / JOBS_PER_PAGE);
   const paginatedJobs = jobs.slice((page - 1) * JOBS_PER_PAGE, page * JOBS_PER_PAGE);
 
   const seoTitle = isWorldwide
     ? `${categoryName} Jobs | Browse ${categoryName} Vacancies | JobsReport`
-    : `${categoryName} Jobs in ${selectedCountry} | Browse ${categoryName} Vacancies ${selectedCountry} | JobsReport`;
+    : `${categoryName} Jobs in ${countryName} | Browse ${categoryName} Vacancies ${countryName} | JobsReport`;
 
   const seoDescription = isWorldwide
     ? `Browse ${jobs.length} ${categoryName.toLowerCase()} job listings worldwide.`
-    : `Browse ${jobs.length} ${categoryName.toLowerCase()} job listings in ${selectedCountry}. Find the latest ${categoryName.toLowerCase()} vacancies and career opportunities in ${selectedCountry} on JobsReport.`;
+    : `Browse ${jobs.length} ${categoryName.toLowerCase()} job listings in ${countryName}. Find the latest ${categoryName.toLowerCase()} vacancies and career opportunities in ${countryName} on JobsReport.`;
 
-  const canonicalUrl = `https://jobsreport.online/category/${categorySlug}`;
+  const canonicalUrl = countrySlug
+    ? `https://jobsreport.online/category/${categorySlug}/${countrySlug}`
+    : `https://jobsreport.online/category/${categorySlug}`;
 
   if (loading) {
     return (
@@ -80,16 +98,16 @@ export default function CategoryPage() {
 
         <div>
           <h1 className="text-3xl md:text-4xl font-black text-white uppercase tracking-wider">
-            {isWorldwide ? `${categoryName} Jobs` : `${categoryName} Jobs in ${selectedCountry}`}
+            {isWorldwide ? `${categoryName} Jobs` : `${categoryName} Jobs in ${countryName}`}
           </h1>
           <p className="text-gray-400 text-sm mt-2">
             {isWorldwide 
               ? `Browse ${jobs.length} ${categoryName.toLowerCase()} jobs worldwide`
-              : `Browse ${jobs.length} ${categoryName.toLowerCase()} jobs in ${selectedCountry}`}
+              : `Browse ${jobs.length} ${categoryName.toLowerCase()} jobs in ${countryName}`}
           </p>
         </div>
 
-        <AdBanner key={`cat-top-${categorySlug}-${selectedCountry}`} slot="4550717155" />
+        <AdBanner key={`cat-top-${categorySlug}-${countrySlug || 'all'}`} slot="4550717155" />
 
         {jobs.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
@@ -98,7 +116,7 @@ export default function CategoryPage() {
             <p className="text-xs mt-1">
               {isWorldwide 
                 ? `No ${categoryName.toLowerCase()} jobs available.` 
-                : `No ${categoryName.toLowerCase()} jobs available in ${selectedCountry}.`}
+                : `No ${categoryName.toLowerCase()} jobs available in ${countryName}.`}
             </p>
           </div>
         ) : (
@@ -142,7 +160,7 @@ export default function CategoryPage() {
           </div>
         )}
 
-        <AdBanner key={`cat-bottom-${categorySlug}-${selectedCountry}`} slot="1373889473" />
+        <AdBanner key={`cat-bottom-${categorySlug}-${countrySlug || 'all'}`} slot="1373889473" />
       </div>
     </>
   );
