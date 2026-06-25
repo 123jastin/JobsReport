@@ -21,7 +21,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
     const categories = result.results.map((c: any) => ({
       name: c.name,
-      slug: c.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/\s+/g, '-'),
+      slug: c.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, ''),
       count: c.count,
       activeCount: c.active_count
     }));
