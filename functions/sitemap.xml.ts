@@ -29,9 +29,29 @@ export const onRequestGet = async (context: any) => {
     }
   } catch (err) {}
 
+  // ========== CATEGORY PAGES ==========
+  try {
+    const { results } = await DB.prepare(`
+      SELECT DISTINCT job_category as name FROM jobs 
+      WHERE job_category != '' AND job_category != 'Other' AND is_active = 1
+    `).all();
+    
+    const countries = ['tanzania', 'kenya', 'uganda', 'rwanda'];
+    
+    for (const cat of results || []) {
+      const slug = (cat.name as string).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+      
+      urls.push(`<url><loc>${baseUrl}/category/${slug}</loc><changefreq>daily</changefreq><priority>0.8</priority></url>`);
+      
+      for (const country of countries) {
+        urls.push(`<url><loc>${baseUrl}/category/${slug}/${country}</loc><changefreq>daily</changefreq><priority>0.8</priority></url>`);
+      }
+    }
+  } catch (err) {}
+
   // ========== JOB PAGES ==========
   try {
-    const { results } = await DB.prepare(`SELECT id, title FROM jobs`).all();
+    const { results } = await DB.prepare(`SELECT id, title FROM jobs WHERE is_active = 1`).all();
     for (const job of results || []) {
       const slug = (job.title as string).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
       urls.push(`<url><loc>${baseUrl}/market/${slug}-${job.id}</loc><changefreq>daily</changefreq><priority>0.7</priority></url>`);
