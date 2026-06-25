@@ -55,22 +55,33 @@ export default function RegionsPage() {
               loc.country.toLowerCase() === selectedCountry.toLowerCase()
             );
 
-        const regionsWithJobs: RegionData[] = filteredLocations.map(loc => {
-          const locationName = loc.name.toLowerCase();
-          const regionName = loc.region?.toLowerCase() || '';
+        // Remove duplicates by grouping on unique region name
+        const uniqueRegions = new Map<string, { name: string; country: string; countrySlug: string }>();
+        filteredLocations.forEach(loc => {
+          const key = loc.name.toLowerCase().trim();
+          if (!uniqueRegions.has(key)) {
+            uniqueRegions.set(key, {
+              name: loc.name,
+              country: loc.country,
+              countrySlug: (loc.country || '').toLowerCase().replace(/\s+/g, '-')
+            });
+          }
+        });
+
+        const regionsWithJobs: RegionData[] = Array.from(uniqueRegions.values()).map(region => {
+          const regionName = region.name.toLowerCase();
           
           const matchingJobs = jobs.filter((job: any) => {
             if (!job.location) return false;
             const jobLoc = job.location.toLowerCase();
-            return jobLoc.includes(locationName) || 
-                   (regionName && jobLoc.includes(regionName));
+            return jobLoc.includes(regionName);
           });
 
           return {
-            name: loc.name,
-            slug: loc.name.toLowerCase().replace(/\s+/g, '-'),
-            country: loc.country,
-            countrySlug: loc.country.toLowerCase().replace(/\s+/g, '-'),
+            name: region.name,
+            slug: region.name.toLowerCase().replace(/\s+/g, '-'),
+            country: region.country,
+            countrySlug: region.countrySlug,
             jobCount: matchingJobs.length,
             activeJobs: matchingJobs.filter((j: any) => j.active !== false).length
           };
@@ -83,9 +94,7 @@ export default function RegionsPage() {
         });
 
         setRegions(sorted);
-      } catch (err) {
-        console.error('Failed to load regions:', err);
-      } finally {
+      } catch (err) {} finally {
         setLoading(false);
       }
     };
@@ -144,54 +153,30 @@ export default function RegionsPage() {
     }
   };
 
-  // 🔥 In-Feed Ad #1
   const InFeedAd1 = ({ index }: { index: number }) => (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="p-4 rounded-2xl border border-white/5"
-      style={{ background: 'transparent' }}
-    >
-      <ins className="adsbygoogle"
-        style={{ display: 'block', background: 'transparent' }}
-        data-ad-format="fluid"
-        data-ad-layout-key="-h0-1a+31-4t+7z"
-        data-ad-client="ca-pub-8155064094205693"
-        data-ad-slot="1805968460" />
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+      className="p-4 rounded-2xl border border-white/5" style={{ background: 'transparent' }}>
+      <ins className="adsbygoogle" style={{ display: 'block', background: 'transparent' }}
+        data-ad-format="fluid" data-ad-layout-key="-h0-1a+31-4t+7z"
+        data-ad-client="ca-pub-8155064094205693" data-ad-slot="1805968460" />
     </motion.div>
   );
 
-  // 🔥 In-Feed Ad #2
   const InFeedAd2 = ({ index }: { index: number }) => (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="p-4 rounded-2xl border border-white/5"
-      style={{ background: 'transparent' }}
-    >
-      <ins className="adsbygoogle"
-        style={{ display: 'block', background: 'transparent' }}
-        data-ad-format="fluid"
-        data-ad-layout-key="-gh-1o+14-67+ka"
-        data-ad-client="ca-pub-8155064094205693"
-        data-ad-slot="9872160747" />
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+      className="p-4 rounded-2xl border border-white/5" style={{ background: 'transparent' }}>
+      <ins className="adsbygoogle" style={{ display: 'block', background: 'transparent' }}
+        data-ad-format="fluid" data-ad-layout-key="-gh-1o+14-67+ka"
+        data-ad-client="ca-pub-8155064094205693" data-ad-slot="9872160747" />
     </motion.div>
   );
 
-  // 🔥 In-Feed Ad #3
   const InFeedAd3 = ({ index }: { index: number }) => (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="p-4 rounded-2xl border border-white/5"
-      style={{ background: 'transparent' }}
-    >
-      <ins className="adsbygoogle"
-        style={{ display: 'block', background: 'transparent' }}
-        data-ad-format="fluid"
-        data-ad-layout-key="-gm-l+1-46+ex"
-        data-ad-client="ca-pub-8155064094205693"
-        data-ad-slot="5598749525" />
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+      className="p-4 rounded-2xl border border-white/5" style={{ background: 'transparent' }}>
+      <ins className="adsbygoogle" style={{ display: 'block', background: 'transparent' }}
+        data-ad-format="fluid" data-ad-layout-key="-gm-l+1-46+ex"
+        data-ad-client="ca-pub-8155064094205693" data-ad-slot="5598749525" />
     </motion.div>
   );
 
@@ -208,163 +193,102 @@ export default function RegionsPage() {
 
   return (
     <>
-      <SEO
-        title={pageTitle}
-        description={pageDescription}
+      <SEO title={pageTitle} description={pageDescription}
         keywords={selectedCountry === 'Worldwide'
           ? 'jobs by region, jobs by city, regional jobs, local jobs, find jobs near me'
           : `jobs in ${selectedCountry} regions, ${selectedCountry} cities jobs, regional jobs ${selectedCountry}`}
         canonicalUrl="https://jobsreport.online/regions"
-        ogTitle={pageTitle}
-        ogDescription={pageDescription}
-        ogUrl="https://jobsreport.online/regions"
-        structuredData={structuredData}
-      />
+        ogTitle={pageTitle} ogDescription={pageDescription} ogUrl="https://jobsreport.online/regions"
+        structuredData={structuredData} />
 
       <div className="min-h-screen space-y-8 pt-8">
-        {/* Header */}
         <div>
           <div className="flex items-center gap-2 text-amber-500 font-bold text-xs uppercase tracking-widest mb-4">
-            <MapPin size={14} />
-            <span>Regional Job Explorer</span>
+            <MapPin size={14} /><span>Regional Job Explorer</span>
           </div>
           <h1 className="text-4xl md:text-6xl font-black text-white mb-4 leading-tight tracking-tighter">
-            {selectedCountry === 'Worldwide' 
-              ? 'Jobs by City & Region'
-              : `Jobs by Region in ${selectedCountry}`}
+            {selectedCountry === 'Worldwide' ? 'Jobs by City & Region' : `Jobs by Region in ${selectedCountry}`}
           </h1>
           <p className="text-gray-400 text-lg max-w-2xl">
             {selectedCountry === 'Worldwide'
               ? `Browse job opportunities across ${locationsWithJobs} cities and regions worldwide. ${totalActiveJobs} active jobs available.`
               : `Browse job opportunities across ${locationsWithJobs} regions in ${selectedCountry}. ${totalActiveJobs} active jobs available.`}
           </p>
-          
           <div className="flex flex-wrap gap-6 mt-6">
-            <div className="flex items-center gap-2 text-sm">
-              <MapPin size={16} className="text-amber-500" />
-              <span className="text-gray-400"><span className="text-white font-bold">{locationsWithJobs}</span> Active Regions</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <Briefcase size={16} className="text-blue-500" />
-              <span className="text-gray-400"><span className="text-white font-bold">{totalActiveJobs}</span> Active Jobs</span>
-            </div>
-            {totalLocations > locationsWithJobs && (
-              <div className="flex items-center gap-2 text-sm">
-                <Globe size={16} className="text-gray-500" />
-                <span className="text-gray-500"><span className="text-white font-bold">{totalLocations}</span> Total Locations</span>
-              </div>
-            )}
+            <div className="flex items-center gap-2 text-sm"><MapPin size={16} className="text-amber-500" /><span className="text-gray-400"><span className="text-white font-bold">{locationsWithJobs}</span> Active Regions</span></div>
+            <div className="flex items-center gap-2 text-sm"><Briefcase size={16} className="text-blue-500" /><span className="text-gray-400"><span className="text-white font-bold">{totalActiveJobs}</span> Active Jobs</span></div>
+            {totalLocations > locationsWithJobs && <div className="flex items-center gap-2 text-sm"><Globe size={16} className="text-gray-500" /><span className="text-gray-500"><span className="text-white font-bold">{totalLocations}</span> Total Locations</span></div>}
           </div>
         </div>
 
-        {/* 🔥 Top Display Ad */}
         <AdBanner key="regions-top" slot="4550717155" />
 
-        {/* Search */}
         <div className="relative">
           <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder={selectedCountry === 'Worldwide' 
-              ? `Search ${locationsWithJobs} cities or countries...` 
-              : `Search ${locationsWithJobs} regions in ${selectedCountry}...`}
-            className="w-full bg-white/[0.02] border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white text-sm focus:outline-none focus:border-amber-500/50 transition-colors"
-          />
+          <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder={selectedCountry === 'Worldwide' ? `Search ${locationsWithJobs} cities or countries...` : `Search ${locationsWithJobs} regions in ${selectedCountry}...`}
+            className="w-full bg-white/[0.02] border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white text-sm focus:outline-none focus:border-amber-500/50 transition-colors" />
         </div>
 
-        {/* No results */}
         {filteredRegions.length === 0 && (
           <div className="text-center py-16">
             <MapPin size={48} className="text-gray-600 mx-auto mb-4" />
             <h3 className="text-lg font-bold text-white mb-2">No Regions Found</h3>
-            <p className="text-gray-500 text-sm">
-              {searchTerm 
-                ? 'No regions match your search. Try different keywords.'
-                : selectedCountry === 'Worldwide'
-                  ? 'No locations have been added yet. Add locations via the admin panel.'
-                  : `No locations found for ${selectedCountry}.`}
-            </p>
+            <p className="text-gray-500 text-sm">{searchTerm ? 'No regions match your search.' : 'No locations available.'}</p>
           </div>
         )}
 
-        {/* Worldwide View - Grouped by Country with In-Feed Ads */}
         {selectedCountry === 'Worldwide' && groupedByCountry && Object.keys(groupedByCountry).length > 0 && (
           <div className="space-y-12">
-            {Object.entries(groupedByCountry)
-              .sort(([, a], [, b]) => 
-                b.reduce((sum, r) => sum + r.jobCount, 0) - a.reduce((sum, r) => sum + r.jobCount, 0)
-              )
-              .map(([country, countryRegions]) => (
-                <section key={country}>
-                  <div className="flex items-center gap-3 mb-4">
-                    <Globe size={18} className="text-blue-400" />
-                    <h2 className="text-lg font-bold text-white uppercase tracking-widest">{country}</h2>
-                    <span className="text-[10px] text-gray-500 font-mono">{countryRegions.length} region{countryRegions.length > 1 ? 's' : ''}</span>
-                    <Link to={`/country/${countryRegions[0]?.countrySlug}`} className="text-[10px] text-blue-500 hover:text-blue-400 font-bold uppercase tracking-wider ml-auto">View Country →</Link>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {countryRegions.map((region, idx: number) => {
-                      const elements = [];
-                      elements.push(
-                        <Link
-                          key={region.slug}
-                          to={`/country/${region.countrySlug}/region/${region.slug}`}
-                          className="group p-4 rounded-2xl bg-white/[0.01] border border-white/5 hover:bg-white/[0.03] hover:border-amber-500/30 transition-all"
-                        >
-                          <div className="flex items-start justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              <MapPin size={14} className="text-amber-500" />
-                              <h3 className="text-sm font-bold text-white group-hover:text-amber-400 transition-colors">{region.name}</h3>
-                            </div>
-                            <ArrowRight size={14} className="text-gray-600 group-hover:text-amber-400 group-hover:translate-x-1 transition-all" />
-                          </div>
-                          <div className="flex items-center gap-3 text-[10px] text-gray-500">
-                            <span className="flex items-center gap-1"><Briefcase size={10} /><span className="text-white font-bold">{region.activeJobs}</span> active job{region.activeJobs !== 1 ? 's' : ''}</span>
-                            {region.jobCount > region.activeJobs && <span className="text-gray-600">({region.jobCount} total)</span>}
-                          </div>
-                        </Link>
-                      );
-                      
-                      // 🔥 Add alternating in-feed ads every 3 regions
-                      if ((idx + 1) % 3 === 0 && idx < countryRegions.length - 1) {
-                        const adNumber = Math.floor((idx + 1) / 3);
-                        const remainder = adNumber % 3;
-                        elements.push(
-                          remainder === 1 ? <InFeedAd1 key={`ad1-${country}-${idx}`} index={idx} /> :
-                          remainder === 2 ? <InFeedAd2 key={`ad2-${country}-${idx}`} index={idx} /> :
-                          <InFeedAd3 key={`ad3-${country}-${idx}`} index={idx} />
-                        );
-                      }
-                      
-                      return elements;
-                    }).flat()}
-                  </div>
-                </section>
-              ))}
+            {Object.entries(groupedByCountry).sort(([, a], [, b]) => 
+              b.reduce((sum, r) => sum + r.jobCount, 0) - a.reduce((sum, r) => sum + r.jobCount, 0)
+            ).map(([country, countryRegions]) => (
+              <section key={country}>
+                <div className="flex items-center gap-3 mb-4">
+                  <Globe size={18} className="text-blue-400" />
+                  <h2 className="text-lg font-bold text-white uppercase tracking-widest">{country}</h2>
+                  <span className="text-[10px] text-gray-500 font-mono">{countryRegions.length} region{countryRegions.length > 1 ? 's' : ''}</span>
+                  <Link to={`/country/${countryRegions[0]?.countrySlug}`} className="text-[10px] text-blue-500 hover:text-blue-400 font-bold uppercase tracking-wider ml-auto">View Country →</Link>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {countryRegions.map((region, idx: number) => {
+                    const elements = [];
+                    elements.push(
+                      <Link key={region.slug} to={`/country/${region.countrySlug}/region/${region.slug}`}
+                        className="group p-4 rounded-2xl bg-white/[0.01] border border-white/5 hover:bg-white/[0.03] hover:border-amber-500/30 transition-all">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2"><MapPin size={14} className="text-amber-500" /><h3 className="text-sm font-bold text-white group-hover:text-amber-400 transition-colors">{region.name}</h3></div>
+                          <ArrowRight size={14} className="text-gray-600 group-hover:text-amber-400 group-hover:translate-x-1 transition-all" />
+                        </div>
+                        <div className="flex items-center gap-3 text-[10px] text-gray-500">
+                          <span className="flex items-center gap-1"><Briefcase size={10} /><span className="text-white font-bold">{region.activeJobs}</span> active job{region.activeJobs !== 1 ? 's' : ''}</span>
+                          {region.jobCount > region.activeJobs && <span className="text-gray-600">({region.jobCount} total)</span>}
+                        </div>
+                      </Link>
+                    );
+                    if ((idx + 1) % 3 === 0 && idx < countryRegions.length - 1) {
+                      const adNum = Math.floor((idx + 1) / 3) % 3;
+                      elements.push(adNum === 1 ? <InFeedAd1 key={`ad1-${country}-${idx}`} index={idx} /> : adNum === 2 ? <InFeedAd2 key={`ad2-${country}-${idx}`} index={idx} /> : <InFeedAd3 key={`ad3-${country}-${idx}`} index={idx} />);
+                    }
+                    return elements;
+                  }).flat()}
+                </div>
+              </section>
+            ))}
           </div>
         )}
 
-        {/* Single Country View with In-Feed Ads */}
         {selectedCountry !== 'Worldwide' && regionsWithJobs.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {regionsWithJobs.map((region, idx: number) => {
               const elements = [];
               elements.push(
-                <Link
-                  key={region.slug}
-                  to={`/country/${region.countrySlug}/region/${region.slug}`}
-                  className="group p-5 rounded-2xl bg-white/[0.01] border border-white/5 hover:bg-white/[0.03] hover:border-amber-500/30 transition-all"
-                >
+                <Link key={region.slug} to={`/country/${region.countrySlug}/region/${region.slug}`}
+                  className="group p-5 rounded-2xl bg-white/[0.01] border border-white/5 hover:bg-white/[0.03] hover:border-amber-500/30 transition-all">
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center"><MapPin size={18} className="text-amber-400" /></div>
-                      <div>
-                        <h3 className="text-sm font-bold text-white group-hover:text-amber-400 transition-colors">{region.name}</h3>
-                        <span className="text-[10px] text-gray-500 font-mono">{region.country}</span>
-                      </div>
+                      <div><h3 className="text-sm font-bold text-white group-hover:text-amber-400 transition-colors">{region.name}</h3><span className="text-[10px] text-gray-500 font-mono">{region.country}</span></div>
                     </div>
                     <ArrowRight size={16} className="text-gray-600 group-hover:text-amber-400 group-hover:translate-x-1 transition-all" />
                   </div>
@@ -374,24 +298,15 @@ export default function RegionsPage() {
                   </div>
                 </Link>
               );
-              
-              // 🔥 Add alternating in-feed ads every 3 regions
               if ((idx + 1) % 3 === 0 && idx < regionsWithJobs.length - 1) {
-                const adNumber = Math.floor((idx + 1) / 3);
-                const remainder = adNumber % 3;
-                elements.push(
-                  remainder === 1 ? <InFeedAd1 key={`ad1-${idx}`} index={idx} /> :
-                  remainder === 2 ? <InFeedAd2 key={`ad2-${idx}`} index={idx} /> :
-                  <InFeedAd3 key={`ad3-${idx}`} index={idx} />
-                );
+                const adNum = Math.floor((idx + 1) / 3) % 3;
+                elements.push(adNum === 1 ? <InFeedAd1 key={`ad1-${idx}`} index={idx} /> : adNum === 2 ? <InFeedAd2 key={`ad2-${idx}`} index={idx} /> : <InFeedAd3 key={`ad3-${idx}`} index={idx} />);
               }
-              
               return elements;
             }).flat()}
           </div>
         )}
 
-        {/* Regions without jobs */}
         {regionsWithoutJobs.length > 0 && (
           <section>
             <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -407,7 +322,6 @@ export default function RegionsPage() {
           </section>
         )}
 
-        {/* No regions with jobs */}
         {selectedCountry !== 'Worldwide' && regionsWithJobs.length === 0 && filteredRegions.length > 0 && (
           <div className="text-center py-16">
             <MapPin size={48} className="text-gray-600 mx-auto mb-4" />
@@ -417,7 +331,6 @@ export default function RegionsPage() {
           </div>
         )}
 
-        {/* 🔥 Footer Display Ad */}
         <AdBanner key="regions-footer" slot="5466053430" />
       </div>
     </>
