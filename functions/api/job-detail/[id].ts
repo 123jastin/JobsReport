@@ -34,6 +34,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       SELECT j.id, j.title, j.description, j.job_category, j.industry, j.employment_type, j.workplace_type,
         j.education_level, j.experience_months, j.skills, j.benefits, j.salary_min, j.salary_max, j.salary_currency,
         j.street_address, j.city, j.region, j.postcode, j.canonical_url, j.whatsapp_number, j.application_instructions,
+        j.country,
         r.name as role, c.name as company, c.logo_url, c.website,
         j.location, j.apply_url, j.salary, j.posted_at, j.expires_at, j.is_active
       FROM jobs j JOIN roles r ON j.role_id = r.id JOIN companies c ON j.company_id = c.id
@@ -49,7 +50,6 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
     const job = jobResult.results[0] as any;
 
-    // 🔥 GET IMAGES with SEO-optimized naming
     const imagesResult = await DB.prepare(
       'SELECT url, thumbnail_url, name, type, seo_title, seo_description FROM job_images WHERE job_id = ? ORDER BY sort_order'
     ).bind(job.id).all();
@@ -81,7 +81,6 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       };
     });
 
-    // 🔥 GET RELATED JOBS
     const relatedResult = await DB.prepare(`
       SELECT j.id, j.title, r.name as role, c.name as company, c.logo_url, j.location,
         j.salary, j.salary_min, j.salary_max, j.salary_currency, j.posted_at, j.expires_at, j.is_active
@@ -116,6 +115,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       job_category: job.job_category || 'Other', employment_type: job.employment_type || 'FULL_TIME',
       workplace_type: job.workplace_type || 'Onsite', street_address: job.street_address || '',
       city: job.city || '', region: job.region || '', postcode: job.postcode || '',
+      country: job.country || 'Tanzania',
       slug: `${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${job.id}`,
       postedAt: job.posted_at, expiresAt: job.expires_at, active: job.is_active === 1,
       whatsapp_number: job.whatsapp_number || '', application_instructions: job.application_instructions || '',
