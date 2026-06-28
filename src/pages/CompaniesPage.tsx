@@ -213,7 +213,6 @@ export default function CompaniesPage() {
               ← Back to All Companies
             </button>
 
-            {/* Company Header */}
             <div className="p-8 bg-white/[0.01] border border-white/10 rounded-3xl">
               <div className="flex flex-col md:flex-row items-start gap-6">
                 <div className="w-20 h-20 rounded-2xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
@@ -242,7 +241,6 @@ export default function CompaniesPage() {
               </div>
             </div>
 
-            {/* Company Details Grid - from first job's company data */}
             {jobs.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {(jobs[0].companyStreetAddress || jobs[0].companyArea || jobs[0].companyLocality || 
@@ -331,7 +329,6 @@ export default function CompaniesPage() {
               </div>
             )}
 
-            {/* Company Description */}
             {jobs.length > 0 && jobs[0].companyDescription && (
               <div className="p-6 bg-white/[0.01] border border-white/10 rounded-3xl">
                 <h3 className="text-xs font-extrabold text-amber-400 uppercase tracking-widest flex items-center gap-2 mb-3">
@@ -343,7 +340,6 @@ export default function CompaniesPage() {
 
             <AdBanner key={`company-${selectedCompany.id}`} slot="1373889473" />
 
-            {/* Company Jobs */}
             <div>
               <h3 className="text-lg font-bold text-white uppercase tracking-widest mb-4 flex items-center gap-3">
                 <div className="w-1.5 h-6 bg-blue-500"></div>
@@ -355,7 +351,7 @@ export default function CompaniesPage() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {jobs.map((job) => (
-                    <Link key={job.id} to={`/market/${job.slug || job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${job.id}`}
+                    <Link key={job.id} to={`/market/${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')}-${job.id}`}
                       className={`block p-5 rounded-2xl border transition-all group ${job.active ? 'bg-white/[0.01] border-white/5 hover:bg-white/[0.03] hover:border-blue-500/30' : 'opacity-60'}`}>
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center gap-2">
