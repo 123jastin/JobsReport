@@ -1,3 +1,4 @@
+
 import { PagesFunction } from '@cloudflare/workers-types';
 
 type Env = {
