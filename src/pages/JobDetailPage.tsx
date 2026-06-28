@@ -26,6 +26,13 @@ export default function JobDetailPage() {
     (job.expiresAt && new Date(job.expiresAt) < new Date())
   ) : false;
 
+  const getCountryCode = (country: string): string => {
+    if (!country) return 'TZ';
+    const lower = country.toLowerCase().trim();
+    if (lower === 'tanzania' || lower === 'tz') return 'TZ';
+    return country;
+  };
+
 useEffect(() => {
   async function loadJob() {
     try {
@@ -120,7 +127,7 @@ useEffect(() => {
     "validThrough": job.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     "employmentType": job.employment_type || 'FULL_TIME',
     "hiringOrganization": { "@type": "Organization", "name": job.company, "sameAs": job.companyWebsite || '', "logo": job.logoUrl || '' },
-    "jobLocation": { "@type": "Place", "address": { "@type": "PostalAddress", "streetAddress": job.street_address || '', "addressLocality": job.city || job.location || '', "addressRegion": job.region || '', "addressCountry": job.country || "TZ", "postalCode": job.postcode || '' } },
+    "jobLocation": { "@type": "Place", "address": { "@type": "PostalAddress", "streetAddress": job.street_address || '', "addressLocality": job.city || job.location || '', "addressRegion": job.region || '', "addressCountry": getCountryCode(job.country || "TZ"), "postalCode": job.postcode || '' } },
     "baseSalary": (job.salary_min || job.salary_max) ? { "@type": "MonetaryAmount", "currency": (job.salary_currency || 'TZS').toUpperCase(), "value": { "@type": "QuantitativeValue", "minValue": Number(job.salary_min || job.salary_max), "maxValue": Number(job.salary_max || job.salary_min), "unitText": "MONTH" } } : undefined,
     "educationRequirements": (job.education_level && job.education_level !== 'Any') ? { "@type": "EducationalOccupationalCredential", "credentialCategory": job.education_level } : undefined,
     "experienceRequirements": job.experience_months > 0 ? { "@type": "OccupationalExperienceRequirements", "monthsOfExperience": Number(job.experience_months) } : undefined,
