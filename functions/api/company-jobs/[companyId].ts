@@ -92,7 +92,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         experience_months: job.experience_months || 0,
         skills: (() => { try { return JSON.parse(job.skills || '[]'); } catch { return []; } })(),
         benefits: (() => { try { return JSON.parse(job.benefits || '[]'); } catch { return []; } })(),
-        slug: `${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${job.id}`,
+        slug: `${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')}-${job.id}`,
         postedAt: job.posted_at,
         expiresAt: job.expires_at,
         active: job.is_active === 1,
