@@ -265,45 +265,35 @@ export default function AdminPage() {
 
   // ✅ AUTO-FILL LOCATION FROM COMPANY
   const handleAutoFillLocationFromCompany = (companyName: string) => {
-  const company = companiesState.find(c => c.name === companyName);
-  if (!company) {
-    showFeedback('error', `Company "${companyName}" not found in catalog`);
-    return;
-  }
-
-  // Get the country code from the company (e.g., "TZ", "KE", "US")
-  const companyCountryCode = (company as any).country || 'TZ';
-  
-  // Find the country in the countries array to get currency
-  const countryData = countries.find(c => c.code === companyCountryCode);
-  const currency = countryData?.currency || 'TZS';
-
-  setSchemaData(prev => ({
-    ...prev,
-    street_address: (company as any).streetAddress || prev.street_address,
-    city: (company as any).locality || prev.city,
-    region: (company as any).district || prev.region,
-    country: (company as any).country === 'TZ' ? 'Tanzania' : 
-             (company as any).country || prev.country,
-    postcode: (company as any).postalCode || prev.postcode,
-    industry: (company as any).industry || prev.industry,
-    // ✅ Auto-set currency based on company's country
-    salary_currency: currency,
-  }));
-
-  // Also auto-fill location field if empty
-  if (!jobForm.location) {
-    const locationParts = [];
-    if ((company as any).locality) locationParts.push((company as any).locality);
-    if ((company as any).district) locationParts.push((company as any).district);
-    if (locationParts.length > 0) {
-      setJobForm(prev => ({ ...prev, location: locationParts.join(', ') }));
+    const company = companiesState.find(c => c.name === companyName);
+    if (!company) {
+      showFeedback('error', `Company "${companyName}" not found in catalog`);
+      return;
     }
-  }
 
-  showFeedback('success', `📍 Location and currency (${currency}) auto-filled from ${companyName}`);
-};
-  
+    setSchemaData(prev => ({
+      ...prev,
+      street_address: (company as any).streetAddress || prev.street_address,
+      city: (company as any).locality || prev.city,
+      region: (company as any).district || prev.region,
+      country: (company as any).country === 'TZ' ? 'Tanzania' : 
+               (company as any).country || prev.country,
+      postcode: (company as any).postalCode || prev.postcode,
+      industry: (company as any).industry || prev.industry,
+    }));
+
+    // Also auto-fill location field if empty
+    if (!jobForm.location) {
+      const locationParts = [];
+      if ((company as any).locality) locationParts.push((company as any).locality);
+      if ((company as any).district) locationParts.push((company as any).district);
+      if (locationParts.length > 0) {
+        setJobForm(prev => ({ ...prev, location: locationParts.join(', ') }));
+      }
+    }
+
+    showFeedback('success', `📍 Location auto-filled from ${companyName}`);
+  };
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
