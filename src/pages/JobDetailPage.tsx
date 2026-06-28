@@ -29,12 +29,8 @@ export default function JobDetailPage() {
 useEffect(() => {
   async function loadJob() {
     try {
-      // Get the job ID from the end of the URL
-      // URL: /market/workshop-superintendent-kinondoni-job-mqng36f30mvo
       const segments = jobId?.split('-') || [];
-      // Find where "job" starts
       const jobIndex = segments.findIndex(s => s === 'job');
-      // Take everything from "job" onwards
       const extractedId = jobIndex >= 0 ? segments.slice(jobIndex).join('-') : '';
       
       if (extractedId) {
@@ -57,8 +53,6 @@ useEffect(() => {
   if (jobId) loadJob();
   window.scrollTo(0, 0);
 }, [jobId]);
-  
-  
   
   const getRelatedJobs = () => {
     if (!job || allJobs.length === 0) return [];
@@ -126,7 +120,7 @@ useEffect(() => {
     "validThrough": job.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     "employmentType": job.employment_type || 'FULL_TIME',
     "hiringOrganization": { "@type": "Organization", "name": job.company, "sameAs": job.companyWebsite || '', "logo": job.logoUrl || '' },
-    "jobLocation": { "@type": "Place", "address": { "@type": "PostalAddress", "streetAddress": job.street_address || '', "addressLocality": job.city || job.location || '', "addressRegion": job.region || '', "addressCountry": "TZ", "postalCode": job.postcode || '' } },
+    "jobLocation": { "@type": "Place", "address": { "@type": "PostalAddress", "streetAddress": job.street_address || '', "addressLocality": job.city || job.location || '', "addressRegion": job.region || '', "addressCountry": job.country || "TZ", "postalCode": job.postcode || '' } },
     "baseSalary": (job.salary_min || job.salary_max) ? { "@type": "MonetaryAmount", "currency": (job.salary_currency || 'TZS').toUpperCase(), "value": { "@type": "QuantitativeValue", "minValue": Number(job.salary_min || job.salary_max), "maxValue": Number(job.salary_max || job.salary_min), "unitText": "MONTH" } } : undefined,
     "educationRequirements": (job.education_level && job.education_level !== 'Any') ? { "@type": "EducationalOccupationalCredential", "credentialCategory": job.education_level } : undefined,
     "experienceRequirements": job.experience_months > 0 ? { "@type": "OccupationalExperienceRequirements", "monthsOfExperience": Number(job.experience_months) } : undefined,
@@ -155,7 +149,6 @@ useEffect(() => {
     "url": jobUrl
   } : null;
 
-  // 🔥 Background download function
   const triggerBackgroundDownload = (url: string, filename: string) => {
     const link = document.createElement('a');
     link.href = url;
@@ -273,7 +266,6 @@ useEffect(() => {
         <a href={`mailto:jjovinatha@gmail.com?subject=Report%20Job&body=Please%20review%20this%20listing%3A%20${encodeURIComponent(jobUrl)}`} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 text-[10px] font-bold uppercase tracking-wider transition-all flex-shrink-0"><Flag size={11} />Report</a>
       </div>
 
-      {/* ATTACHMENTS - Preview + Background Download */}
       {hasFiles && (
         <div className="px-4 py-6 border-b border-white/5">
           <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
@@ -289,11 +281,9 @@ useEffect(() => {
                 <div 
                   key={index} 
                   onClick={() => { 
-                    // 🔥 Open preview as before
                     setViewerFiles(job.images); 
                     setViewerIndex(index); 
                     setViewerOpen(true);
-                    // 🔥 Also trigger background download
                     triggerBackgroundDownload(img.url, filename);
                   }} 
                   className="flex-shrink-0 w-24 h-24 md:w-full md:aspect-square rounded-xl overflow-hidden border border-white/5 bg-slate-900/50 cursor-pointer active:scale-95 transition-transform"
@@ -380,7 +370,6 @@ useEffect(() => {
 
       <div className="h-20" />
 
-      {/* FULLSCREEN VIEWER - Same as before */}
       {viewerOpen && viewerFiles.length > 0 && (
         <div className="fixed inset-0 z-50 bg-black flex flex-col">
           <div className="flex items-center justify-between px-4 h-14 bg-black/90 shrink-0">
