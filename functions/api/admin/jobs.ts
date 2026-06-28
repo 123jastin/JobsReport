@@ -4,14 +4,46 @@ type Env = {
   DB: D1Database;
 };
 
+// 🔥 Country detection helper
+function detectCountryCode(location: string): string {
+  if (!location) return 'TZ';
+  const lower = location.toLowerCase();
+  
+  const countryMap: [string, string][] = [
+    ['tanzania', 'TZ'], ['dar es salaam', 'TZ'], ['dodoma', 'TZ'], ['arusha', 'TZ'], ['mwanza', 'TZ'], ['zanzibar', 'TZ'], ['mbeya', 'TZ'], ['morogoro', 'TZ'], ['tanga', 'TZ'],
+    ['kenya', 'KE'], ['nairobi', 'KE'], ['mombasa', 'KE'], ['kisumu', 'KE'],
+    ['uganda', 'UG'], ['kampala', 'UG'], ['entebbe', 'UG'],
+    ['zambia', 'ZM'], ['lusaka', 'ZM'], ['kitwe', 'ZM'], ['ndola', 'ZM'],
+    ['rwanda', 'RW'], ['kigali', 'RW'],
+    ['malawi', 'MW'], ['lilongwe', 'MW'], ['blantyre', 'MW'],
+    ['mozambique', 'MZ'], ['maputo', 'MZ'],
+    ['south africa', 'ZA'], ['johannesburg', 'ZA'], ['cape town', 'ZA'], ['durban', 'ZA'], ['pretoria', 'ZA'],
+    ['nigeria', 'NG'], ['lagos', 'NG'], ['abuja', 'NG'],
+    ['ghana', 'GH'], ['accra', 'GH'],
+    ['ethiopia', 'ET'], ['addis ababa', 'ET'],
+    ['india', 'IN'], ['mumbai', 'IN'], ['delhi', 'IN'], ['bangalore', 'IN'],
+    ['uae', 'AE'], ['dubai', 'AE'], ['abu dhabi', 'AE'],
+    ['united kingdom', 'GB'], ['london', 'GB'], ['uk', 'GB'],
+    ['united states', 'US'], ['usa', 'US'], ['new york', 'US'],
+    ['zimbabwe', 'ZW'], ['harare', 'ZW'],
+    ['botswana', 'BW'], ['gaborone', 'BW'],
+    ['egypt', 'EG'], ['cairo', 'EG'],
+    ['sudan', 'SD'], ['khartoum', 'SD'],
+  ];
+  
+  for (const [keyword, code] of countryMap) {
+    if (lower.includes(keyword)) return code;
+  }
+  
+  return 'TZ';
+}
+
 // POST - Create job with full schema
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
 
   try {
     const body: any = await context.request.json();
-    
-    console.log('Creating job:', body.title);
 
     const id = 'job-' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
 
@@ -49,13 +81,15 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         `INSERT OR REPLACE INTO locations (id, name, region, country, postcode, street_address) 
          VALUES (?, ?, ?, ?, ?, ?)`
       ).bind(locationId, locationName, body.region?.trim() || '', body.country?.trim() || 'Tanzania', body.postcode?.trim() || '', body.street_address?.trim() || '').run();
-      console.log(`📍 Location saved for job ${id}: ${locationName}`);
     }
+
+    // 🔥 Detect country code
+    const detectedCountry = detectCountryCode(body.location || body.city || '');
 
     const canonicalUrl = body.canonical_url || 
       `https://jobsreport.online/market/${body.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${id}`;
 
-    // Insert job (29 columns - added whatsapp_number + application_instructions)
+    // Insert job with country
     await DB.prepare(`
       INSERT INTO jobs (
         id, title, role_id, company_id, location, apply_url, salary,
@@ -64,9 +98,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         education_level, experience_months, skills, benefits,
         salary_min, salary_max, salary_currency,
         street_address, city, region, postcode, canonical_url,
-        whatsapp_number, application_instructions
+        whatsapp_number, application_instructions, country
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       id, body.title?.trim(), roleResult.id, companyResult.id,
       body.location || 'Remote', body.url || '', body.salary || '',
@@ -82,7 +116,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       body.salary_currency || 'TZS',
       body.street_address || '', body.city || '', body.region || '',
       body.postcode || '', canonicalUrl,
-      body.whatsapp_number || '', body.application_instructions || ''
+      body.whatsapp_number || '', body.application_instructions || '',
+      detectedCountry
     ).run();
 
     // Save files
@@ -98,7 +133,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           `).bind(imageId, id, file.url || '', file.thumbnail || file.url || '', file.name || 'file', i, fileType, file.seoTitle || file.name || '', file.seoDescription || '').run();
           savedFiles.push({ url: file.url, thumbnail: file.thumbnail || file.url, name: file.name, type: fileType, seoTitle: file.seoTitle, seoDescription: file.seoDescription });
-        } catch (dbErr) { console.error(`Failed to save file ${i}:`, dbErr); }
+        } catch (dbErr) {}
       }
     }
 
@@ -114,7 +149,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       salary_currency: body.salary_currency || 'TZS',
       street_address: body.street_address || '',
       city: body.city || '', region: body.region || '',
-      country: body.country || 'Tanzania', postcode: body.postcode || '',
+      country: detectedCountry, postcode: body.postcode || '',
       canonical_url: canonicalUrl,
       whatsapp_number: body.whatsapp_number || '',
       application_instructions: body.application_instructions || '',
@@ -124,7 +159,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }), { status: 201, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
 
   } catch (err) {
-    console.error('Job creation error:', err);
     return new Response(JSON.stringify({ message: 'Failed to create job', error: err instanceof Error ? err.message : 'Unknown' }), {
       status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
@@ -162,8 +196,10 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         `INSERT OR REPLACE INTO locations (id, name, region, country, postcode, street_address) 
          VALUES (?, ?, ?, ?, ?, ?)`
       ).bind(locationId, locationName, body.region?.trim() || '', body.country?.trim() || 'Tanzania', body.postcode?.trim() || '', body.street_address?.trim() || '').run();
-      console.log(`📍 Location updated for job ${id}: ${locationName}`);
     }
+
+    // 🔥 Detect country code
+    const detectedCountry = detectCountryCode(body.location || body.city || '');
 
     await DB.prepare(`
       UPDATE jobs SET 
@@ -173,7 +209,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
         education_level = ?, experience_months = ?, skills = ?, benefits = ?,
         salary_min = ?, salary_max = ?, salary_currency = ?,
         street_address = ?, city = ?, region = ?, postcode = ?, canonical_url = ?,
-        whatsapp_number = ?, application_instructions = ?
+        whatsapp_number = ?, application_instructions = ?, country = ?
       WHERE id = ?
     `).bind(
       body.title?.trim(), roleResult.id, companyResult.id,
@@ -189,6 +225,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       body.street_address || '', body.city || '', body.region || '',
       body.postcode || '', body.canonical_url || '',
       body.whatsapp_number || '', body.application_instructions || '',
+      detectedCountry,
       id
     ).run();
 
@@ -216,7 +253,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       salary_currency: body.salary_currency || 'TZS',
       street_address: body.street_address || '',
       city: body.city || '', region: body.region || '',
-      postcode: body.postcode || '', canonical_url: body.canonical_url || '',
+      country: detectedCountry, postcode: body.postcode || '', canonical_url: body.canonical_url || '',
       whatsapp_number: body.whatsapp_number || '',
       application_instructions: body.application_instructions || '',
       postedAt: new Date().toISOString().split('T')[0], expiresAt: body.expiresAt || '',
@@ -224,7 +261,6 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     }), { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
 
   } catch (err) {
-    console.error('Job update error:', err);
     return new Response(JSON.stringify({ message: 'Failed to update job' }), {
       status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
@@ -236,7 +272,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
   const url = new URL(context.request.url);
   const pathParts = url.pathname.split('/');
-  const id = pathParts[pathParts.length - 1];
+  const id = pathParts[parts.length - 1];
   try {
     await DB.prepare('DELETE FROM locations WHERE id = ?').bind('loc-' + id).run();
     await DB.prepare('DELETE FROM job_images WHERE job_id = ?').bind(id).run();
