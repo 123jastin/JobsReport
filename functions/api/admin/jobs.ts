@@ -38,6 +38,73 @@ function detectCountryCode(location: string): string {
   return 'TZ';
 }
 
+// 🔥 Slugify helper
+function slugify(text: string): string {
+  return text.toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+// 🔥 Auto-link — adds contextual footer links to job descriptions
+function enrichJobDescription(html: string, job: {
+  company: string;
+  role?: string;
+  job_category?: string;
+  city?: string;
+  country?: string;
+  location?: string;
+}): string {
+  let enriched = html || '';
+  const links: string[] = [];
+
+  // Company link
+  if (job.company) {
+    const companySlug = slugify(job.company);
+    links.push(
+      `<a href="https://jobsreport.online/companies/${companySlug}" style="color:#3b82f6;text-decoration:none;">📋 View all jobs at ${job.company}</a>`
+    );
+  }
+
+  // Category link
+  const category = job.job_category || job.role;
+  if (category) {
+    const catSlug = slugify(category);
+    links.push(
+      `<a href="https://jobsreport.online/category/${catSlug}" style="color:#3b82f6;text-decoration:none;">🔍 Browse more ${category} jobs</a>`
+    );
+  }
+
+  // City link
+  if (job.city) {
+    const cityName = job.city.trim();
+    const citySlug = slugify(cityName);
+    const countrySlug = slugify(job.country || 'tanzania');
+    links.push(
+      `<a href="https://jobsreport.online/country/${countrySlug}/region/${citySlug}" style="color:#3b82f6;text-decoration:none;">📍 More jobs in ${cityName}</a>`
+    );
+  }
+
+  // Country link
+  if (job.country && job.country !== 'TZ' && job.country !== 'Tanzania') {
+    const countrySlug = slugify(job.country);
+    links.push(
+      `<a href="https://jobsreport.online/country/${countrySlug}" style="color:#3b82f6;text-decoration:none;">🌍 Jobs in ${job.country}</a>`
+    );
+  }
+
+  // Add footer with links
+  if (links.length > 0) {
+    enriched += `
+      <div style="margin-top:24px;padding-top:16px;border-top:1px solid #334155;display:flex;flex-wrap:wrap;gap:12px;font-size:13px;font-family:system-ui,sans-serif;">
+        ${links.join(' <span style="color:#475569;">|</span> ')}
+      </div>
+    `;
+  }
+
+  return enriched;
+}
+
 // POST - Create job with full schema
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
@@ -86,6 +153,16 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     // 🔥 Detect country code
     const detectedCountry = detectCountryCode(body.location || body.city || '');
 
+    // 🔥 Enrich description with contextual links
+    const enrichedDescription = enrichJobDescription(body.description || '', {
+      company: body.company?.trim(),
+      role: body.role?.trim(),
+      job_category: body.job_category,
+      city: body.city?.trim(),
+      country: detectedCountry,
+      location: body.location
+    });
+
     const canonicalUrl = body.canonical_url || 
       `https://jobsreport.online/market/${body.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${id}`;
 
@@ -107,7 +184,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       new Date().toISOString().split('T')[0],
       body.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       body.is_active !== undefined ? body.is_active : 1,
-      body.description || '',
+      enrichedDescription,
       body.job_category || 'Other', body.industry || '',
       body.employment_type || 'FULL_TIME', body.workplace_type || 'Onsite',
       body.education_level || 'Any', body.experience_months || 0,
@@ -140,7 +217,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return new Response(JSON.stringify({
       id, title: body.title?.trim(), role: body.role?.trim(), company: body.company?.trim(),
       location: body.location || 'Remote', url: body.url || '', salary: body.salary || '',
-      description: body.description || '',
+      description: enrichedDescription,
       job_category: body.job_category || 'Other', employment_type: body.employment_type || 'FULL_TIME',
       workplace_type: body.workplace_type || 'Onsite', education_level: body.education_level || 'Any',
       experience_months: body.experience_months || 0,
@@ -201,6 +278,16 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     // 🔥 Detect country code
     const detectedCountry = detectCountryCode(body.location || body.city || '');
 
+    // 🔥 Enrich description with contextual links
+    const enrichedDescription = enrichJobDescription(body.description || '', {
+      company: body.company?.trim(),
+      role: body.role?.trim(),
+      job_category: body.job_category,
+      city: body.city?.trim(),
+      country: detectedCountry,
+      location: body.location
+    });
+
     await DB.prepare(`
       UPDATE jobs SET 
         title = ?, role_id = ?, company_id = ?, location = ?, apply_url = ?, salary = ?,
@@ -215,7 +302,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       body.title?.trim(), roleResult.id, companyResult.id,
       body.location || 'Remote', body.url || '', body.salary || '',
       body.expiresAt || '', body.is_active !== undefined ? body.is_active : 1,
-      body.description || '',
+      enrichedDescription,
       body.job_category || 'Other', body.industry || '',
       body.employment_type || 'FULL_TIME', body.workplace_type || 'Onsite',
       body.education_level || 'Any', body.experience_months || 0,
@@ -244,7 +331,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     return new Response(JSON.stringify({
       id, title: body.title?.trim(), role: body.role?.trim(), company: body.company?.trim(),
       location: body.location || 'Remote', url: body.url || '', salary: body.salary || '',
-      description: body.description || '',
+      description: enrichedDescription,
       job_category: body.job_category || 'Other', employment_type: body.employment_type || 'FULL_TIME',
       workplace_type: body.workplace_type || 'Onsite', education_level: body.education_level || 'Any',
       experience_months: body.experience_months || 0,
@@ -272,7 +359,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
   const url = new URL(context.request.url);
   const pathParts = url.pathname.split('/');
-  const id = pathParts[parts.length - 1];
+  const id = pathParts[pathParts.length - 1];
   try {
     await DB.prepare('DELETE FROM locations WHERE id = ?').bind('loc-' + id).run();
     await DB.prepare('DELETE FROM job_images WHERE job_id = ?').bind(id).run();
