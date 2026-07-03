@@ -33,33 +33,33 @@ export default function JobDetailPage() {
     return country;
   };
 
-useEffect(() => {
-  async function loadJob() {
-    try {
-      const segments = jobId?.split('-') || [];
-      const jobIndex = segments.findIndex(s => s === 'job');
-      const extractedId = jobIndex >= 0 ? segments.slice(jobIndex).join('-') : '';
-      
-      if (extractedId) {
-        const res = await fetch(`/api/job-detail/${extractedId}`);
-        if (res.ok) {
-          const jobData = await res.json();
-          if (jobData && !jobData.error) {
-            setJob(jobData);
-            setAllJobs(jobData.relatedJobs || []);
-            document.title = `${jobData.title} - ${jobData.company} | JobsReport`;
-            setLoading(false);
-            return;
+  useEffect(() => {
+    async function loadJob() {
+      try {
+        const segments = jobId?.split('-') || [];
+        const jobIndex = segments.findIndex(s => s === 'job');
+        const extractedId = jobIndex >= 0 ? segments.slice(jobIndex).join('-') : '';
+        
+        if (extractedId) {
+          const res = await fetch(`/api/job-detail/${extractedId}`);
+          if (res.ok) {
+            const jobData = await res.json();
+            if (jobData && !jobData.error) {
+              setJob(jobData);
+              setAllJobs(jobData.relatedJobs || []);
+              document.title = `${jobData.title} - ${jobData.company} | JobsReport`;
+              setLoading(false);
+              return;
+            }
           }
         }
-      }
-      
-      setJob(null);
-    } catch (err) {} finally { setLoading(false); }
-  }
-  if (jobId) loadJob();
-  window.scrollTo(0, 0);
-}, [jobId]);
+        
+        setJob(null);
+      } catch (err) {} finally { setLoading(false); }
+    }
+    if (jobId) loadJob();
+    window.scrollTo(0, 0);
+  }, [jobId]);
   
   const getRelatedJobs = () => {
     if (!job || allJobs.length === 0) return [];
@@ -340,6 +340,47 @@ useEffect(() => {
       </div>
 
       <AdBanner key={`ad2-${jobId}`} slot="1373889473" />
+
+      {/* 🔥 Company Info Section with Auto-Links */}
+      <div className="px-4 py-6 border-b border-white/5">
+        <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
+          <Building2 size={16} className="text-blue-400" /> About {job.company}
+        </h3>
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <Link 
+              to={`/companies/${job.company.toLowerCase().replace(/\s+/g, '-')}`}
+              className="text-sm text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1 transition-colors"
+            >
+              <Building2 size={14} />
+              View all jobs at {job.company}
+              <ExternalLink size={12} />
+            </Link>
+          </div>
+          {job.job_category && (
+            <div className="flex items-center gap-3">
+              <Link 
+                to={`/category/${(job.job_category || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')}`}
+                className="text-sm text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1 transition-colors"
+              >
+                <Briefcase size={14} />
+                Browse more {job.job_category} jobs
+              </Link>
+            </div>
+          )}
+          {job.city && (
+            <div className="flex items-center gap-3">
+              <Link 
+                to={`/country/${(job.country || 'tanzania').toLowerCase().replace(/\s+/g, '-')}/region/${job.city.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+                className="text-sm text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1 transition-colors"
+              >
+                <MapPin size={14} />
+                More jobs in {job.city}
+              </Link>
+            </div>
+          )}
+        </div>
+      </div>
 
       {relatedJobs.length > 0 && (
         <div className="px-4 py-8 border-t border-white/5">
