@@ -7,7 +7,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 
 import Layout from './components/Layout';
 import RouteTracker from './components/RouteTracker';
-import AutoAdsRefresh from './components/AutoAdsRefresh';
 import AnchorAd from './components/AnchorAd';
 import HomePage from './pages/HomePage';
 import CountryPage from './pages/CountryPage';
@@ -37,7 +36,6 @@ export default function App() {
         <AuthProvider>
           <Router>
             <RouteTracker />
-            <AutoAdsRefresh />
             
             <Layout>
               <Routes>
