@@ -78,9 +78,20 @@
         max-width: 728px;
         margin: 0 auto;
       }
+
+      /* Auto-link styling for job descriptions */
+      .job-description-content a {
+        color: #3b82f6;
+        text-decoration: underline;
+        transition: color 0.2s;
+      }
+
+      .job-description-content a:hover {
+        color: #60a5fa;
+      }
     </style>
     
-    <!-- Google AdSense - Vignette Auto Ads + Manual Ads -->
+    <!-- Google AdSense - Manual Ads Only (No Auto Ads) -->
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8155064094205693"
      crossorigin="anonymous"></script>
     
@@ -97,13 +108,9 @@
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     
-    <!-- 🔥 Initialize AdSense with Vignette Auto Ads ONLY (Anchor OFF in dashboard) -->
+    <!-- Initialize empty AdSense array for manual ads only -->
     <script>
       window.adsbygoogle = window.adsbygoogle || [];
-      window.adsbygoogle.push({
-        google_ad_client: 'ca-pub-8155064094205693',
-        enable_page_level_ads: true
-      });
     </script>
     
     <!-- Clever Ads Script -->
