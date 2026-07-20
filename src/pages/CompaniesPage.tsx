@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Building2, Globe, MapPin, Briefcase, ExternalLink, ArrowRight, Search, Clock, Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import SEO from '../components/SEO';
+import AdBanner from '../components/AdBanner';
 
 interface Company {
   id: string;
@@ -132,6 +133,29 @@ export default function CompaniesPage() {
     ? `https://jobsreport.online/companies/${getCompanySlug(selectedCompany.name)}`
     : 'https://jobsreport.online/companies';
 
+  const InFeedAd = ({ slot, layoutKey }: { slot: string; layoutKey: string; idx: number }) => {
+    const adRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+      const timer = setTimeout(() => {
+        if (adRef.current) {
+          adRef.current.innerHTML = '';
+          const ins = document.createElement('ins');
+          ins.className = 'adsbygoogle';
+          ins.style.display = 'block';
+          ins.style.background = 'transparent';
+          ins.setAttribute('data-ad-format', 'fluid');
+          ins.setAttribute('data-ad-layout-key', layoutKey);
+          ins.setAttribute('data-ad-client', 'ca-pub-8155064094205693');
+          ins.setAttribute('data-ad-slot', slot);
+          adRef.current.appendChild(ins);
+          try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) {}
+        }
+      }, 200);
+      return () => clearTimeout(timer);
+    }, [slot, layoutKey]);
+    return <div className="p-4 rounded-3xl border border-white/5" style={{ background: 'transparent' }}><div ref={adRef} /></div>;
+  };
+
   if (loading) {
     return (
       <>
@@ -171,7 +195,7 @@ export default function CompaniesPage() {
           </div>
         </div>
 
-        {/* Ad removed */}
+        <AdBanner key="companies-top" slot="4550717155" />
 
         {!selectedCompany && (
           <div className="relative">
@@ -314,7 +338,7 @@ export default function CompaniesPage() {
               </div>
             )}
 
-            {/* Ad removed */}
+            <AdBanner key={`company-${selectedCompany.id}`} slot="1373889473" />
 
             <div>
               <h3 className="text-lg font-bold text-white uppercase tracking-widest mb-4 flex items-center gap-3">
@@ -392,7 +416,7 @@ export default function CompaniesPage() {
           </div>
         )}
 
-        {/* Ad removed */}
+        <AdBanner key="companies-footer" slot="5466053430" />
       </div>
     </>
   );
