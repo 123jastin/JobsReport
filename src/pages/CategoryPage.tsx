@@ -3,7 +3,6 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Building2, MapPin, ArrowLeft, Briefcase, Globe } from 'lucide-react';
 import SEO from '../components/SEO';
-import AdBanner from '../components/AdBanner';
 import { useCountry } from '../context/CountryContext';
 
 const JOBS_PER_PAGE = 10;
@@ -107,7 +106,7 @@ export default function CategoryPage() {
           </p>
         </div>
 
-        <AdBanner key={`cat-top-${categorySlug}-${countrySlug || 'all'}`} slot="4550717155" />
+        {/* Ad removed */}
 
         {jobs.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
@@ -160,7 +159,7 @@ export default function CategoryPage() {
           </div>
         )}
 
-        <AdBanner key={`cat-bottom-${categorySlug}-${countrySlug || 'all'}`} slot="1373889473" />
+        {/* Ad removed */}
       </div>
     </>
   );
