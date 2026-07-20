@@ -1,13 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  Building2, Search, TrendingUp, Clock, Globe,
+  Search, TrendingUp, Clock, Globe,
   RefreshCw, Filter, ArrowUpRight, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { RawJob, Company } from '../types';
 import { Link, useSearchParams, useParams, useNavigate } from 'react-router-dom';
 import SEO from '../components/SEO';
-import AdBanner from '../components/AdBanner';
 import { useCountry } from '../context/CountryContext';
 
 const getJobSlug = (job: RawJob): string => {
@@ -22,56 +21,6 @@ const getJobSlug = (job: RawJob): string => {
 };
 
 const JOBS_PER_PAGE = 15;
-
-// ✅ Fixed InFeedAd - no DOM manipulation, uses React rendering with status check
-const InFeedAd = ({ slot, layoutKey, index }: { slot: string; layoutKey: string; index: number }) => {
-  const adRef = useRef<HTMLModElement>(null);
-
-  useEffect(() => {
-    const adElement = adRef.current;
-    if (!adElement) return;
-
-    // Prevent duplicate initialization
-    if (adElement.getAttribute('data-adsbygoogle-status')) {
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      if (!adRef.current) return;
-      
-      if (adRef.current.getAttribute('data-adsbygoogle-status')) {
-        return;
-      }
-
-      try {
-        (window.adsbygoogle = window.adsbygoogle || []).push({});
-      } catch (e) {
-        console.error('InFeedAd error:', e);
-      }
-    }, 200);
-
-    return () => clearTimeout(timer);
-  }, [slot, layoutKey]);
-
-  return (
-    <motion.div 
-      initial={{ opacity: 0, y: 12 }} 
-      animate={{ opacity: 1, y: 0, transition: { delay: Math.min(index * 0.04, 0.4) } }}
-      className="p-4 rounded-3xl border border-white/5 transition-all duration-300" 
-      style={{ background: 'transparent' }}
-    >
-      <ins
-        ref={adRef}
-        className="adsbygoogle"
-        style={{ display: 'block', background: 'transparent' }}
-        data-ad-format="fluid"
-        data-ad-layout-key={layoutKey}
-        data-ad-client="ca-pub-8155064094205693"
-        data-ad-slot={slot}
-      />
-    </motion.div>
-  );
-};
 
 export default function MarketPage() {
   const navigate = useNavigate();
@@ -351,35 +300,22 @@ export default function MarketPage() {
               </motion.div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {activeJobs.map((job, idx) => {
-                  const elements = [];
-                  elements.push(<JobCard key={job.id || idx} job={job} idx={idx} />);
-                  if ((idx + 1) % 3 === 0 && idx < activeJobs.length - 1) {
-                    const adNumber = Math.floor((idx + 1) / 3);
-                    // ✅ Fixed: Stable key without currentPage
-                    const adKey = `infeed-${idx}`;
-                    elements.push(<InFeedAd key={adKey} slot={adNumber % 2 === 1 ? "1805968460" : "9872160747"} layoutKey={adNumber % 2 === 1 ? "-h0-1a+31-4t+7z" : "-gh-1o+14-67+ka"} index={idx + 1} />);
-                  }
-                  return elements;
-                }).flat()}
+                {activeJobs.map((job, idx) => (
+                  <JobCard key={job.id || idx} job={job} idx={idx} />
+                ))}
               </div>
             )}
           </AnimatePresence>
         </div>
 
-        {/* ✅ Single AdBanner - only shown when there are more pages */}
         {currentPage < totalPages && (
-          <>
-            <div className="pt-4 space-y-4">
-              <button onClick={() => handlePageChange(currentPage + 1)}
-                className="w-full py-4 rounded-2xl bg-gradient-to-r from-blue-600/20 to-violet-600/20 border border-blue-500/30 hover:border-blue-500/50 hover:from-blue-600/30 hover:to-violet-600/30 text-white font-bold text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-3 group">
-                <span>See More Jobs</span><ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
-              </button>
-              <p className="text-center text-[10px] text-gray-500 font-mono">Showing page {currentPage} of {totalPages} • {totalActiveJobs} total jobs available</p>
-            </div>
-            {/* ✅ One AdBanner after load more button - no dynamic key */}
-            <AdBanner slot="5466053430" />
-          </>
+          <div className="pt-4 space-y-4">
+            <button onClick={() => handlePageChange(currentPage + 1)}
+              className="w-full py-4 rounded-2xl bg-gradient-to-r from-blue-600/20 to-violet-600/20 border border-blue-500/30 hover:border-blue-500/50 hover:from-blue-600/30 hover:to-violet-600/30 text-white font-bold text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-3 group">
+              <span>See More Jobs</span><ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
+            </button>
+            <p className="text-center text-[10px] text-gray-500 font-mono">Showing page {currentPage} of {totalPages} • {totalActiveJobs} total jobs available</p>
+          </div>
         )}
 
         {totalPages > 1 && (
