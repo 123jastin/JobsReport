@@ -98,17 +98,6 @@ export function CareerRedirectProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Push ad when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => {
-        try {
-          ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
-        } catch (e) {}
-      }, 300);
-    }
-  }, [isOpen, animationKey]);
-
   const isEmail = destinationUrl.startsWith('mailto:');
 
   return (
@@ -191,13 +180,7 @@ export function CareerRedirectProvider({ children }: { children: ReactNode }) {
                 You are leaving the JobsReport telemetry interface. External career pages are hosted directly by hiring corporate entities.
               </p>
 
-              {/* AD - Career Page 2 */}
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', minHeight: '300px', margin: '8px 0' }}>
-                <ins className="adsbygoogle"
-                  style={{ display: 'inline-block', width: '120px', height: '300px' }}
-                  data-ad-client="ca-pub-8155064094205693"
-                  data-ad-slot="3874604315" />
-              </div>
+              {/* Ad removed */}
 
               {/* Action Buttons */}
               <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
