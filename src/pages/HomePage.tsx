@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, TrendingUp, RefreshCw, ArrowRight, Zap, BarChart3, Building2, Globe, Clock, MapPin, Briefcase, ChevronRight, Search, Code, Calculator, Palette, Headphones, Users, Shield, Truck, Stethoscope, BookOpen, Scale, Leaf, Settings, Utensils, ChevronDown, FileText, MessageCircle, Flag } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import SEO from '../components/SEO';
-import AdBanner from '../components/AdBanner';
 import TrendingCard from '../components/TrendingCard';
 import ReportCard from '../components/ReportCard';
 import { useCountry } from '../context/CountryContext';
@@ -234,7 +233,7 @@ export default function HomePage() {
           )}
         </section>
 
-        <AdBanner key="home-ad-1" slot="4550717155" />
+        {/* Ad removed */}
 
         <section>
           <div className="flex items-center justify-between mb-6">
@@ -356,7 +355,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <AdBanner key="home-ad-2" slot="1373889473" />
+        {/* Ad removed */}
 
         <section>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 p-6 rounded-3xl bg-white/[0.01] border border-white/5">
