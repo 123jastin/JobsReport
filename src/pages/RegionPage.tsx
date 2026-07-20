@@ -3,7 +3,6 @@ import { useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { MapPin, Building2, Briefcase, ArrowLeft, Globe } from 'lucide-react';
 import SEO from '../components/SEO';
-import AdBanner from '../components/AdBanner';
 import { useCountry } from '../context/CountryContext';
 
 interface Job {
@@ -97,57 +96,6 @@ export default function RegionPage() {
   const activeJobs = jobs.filter(j => j.active !== false);
   const expiredJobs = jobs.filter(j => j.active === false);
 
-  // 🔥 In-Feed Ad #1
-  const InFeedAd1 = ({ index }: { index: number }) => (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="p-4 rounded-2xl border border-white/5"
-      style={{ background: 'transparent' }}
-    >
-      <ins className="adsbygoogle"
-        style={{ display: 'block', background: 'transparent' }}
-        data-ad-format="fluid"
-        data-ad-layout-key="-h0-1a+31-4t+7z"
-        data-ad-client="ca-pub-8155064094205693"
-        data-ad-slot="1805968460" />
-    </motion.div>
-  );
-
-  // 🔥 In-Feed Ad #2
-  const InFeedAd2 = ({ index }: { index: number }) => (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="p-4 rounded-2xl border border-white/5"
-      style={{ background: 'transparent' }}
-    >
-      <ins className="adsbygoogle"
-        style={{ display: 'block', background: 'transparent' }}
-        data-ad-format="fluid"
-        data-ad-layout-key="-gh-1o+14-67+ka"
-        data-ad-client="ca-pub-8155064094205693"
-        data-ad-slot="9872160747" />
-    </motion.div>
-  );
-
-  // 🔥 In-Feed Ad #3
-  const InFeedAd3 = ({ index }: { index: number }) => (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="p-4 rounded-2xl border border-white/5"
-      style={{ background: 'transparent' }}
-    >
-      <ins className="adsbygoogle"
-        style={{ display: 'block', background: 'transparent' }}
-        data-ad-format="fluid"
-        data-ad-layout-key="-gm-l+1-46+ex"
-        data-ad-client="ca-pub-8155064094205693"
-        data-ad-slot="5598749525" />
-    </motion.div>
-  );
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -208,8 +156,7 @@ export default function RegionPage() {
           </div>
         </div>
 
-        {/* 🔥 Top Display Ad */}
-        <AdBanner key={`region-top-${regionSlug}`} slot="4550717155" />
+        {/* Ad removed */}
 
         {/* Jobs List */}
         {jobs.length === 0 ? (
@@ -224,7 +171,7 @@ export default function RegionPage() {
           </div>
         ) : (
           <>
-            {/* Active Jobs with In-Feed Ads */}
+            {/* Active Jobs */}
             {activeJobs.length > 0 && (
               <section>
                 <h2 className="text-lg font-bold text-white uppercase tracking-widest mb-4 flex items-center gap-3">
@@ -233,59 +180,41 @@ export default function RegionPage() {
                 </h2>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {activeJobs.map((job: Job, idx: number) => {
-                    const elements = [];
-                    
-                    // Job card
-                    elements.push(
-                      <motion.div
-                        key={job.id}
-                        initial={{ opacity: 0, y: 12 }}
-                        animate={{ opacity: 1, y: 0 }}
+                  {activeJobs.map((job: Job) => (
+                    <motion.div
+                      key={job.id}
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                    >
+                      <Link
+                        to={getJobSlug(job)}
+                        className="block p-4 bg-white/[0.01] border border-white/5 rounded-2xl hover:bg-white/[0.03] hover:border-amber-500/30 transition-all group"
                       >
-                        <Link
-                          to={getJobSlug(job)}
-                          className="block p-4 bg-white/[0.01] border border-white/5 rounded-2xl hover:bg-white/[0.03] hover:border-amber-500/30 transition-all group"
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
-                              {job.logoUrl ? (
-                                <img src={job.logoUrl} alt={job.company} className="w-full h-full object-cover rounded-xl" />
-                              ) : (
-                                <div className="w-full h-full bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400">
-                                  {job.company?.charAt(0)?.toUpperCase() || '?'}
-                                </div>
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="px-1.5 py-0.5 rounded text-[7px] font-bold bg-amber-500/10 text-amber-400 uppercase">{job.role || 'General'}</span>
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
+                            {job.logoUrl ? (
+                              <img src={job.logoUrl} alt={job.company} className="w-full h-full object-cover rounded-xl" />
+                            ) : (
+                              <div className="w-full h-full bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400">
+                                {job.company?.charAt(0)?.toUpperCase() || '?'}
                               </div>
-                              <h3 className="text-sm font-bold text-white group-hover:text-amber-400 transition-colors truncate">{job.title}</h3>
-                              <div className="flex items-center gap-2 mt-1.5 text-[10px] text-gray-500">
-                                <span className="flex items-center gap-1"><Building2 size={10} />{job.company}</span>
-                                <span className="flex items-center gap-1"><MapPin size={10} />{job.location}</span>
-                              </div>
-                              {job.salary && <span className="text-[9px] text-emerald-400 font-mono mt-1 block">{job.salary}</span>}
-                            </div>
+                            )}
                           </div>
-                        </Link>
-                      </motion.div>
-                    );
-                    
-                    // 🔥 Add alternating in-feed ads every 3 jobs
-                    if ((idx + 1) % 3 === 0 && idx < activeJobs.length - 1) {
-                      const adNumber = Math.floor((idx + 1) / 3);
-                      const remainder = adNumber % 3;
-                      elements.push(
-                        remainder === 1 ? <InFeedAd1 key={`ad1-${idx}`} index={idx} /> :
-                        remainder === 2 ? <InFeedAd2 key={`ad2-${idx}`} index={idx} /> :
-                        <InFeedAd3 key={`ad3-${idx}`} index={idx} />
-                      );
-                    }
-                    
-                    return elements;
-                  }).flat()}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="px-1.5 py-0.5 rounded text-[7px] font-bold bg-amber-500/10 text-amber-400 uppercase">{job.role || 'General'}</span>
+                            </div>
+                            <h3 className="text-sm font-bold text-white group-hover:text-amber-400 transition-colors truncate">{job.title}</h3>
+                            <div className="flex items-center gap-2 mt-1.5 text-[10px] text-gray-500">
+                              <span className="flex items-center gap-1"><Building2 size={10} />{job.company}</span>
+                              <span className="flex items-center gap-1"><MapPin size={10} />{job.location}</span>
+                            </div>
+                            {job.salary && <span className="text-[9px] text-emerald-400 font-mono mt-1 block">{job.salary}</span>}
+                          </div>
+                        </div>
+                      </Link>
+                    </motion.div>
+                  ))}
                 </div>
               </section>
             )}
@@ -321,8 +250,7 @@ export default function RegionPage() {
           </>
         )}
 
-        {/* 🔥 Footer Display Ad */}
-        <AdBanner key={`region-footer-${regionSlug}`} slot="5466053430" />
+        {/* Ad removed */}
       </div>
     </>
   );
