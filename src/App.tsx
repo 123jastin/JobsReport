@@ -7,7 +7,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 
 import Layout from './components/Layout';
 import RouteTracker from './components/RouteTracker';
-import AnchorAd from './components/AnchorAd';
 import HomePage from './pages/HomePage';
 import CountryPage from './pages/CountryPage';
 import CompaniesPage from './pages/CompaniesPage';
