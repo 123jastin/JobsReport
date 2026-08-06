@@ -9,7 +9,6 @@ import Layout from './components/Layout';
 import RouteTracker from './components/RouteTracker';
 import HomePage from './pages/HomePage';
 import CountryPage from './pages/CountryPage';
-import AnchorAd from './components/AnchorAd';
 import CompaniesPage from './pages/CompaniesPage';
 import RegionsPage from './pages/RegionsPage';
 import RegionPage from './pages/RegionPage';
@@ -87,8 +86,6 @@ export default function App() {
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Layout>
-            
-            <AnchorAd />
           </Router>
         </AuthProvider>
       </CareerRedirectProvider>
