@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import SEO from '../components/SEO';
-import AdBanner from '../components/AdBanner';
 import {
   Building2, MapPin, Clock, ExternalLink, ArrowLeft,
   FileText, Eye, ChevronLeft, ChevronRight, X, Download,
@@ -319,8 +318,7 @@ export default function JobDetailPage() {
         <div className="px-4 py-6 border-b border-white/5 text-center"><FileText size={32} className="text-gray-600 mx-auto mb-3" /><p className="text-gray-500 text-sm">No detailed description available for this listing.</p></div>
       )}
 
-      {/* 📢 Ad #1 - After Job Description */}
-      <AdBanner key={`ad1-${jobId}`} slot="1359643655" />
+      {/* Ad removed */}
 
       <div className="px-4 py-6 border-b border-white/5">
         <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4">Job Details</h3>
@@ -340,8 +338,7 @@ export default function JobDetailPage() {
         </div>
       </div>
 
-      {/* 📢 Ad #2 - After Job Details, Before Company Info */}
-      <AdBanner key={`ad2-${jobId}`} slot="8268666934" />
+      {/* Ad removed */}
 
       {/* 🔥 Company Info Section with Auto-Links */}
       <div className="px-4 py-6 border-b border-white/5">
@@ -410,8 +407,7 @@ export default function JobDetailPage() {
         </div>
       )}
 
-      {/* 📢 Ad #3 - After Related Jobs, Before Share */}
-      <AdBanner key={`ad3-${jobId}`} slot="8130166213" />
+      {/* Ad removed */}
 
       <div className="px-4 py-6">
         <button onClick={() => { if (navigator.share) { navigator.share({ title: job.title, url: window.location.href }); } else { navigator.clipboard.writeText(window.location.href); } }} className="w-full py-3 bg-white/[0.02] hover:bg-white/[0.04] text-gray-400 hover:text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-2">
