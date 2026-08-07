@@ -8,58 +8,45 @@ interface AdBannerProps {
 }
 
 export default function AdBanner({ slot, format = 'auto', style }: AdBannerProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
+  const insRef = useRef<HTMLModElement>(null);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (containerRef.current) {
-        // Clear previous ad completely
-        containerRef.current.innerHTML = '';
-        
-        // Create fresh ins element
-        const ins = document.createElement('ins');
-        ins.className = 'adsbygoogle';
-        ins.style.display = 'block';
-        ins.style.width = '100%';
-        ins.style.minHeight = '280px';
-        ins.setAttribute('data-ad-client', 'ca-pub-8155064094205693');
-        ins.setAttribute('data-ad-slot', slot);
-        ins.setAttribute('data-ad-format', format);
-        ins.setAttribute('data-full-width-responsive', 'true');
-        
-        containerRef.current.appendChild(ins);
-        
-        try {
-          (window.adsbygoogle = window.adsbygoogle || []).push({});
-        } catch (err) {
-          console.error('AdSense error:', err);
-        }
+    // Only push if element exists and hasn't already been filled
+    if (insRef.current && !insRef.current.getAttribute('data-adsbygoogle-status')) {
+      try {
+        (window.adsbygoogle = window.adsbygoogle || []).push({});
+      } catch (err) {
+        console.error('AdSense initialization error:', err);
       }
-    }, 200);
-
-    return () => {
-      clearTimeout(timer);
-      if (containerRef.current) {
-        containerRef.current.innerHTML = '';
-      }
-    };
-  }, [slot, location.pathname]); // 🔥 Re-initialize on route change
+    }
+  }, [location.pathname, slot]);
 
   return (
-    <div 
-      ref={containerRef}
-      style={{ 
+    <div
+      style={{
         minHeight: '280px',
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        margin: '16px auto', 
-        maxWidth: '728px', 
-        padding: '0 16px', 
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        margin: '16px auto',
+        maxWidth: '728px',
+        padding: '0 16px',
         overflow: 'hidden',
-        ...style 
+        ...style
       }}
-    />
+    >
+      <ins
+        // 🔥 Key forces React to cleanly unmount/remount on route change
+        key={`${location.pathname}-${slot}`}
+        ref={insRef}
+        className="adsbygoogle"
+        style={{ display: 'block', width: '100%', minHeight: '280px' }}
+        data-ad-client="ca-pub-8155064094205693"
+        data-ad-slot={slot}
+        data-ad-format={format}
+        data-full-width-responsive="true"
+      />
+    </div>
   );
 }
