@@ -90,55 +90,124 @@
         color: #60a5fa;
       }
     </style>
-    
-    <!-- Google AdSense - Manual Ads Only (No Auto Ads) -->
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8155064094205693"
-     crossorigin="anonymous"></script>
+
+    <!-- ========================================================= -->
+    <!-- EZOIC JAVASCRIPT INTEGRATION                              -->
+    <!-- ========================================================= -->
+
+    <!-- Ezoic Privacy / Consent -->
+    <script data-cfasync="false" src="https://cmp.gatekeeperconsent.com/min.js"></script>
+    <script data-cfasync="false" src="https://the.gatekeeperconsent.com/cmp.min.js"></script>
+
+    <!-- Ezoic -->
+    <script async src="//www.ezojs.com/ezoic/sa.min.js"></script>
+
+    <script>
+      window.ezstandalone = window.ezstandalone || {};
+      ezstandalone.cmd = ezstandalone.cmd || [];
+    </script>
+
+    <!-- Ezoic Analytics -->
+    <script src="//ezoicanalytics.com/analytics.js"></script>
+
+    <!-- ========================================================= -->
+    <!-- GOOGLE ADSENSE - MANUAL ADS ONLY                          -->
+    <!-- ========================================================= -->
+
+    <script
+      async
+      src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8155064094205693"
+      crossorigin="anonymous">
+    </script>
     
     <!-- Google Analytics -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-KMM0JJEPZ5"></script>
+
     <script>
       window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
+
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+
       gtag('js', new Date());
       gtag('config', 'G-KMM0JJEPZ5');
     </script>
   </head>
+
   <body>
     <div id="root"></div>
+
     <script type="module" src="/src/main.tsx"></script>
     
-    <!-- Initialize empty AdSense array for manual ads only -->
+    <!-- Initialize AdSense array for manual ads only -->
     <script>
       window.adsbygoogle = window.adsbygoogle || [];
     </script>
     
-    <!-- Clever Ads Script -->
-    <script data-cfasync="false" type="text/javascript" id="clever-core">
-    /* <![CDATA[ */
-        (function (document, window) {
-            var a, c = document.createElement("script"), f = window.frameElement;
+    <!-- ========================================================= -->
+    <!-- CLEVER ADS SCRIPT                                        -->
+    <!-- ========================================================= -->
 
-            c.id = "CleverCoreLoader88674";
-            c.src = "https://scripts.cleverwebserver.com/33276cd4a3902a21b7acac94278bdd0c.js";
+    <script
+      data-cfasync="false"
+      type="text/javascript"
+      id="clever-core">
 
-            c.async = !0;
-            c.type = "text/javascript";
-            c.setAttribute("data-target", window.name || (f && f.getAttribute("id")));
-            c.setAttribute("data-callback", "put-your-callback-function-here");
-            c.setAttribute("data-callback-url-click", "put-your-click-macro-here");
-            c.setAttribute("data-callback-url-view", "put-your-view-macro-here");
+      /* <![CDATA[ */
 
-            try {
-                a = parent.document.getElementsByTagName("script")[0] || document.getElementsByTagName("script")[0];
-            } catch (e) {
-                a = !1;
-            }
+      (function (document, window) {
+        var a,
+            c = document.createElement("script"),
+            f = window.frameElement;
 
-            a || (a = document.getElementsByTagName("head")[0] || document.getElementsByTagName("body")[0]);
-            a.parentNode.insertBefore(c, a);
-        })(document, window);
-    /* ]]> */
+        c.id = "CleverCoreLoader88674";
+
+        c.src =
+          "https://scripts.cleverwebserver.com/33276cd4a3902a21b7acac94278bdd0c.js";
+
+        c.async = !0;
+        c.type = "text/javascript";
+
+        c.setAttribute(
+          "data-target",
+          window.name || (f && f.getAttribute("id"))
+        );
+
+        c.setAttribute(
+          "data-callback",
+          "put-your-callback-function-here"
+        );
+
+        c.setAttribute(
+          "data-callback-url-click",
+          "put-your-click-macro-here"
+        );
+
+        c.setAttribute(
+          "data-callback-url-view",
+          "put-your-view-macro-here"
+        );
+
+        try {
+          a =
+            parent.document.getElementsByTagName("script")[0] ||
+            document.getElementsByTagName("script")[0];
+        } catch (e) {
+          a = !1;
+        }
+
+        a ||
+          (a =
+            document.getElementsByTagName("head")[0] ||
+            document.getElementsByTagName("body")[0]);
+
+        a.parentNode.insertBefore(c, a);
+
+      })(document, window);
+
+      /* ]]> */
+
     </script>
   </body>
 </html>
