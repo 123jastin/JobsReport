@@ -1,4 +1,4 @@
-import { ReactNode, useState, FormEvent, useEffect, useRef } from 'react';
+import { ReactNode, useState, FormEvent, useEffect } from 'react';
 import { NavLink, Link, useLocation } from 'react-router-dom';
 import { 
   Home, 
@@ -38,9 +38,8 @@ export default function Layout({ children }: LayoutProps) {
   const [passcode, setPasscode] = useState('');
   const [loginError, setLoginError] = useState('');
 
-  // 🔥 Route tracking for GA pageviews and Clever ads refresh
+  // Route tracking for GA pageviews only
   const location = useLocation();
-  const isFirstLoad = useRef(true);
 
   const handleLoginSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -55,9 +54,9 @@ export default function Layout({ children }: LayoutProps) {
     }
   };
 
-  // 🔥 Track GA pageviews + Refresh Clever ads on every SPA navigation
+  // Track GA pageviews on every SPA navigation
   useEffect(() => {
-    // 🔥 Send pageview to Google Analytics on EVERY route change
+    // Send pageview to Google Analytics on EVERY route change
     if (window.gtag) {
       window.gtag('config', 'G-KMM0JJEPZ5', {
         page_path: location.pathname + location.search,
@@ -65,41 +64,12 @@ export default function Layout({ children }: LayoutProps) {
       });
       console.log('📊 GA pageview tracked:', location.pathname);
     }
-
-    // Skip Clever refresh on first load (handled by index.html)
-    if (isFirstLoad.current) {
-      isFirstLoad.current = false;
-      return;
-    }
-
-    // 🔥 Refresh Clever ads on subsequent navigations
-    setTimeout(() => {
-      // Remove old Clever ad elements
-      const cleverAds = document.querySelectorAll('[id*="clever"]:not(#clever-ad-space):not(#clever-core)');
-      cleverAds.forEach(el => el.remove());
-
-      // Clear ad space
-      const adSpace = document.getElementById('clever-ad-space');
-      if (adSpace) adSpace.innerHTML = '';
-
-      // Reload Clever script
-      const oldCleverScript = document.getElementById('clever-core');
-      if (oldCleverScript && oldCleverScript.parentNode) {
-        const newCleverScript = document.createElement('script');
-        newCleverScript.setAttribute('data-cfasync', 'false');
-        newCleverScript.type = 'text/javascript';
-        newCleverScript.innerHTML = oldCleverScript.innerHTML;
-        oldCleverScript.parentNode.replaceChild(newCleverScript, oldCleverScript);
-      }
-
-      console.log('🔄 Clever ads refreshed');
-    }, 300);
   }, [location.pathname, location.search]);
 
   return (
     <div className="min-h-screen bg-bg-deep flex flex-col overflow-x-hidden pt-16">
       
-      {/* 🔥 Organization Schema - Appears on ALL pages */}
+      {/* Organization Schema - Appears on ALL pages */}
       <SEO
         title="JobsReport - Real-Time Jobs platform for Employers and Job Seekers"
         description="Find the latest jobs, vacancies, and career opportunities worldwide in a real-time job market intelligence platform with verified listings from top employers."
@@ -130,7 +100,7 @@ export default function Layout({ children }: LayoutProps) {
         }}
       />
       
-      {/* 🔮 Sticky Header Navigation */}
+      {/* Sticky Header Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-50 h-16 bg-bg-surface/90 backdrop-blur-md border-b border-white/10 px-4 md:px-8 flex items-center justify-between">
         <div className="flex items-center gap-8">
           <Link to="/" className="flex items-center gap-3">
@@ -171,7 +141,7 @@ export default function Layout({ children }: LayoutProps) {
             <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Live System Active</span>
           </div>
 
-          {/* 🌍 Country Selector Dropdown */}
+          {/* Country Selector Dropdown */}
           <div className="relative">
             <button 
               onClick={() => setIsCountryDropdownOpen(!isCountryDropdownOpen)}
@@ -317,10 +287,10 @@ export default function Layout({ children }: LayoutProps) {
             </button>
           )}
 
-          {/* 🔔 Notification Bell */}
+          {/* Notification Bell */}
           <NotificationBell />
 
-          {/* 🍔 Three bars menu button */}
+          {/* Three bars menu button */}
           <button 
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
@@ -391,7 +361,7 @@ export default function Layout({ children }: LayoutProps) {
         )}
       </AnimatePresence>
 
-      {/* 🖥️ Login Authentication Modal */}
+      {/* Login Authentication Modal */}
       <AnimatePresence>
         {isLoginModalOpen && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
