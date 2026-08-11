@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
 
 interface AdBannerProps {
   slot: string;
@@ -7,20 +6,32 @@ interface AdBannerProps {
   style?: React.CSSProperties;
 }
 
-export default function AdBanner({ slot, format = 'auto', style }: AdBannerProps) {
-  const location = useLocation();
+export default function AdBanner({
+  slot,
+  format = 'auto',
+  style,
+}: AdBannerProps) {
   const insRef = useRef<HTMLModElement>(null);
+  const initializedRef = useRef(false);
 
   useEffect(() => {
-    // Only push if element exists and hasn't already been filled
-    if (insRef.current && !insRef.current.getAttribute('data-adsbygoogle-status')) {
-      try {
-        (window.adsbygoogle = window.adsbygoogle || []).push({});
-      } catch (err) {
-        console.error('AdSense initialization error:', err);
-      }
+    if (!insRef.current || initializedRef.current) return;
+
+    const ins = insRef.current;
+
+    // Don't initialize an already processed AdSense element
+    if (ins.getAttribute('data-adsbygoogle-status')) {
+      initializedRef.current = true;
+      return;
     }
-  }, [location.pathname, slot]);
+
+    try {
+      (window.adsbygoogle = window.adsbygoogle || []).push({});
+      initializedRef.current = true;
+    } catch (error) {
+      console.error('AdSense initialization error:', error);
+    }
+  }, []);
 
   return (
     <div
@@ -33,15 +44,17 @@ export default function AdBanner({ slot, format = 'auto', style }: AdBannerProps
         maxWidth: '728px',
         padding: '0 16px',
         overflow: 'hidden',
-        ...style
+        ...style,
       }}
     >
       <ins
-        // 🔥 Key forces React to cleanly unmount/remount on route change
-        key={`${location.pathname}-${slot}`}
         ref={insRef}
         className="adsbygoogle"
-        style={{ display: 'block', width: '100%', minHeight: '280px' }}
+        style={{
+          display: 'block',
+          width: '100%',
+          minHeight: '280px',
+        }}
         data-ad-client="ca-pub-8155064094205693"
         data-ad-slot={slot}
         data-ad-format={format}
