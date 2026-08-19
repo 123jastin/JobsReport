@@ -4,10 +4,18 @@ type Env = {
   GROQ_API_KEY: string;
 };
 
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const GROQ_API_URL =
+  'https://api.groq.com/openai/v1/chat/completions';
 
-// Current high-capability Groq production model
+// ============================================================
+// MODEL
+// ============================================================
+
 const AI_MODEL = 'openai/gpt-oss-120b';
+
+// ============================================================
+// CORS
+// ============================================================
 
 const corsHeaders = {
   'Content-Type': 'application/json',
@@ -16,18 +24,34 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
+// ============================================================
+// RESPONSE HELPER
+// ============================================================
+
 function jsonResponse(
   data: any,
   status = 200
 ): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: corsHeaders,
-  });
+  return new Response(
+    JSON.stringify(data),
+    {
+      status,
+      headers: corsHeaders,
+    }
+  );
 }
 
+// ============================================================
+// CLEAN TEXT
+// ============================================================
+
 function cleanText(value: any): string {
-  if (value === null || value === undefined) return '';
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return '';
+  }
 
   return String(value)
     .replace(/&nbsp;/g, ' ')
@@ -40,34 +64,57 @@ function cleanText(value: any): string {
     .trim();
 }
 
-function extractJSON(content: string): any {
-  if (!content) return null;
+// ============================================================
+// PARSE JSON
+// ============================================================
 
-  let cleaned = content
-    .replace(/```json/gi, '')
-    .replace(/```/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .trim();
+function extractJSON(
+  content: string
+): any | null {
 
-  // First attempt: direct JSON
+  if (!content) {
+    return null;
+  }
+
+  const cleaned =
+    content
+      .replace(/```json/gi, '')
+      .replace(/```/g, '')
+      .trim();
+
+  // Direct JSON
   try {
     return JSON.parse(cleaned);
   } catch {}
 
-  // Second attempt: find the first JSON object
-  const firstBrace = cleaned.indexOf('{');
-  const lastBrace = cleaned.lastIndexOf('}');
+  // Find JSON object
+  const firstBrace =
+    cleaned.indexOf('{');
 
-  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-    const possibleJSON = cleaned.substring(firstBrace, lastBrace + 1);
+  const lastBrace =
+    cleaned.lastIndexOf('}');
 
+  if (
+    firstBrace !== -1 &&
+    lastBrace !== -1 &&
+    lastBrace > firstBrace
+  ) {
     try {
-      return JSON.parse(possibleJSON);
+      return JSON.parse(
+        cleaned.substring(
+          firstBrace,
+          lastBrace + 1
+        )
+      );
     } catch {}
   }
 
   return null;
 }
+
+// ============================================================
+// GROQ REQUEST
+// ============================================================
 
 async function callGroq(
   apiKey: string,
@@ -75,131 +122,232 @@ async function callGroq(
   options: {
     temperature?: number;
     max_tokens?: number;
-    reasoning_effort?: 'none' | 'low' | 'medium' | 'high';
+    reasoning_effort?: 'low' | 'medium' | 'high';
   } = {}
 ) {
-  const response = await fetch(GROQ_API_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: AI_MODEL,
 
-      messages,
+  const response =
+    await fetch(
+      GROQ_API_URL,
+      {
+        method: 'POST',
 
-      // GPT-OSS 120B supports JSON Object Mode
-      response_format: {
-        type: 'json_object',
-      },
+        headers: {
+          Authorization:
+            `Bearer ${apiKey}`,
 
-      temperature: options.temperature ?? 0.2,
-      max_tokens: options.max_tokens ?? 2000,
+          'Content-Type':
+            'application/json',
+        },
 
-      // Keep reasoning controlled for this structured task
-      reasoning_effort: options.reasoning_effort ?? 'medium',
-    }),
-  });
+        body: JSON.stringify({
 
-  const data: any = await response.json();
+          model: AI_MODEL,
+
+          messages,
+
+          response_format: {
+            type: 'json_object',
+          },
+
+          temperature:
+            options.temperature ?? 0.3,
+
+          max_tokens:
+            options.max_tokens ?? 1800,
+
+          reasoning_effort:
+            options.reasoning_effort ?? 'low',
+
+          // Don't return reasoning content
+          include_reasoning: false,
+        }),
+      }
+    );
+
+  const data: any =
+    await response.json();
+
+  // ==========================================================
+  // GROQ ERROR
+  // ==========================================================
 
   if (!response.ok) {
-    const errorMessage =
+
+    const message =
       data?.error?.message ||
       data?.message ||
-      `Groq API returned HTTP ${response.status}`;
+      `Groq HTTP ${response.status}`;
 
-    throw new Error(errorMessage);
+    const error: any =
+      new Error(message);
+
+    error.status =
+      response.status;
+
+    error.groq =
+      data;
+
+    throw error;
   }
 
-  if (!data?.choices?.[0]?.message?.content) {
-    throw new Error('Groq returned an empty response');
-  }
+  // ==========================================================
+  // EMPTY RESPONSE
+  // ==========================================================
 
-  return data;
-}
+  const content =
+    data?.choices?.[0]?.message?.content;
 
-export const onRequestOptions: PagesFunction<Env> = async () => {
-  return new Response(null, {
-    status: 204,
-    headers: corsHeaders,
-  });
-};
-
-export const onRequestPost: PagesFunction<Env> = async (context) => {
-  const { GROQ_API_KEY } = context.env;
-
-  // ============================================================
-  // CHECK API KEY
-  // ============================================================
-
-  if (!GROQ_API_KEY) {
-    return jsonResponse(
-      {
-        success: false,
-        error: 'AI service not configured',
-        details: 'GROQ_API_KEY is missing from Cloudflare environment variables.',
-      },
-      500
+  if (!content) {
+    throw new Error(
+      'Groq returned an empty response'
     );
   }
 
-  try {
-    // ============================================================
-    // READ REQUEST
-    // ============================================================
+  return {
+    data,
+    content,
+  };
+}
 
-    const body: any = await context.request.json();
+// ============================================================
+// OPTIONS
+// ============================================================
 
-    const rawText =
-      typeof body.text === 'string'
-        ? body.text.trim()
-        : '';
+export const onRequestOptions:
+  PagesFunction<Env> =
+  async () => {
 
-    if (!rawText || rawText.length < 20) {
+    return new Response(
+      null,
+      {
+        status: 204,
+        headers: corsHeaders,
+      }
+    );
+  };
+
+// ============================================================
+// MAIN API
+// ============================================================
+
+export const onRequestPost:
+  PagesFunction<Env> =
+  async (context) => {
+
+    const {
+      GROQ_API_KEY
+    } = context.env;
+
+    // ========================================================
+    // API KEY
+    // ========================================================
+
+    if (!GROQ_API_KEY) {
+
       return jsonResponse(
         {
           success: false,
-          error: 'Please provide at least 20 characters of company information.',
+          error:
+            'AI service not configured',
+
+          details:
+            'GROQ_API_KEY is missing from Cloudflare environment variables.',
         },
-        400
+        500
       );
     }
 
-    // Limit input to avoid unnecessary token usage
-    const sourceText = rawText.substring(0, 5000);
+    try {
 
-    // ============================================================
-    // STEP 1: EXTRACT STRUCTURED FACTS
-    // ============================================================
+      // ======================================================
+      // REQUEST BODY
+      // ======================================================
 
-    let facts: any = null;
+      const body: any =
+        await context.request.json();
 
-    const extractionMessages = [
-      {
-        role: 'system',
-        content: `
-You are a highly accurate company-information extraction engine.
+      const rawText =
+        typeof body.text === 'string'
+          ? body.text.trim()
+          : '';
 
-Your task is to extract company facts from the supplied reference text.
+      if (
+        !rawText ||
+        rawText.length < 20
+      ) {
 
-IMPORTANT RULES:
+        return jsonResponse(
+          {
+            success: false,
 
-1. Return ONLY valid JSON.
-2. Extract ONLY information explicitly stated in the source.
-3. NEVER invent or guess facts.
-4. If information is missing, use an empty string "".
-5. If a list is missing, use [].
-6. Keep addresses exactly supported by the source.
-7. Do not infer a postal code.
-8. Do not infer a founding year.
-9. Do not infer employee numbers.
-10. Do not invent services.
-11. Do not turn nearby places into company locations.
-12. Preserve the official company name when explicitly available.
+            error:
+              'Please provide at least 20 characters of company information.',
+          },
+          400
+        );
+      }
 
-Return this exact JSON structure:
+      // Keep request reasonably small
+      const sourceText =
+        rawText.substring(
+          0,
+          5000
+        );
+
+      // ======================================================
+      // ONE AI REQUEST
+      // ======================================================
+
+      const messages = [
+
+        {
+          role: 'system',
+
+          content: `
+You are an expert company information extraction and business-reference writing engine for JobsReport.
+
+Your job is to analyze the supplied company information and return structured company data plus an encyclopedia-style company description.
+
+IMPORTANT:
+
+Extract facts ONLY from the supplied source.
+
+NEVER invent facts.
+
+NEVER guess missing information.
+
+If something is not stated, use an empty string "".
+
+For missing lists, use [].
+
+Do not infer:
+- postal codes
+- employee numbers
+- founding years
+- branches
+- customers
+- awards
+- achievements
+- market share
+- ownership
+- services
+
+unless supported by the source.
+
+COUNTRY CODES:
+
+TZ = Tanzania
+KE = Kenya
+UG = Uganda
+RW = Rwanda
+ZA = South Africa
+NG = Nigeria
+GH = Ghana
+
+Return ONLY valid JSON.
+
+Use exactly this structure:
 
 {
   "name": "",
@@ -214,180 +362,44 @@ Return this exact JSON structure:
   "country": "",
   "foundedYear": "",
   "employeeCount": "",
+  "ownership": "",
   "services": [],
   "specialties": [],
   "industriesServed": [],
   "nearbyLocations": [],
   "keyEntities": [],
-  "ownership": ""
+  "description": "",
+  "shortDescription": "",
+  "metaTitle": "",
+  "metaDescription": ""
 }
 
-Country must use a country code when explicitly identifiable:
+DESCRIPTION RULES:
 
-TZ = Tanzania
-KE = Kenya
-UG = Uganda
-RW = Rwanda
-ZA = South Africa
-NG = Nigeria
-GH = Ghana
+Write 150–300 words.
 
-If the country is not explicitly identifiable, return "".
-        `.trim(),
-      },
-      {
-        role: 'user',
-        content: `
-Extract the company information from this source:
+Write like a professional encyclopedia or business reference article.
 
-${sourceText}
-        `.trim(),
-      },
-    ];
+Begin by explaining what the company is and where it operates.
 
-    // Try extraction twice
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        const extractionResponse = await callGroq(
-          GROQ_API_KEY,
-          extractionMessages,
-          {
-            temperature: 0.1,
-            max_tokens: 1400,
-            reasoning_effort: 'low',
-          }
-        );
+Describe its services and activities.
 
-        const extractedContent =
-          extractionResponse.choices[0].message.content || '';
+Mention customers or industries served only when supported.
 
-        const parsed = extractJSON(extractedContent);
+Mention geographical information naturally.
 
-        if (parsed && typeof parsed === 'object') {
-          facts = parsed;
-          break;
-        }
-      } catch (error) {
-        console.error(
-          `Fact extraction attempt ${attempt} failed:`,
-          error
-        );
+Use nearby locations only when explicitly supported.
 
-        if (attempt === 2) {
-          throw error;
-        }
-      }
-    }
+Do not exaggerate.
 
-    // ============================================================
-    // FALLBACK IF EXTRACTION FAILED
-    // ============================================================
+Do not use promotional language.
 
-    if (!facts) {
-      facts = {};
-    }
+Do not repeatedly say "the company".
 
-    if (!facts.name) {
-      facts.name = sourceText
-        .substring(0, 100)
-        .split(/[.,\n]/)[0]
-        .replace(/Company Name[:|\s]*/i, '')
-        .trim();
-    }
+Do not repeat the company name more than 3 times.
 
-    // Normalize arrays
-    facts.services = Array.isArray(facts.services)
-      ? facts.services
-      : [];
+Do not use:
 
-    facts.specialties = Array.isArray(facts.specialties)
-      ? facts.specialties
-      : [];
-
-    facts.industriesServed = Array.isArray(
-      facts.industriesServed
-    )
-      ? facts.industriesServed
-      : [];
-
-    facts.nearbyLocations = Array.isArray(
-      facts.nearbyLocations
-    )
-      ? facts.nearbyLocations
-      : [];
-
-    facts.keyEntities = Array.isArray(
-      facts.keyEntities
-    )
-      ? facts.keyEntities
-      : [];
-
-    // ============================================================
-    // LOCATION CONTEXT
-    // ============================================================
-
-    const locationContext = [
-      facts.streetAddress,
-      facts.area,
-      facts.locality,
-      facts.district,
-      facts.postalArea,
-      facts.country,
-      ...facts.nearbyLocations,
-    ]
-      .filter(Boolean)
-      .map(cleanText)
-      .join(', ');
-
-    // ============================================================
-    // STEP 2: GENERATE ENCYCLOPEDIA-STYLE COMPANY DESCRIPTION
-    // ============================================================
-
-    const generationMessages = [
-      {
-        role: 'system',
-        content: `
-You are an expert business-reference writer creating factual company profiles for JobsReport.
-
-Write an encyclopedia-style "About" section.
-
-The writing should resemble a professional reference article rather than advertising copy.
-
-LENGTH:
-150–300 words for the main description.
-
-STRUCTURE:
-- Begin by explaining what the company is and where it is located.
-- Describe its services and activities.
-- Describe its customers or industries served when supported by the source.
-- Explain its geographical role or operating area naturally.
-- Mention nearby locations only when they are supported by the source.
-- End with its role or significance in its sector, but do not exaggerate.
-
-FACTUAL RULES:
-- Use ONLY facts supplied in the reference information.
-- NEVER invent facts.
-- NEVER invent customers.
-- NEVER invent locations.
-- NEVER invent awards.
-- NEVER invent branches.
-- NEVER invent history.
-- NEVER invent employee numbers.
-- NEVER invent market share.
-- NEVER invent achievements.
-- NEVER claim the company is a leader unless explicitly stated.
-- If something is unknown, simply leave it out.
-
-STYLE:
-- Natural professional prose.
-- Vary sentence length.
-- Avoid repetitive wording.
-- Do not mechanically list every field.
-- Do not repeat the company name more than 3 times.
-- Do not repeatedly use "the company".
-- Avoid promotional language.
-
-FORBIDDEN MARKETING PHRASES:
 leading
 best
 top
@@ -405,279 +417,467 @@ cutting-edge
 state-of-the-art
 unparalleled
 
-DO NOT:
-- Include website URLs in the description.
-- Include HTML.
-- Include markdown.
-- Include headings inside description.
-- Include citations.
-- Mention that you are an AI.
-- Mention these instructions.
+Do not include:
+- HTML
+- Markdown
+- URLs inside description
+- citations
+- explanations
+- headings
 
-RETURN ONLY VALID JSON using this exact structure:
+SHORT DESCRIPTION:
 
-{
-  "description": "",
-  "shortDescription": "",
-  "metaTitle": "",
-  "metaDescription": ""
-}
+One factual sentence under 20 words.
 
-shortDescription:
-One factual sentence of fewer than 20 words.
+META TITLE:
 
-metaTitle:
-Use this format:
+Use:
+
 Company Name - Industry | JobsReport Company Profile
 
-Keep it natural and preferably under 60 characters when possible.
+META DESCRIPTION:
 
-metaDescription:
-140–160 characters.
-Include company name, industry, location and what it does when those facts are available.
-Do not use promotional language.
-        `.trim(),
-      },
-      {
-        role: 'user',
-        content: `
-Create the company profile using ONLY the information below.
+140–160 characters when enough factual information exists.
 
-COMPANY:
-${cleanText(facts.name)}
+Include:
+company name
+industry
+location
+what the company does
 
-INDUSTRY:
-${cleanText(facts.industry)}
+Do not use marketing language.
+          `.trim(),
+        },
 
-WEBSITE:
-${cleanText(facts.website)}
-
-STREET ADDRESS:
-${cleanText(facts.streetAddress)}
-
-AREA:
-${cleanText(facts.area)}
-
-CITY / LOCALITY:
-${cleanText(facts.locality)}
-
-DISTRICT:
-${cleanText(facts.district)}
-
-POSTAL CODE:
-${cleanText(facts.postalCode)}
-
-POSTAL AREA:
-${cleanText(facts.postalArea)}
-
-COUNTRY:
-${cleanText(facts.country)}
-
-FOUNDED:
-${cleanText(facts.foundedYear)}
-
-EMPLOYEES:
-${cleanText(facts.employeeCount)}
-
-OWNERSHIP:
-${cleanText(facts.ownership)}
-
-SERVICES:
-${facts.services.map(cleanText).filter(Boolean).join(', ')}
-
-SPECIALTIES:
-${facts.specialties.map(cleanText).filter(Boolean).join(', ')}
-
-INDUSTRIES SERVED:
-${facts.industriesServed.map(cleanText).filter(Boolean).join(', ')}
-
-NEARBY LOCATIONS:
-${facts.nearbyLocations.map(cleanText).filter(Boolean).join(', ')}
-
-KEY ENTITIES:
-${facts.keyEntities.map(cleanText).filter(Boolean).join(', ')}
-
-LOCATION CONTEXT:
-${locationContext}
-
-SOURCE INFORMATION:
-${sourceText}
-        `.trim(),
-      },
-    ];
-
-    let descriptionData: any = null;
-
-    try {
-      const descriptionResponse = await callGroq(
-        GROQ_API_KEY,
-        generationMessages,
         {
-          temperature: 0.75,
-          max_tokens: 1400,
-          reasoning_effort: 'medium',
+          role: 'user',
+
+          content: `
+Analyze this company information:
+
+${sourceText}
+
+Return the required JSON only.
+          `.trim(),
+        },
+
+      ];
+
+      // ======================================================
+      // TRY AI
+      // ======================================================
+
+      let aiResult: any = null;
+
+      let lastError: any = null;
+
+      for (
+        let attempt = 1;
+        attempt <= 2;
+        attempt++
+      ) {
+
+        try {
+
+          aiResult =
+            await callGroq(
+              GROQ_API_KEY,
+              messages,
+              {
+                temperature: 0.35,
+
+                max_tokens: 2200,
+
+                reasoning_effort: 'low',
+              }
+            );
+
+          break;
+
+        } catch (error: any) {
+
+          lastError =
+            error;
+
+          console.error(
+            `Company AI attempt ${attempt} failed:`,
+            error
+          );
+
+          // Wait briefly before retry
+          if (
+            attempt === 1
+          ) {
+
+            await new Promise(
+              resolve =>
+                setTimeout(
+                  resolve,
+                  700
+                )
+            );
+          }
         }
-      );
-
-      const descriptionContent =
-        descriptionResponse.choices[0].message.content || '';
-
-      descriptionData = extractJSON(descriptionContent);
-
-      // Fallback if JSON extraction fails
-      if (!descriptionData) {
-        descriptionData = {
-          description: cleanText(descriptionContent),
-          shortDescription: '',
-          metaTitle: '',
-          metaDescription: '',
-        };
       }
-    } catch (error) {
-      console.error(
-        'Company description generation failed:',
-        error
-      );
 
-      throw error;
-    }
+      // ======================================================
+      // AI FAILED
+      // ======================================================
 
-    // ============================================================
-    // FINAL FALLBACKS
-    // ============================================================
+      if (!aiResult) {
 
-    let description = cleanText(
-      descriptionData?.description
-    );
+        const status =
+          lastError?.status || 500;
 
-    if (!description || description.length < 50) {
-      description = sourceText.substring(0, 800);
-    }
+        return jsonResponse(
+          {
+            success: false,
 
-    const shortDescription = cleanText(
-      descriptionData?.shortDescription
-    );
+            error:
+              'AI service unavailable',
 
-    const metaTitle =
-      cleanText(descriptionData?.metaTitle) ||
-      `${cleanText(facts.name) || 'Company'} - ${
-        cleanText(facts.industry) || 'Company Profile'
-      } | JobsReport`;
+            details:
+              lastError?.message ||
+              'Groq request failed',
 
-    const metaDescription = cleanText(
-      descriptionData?.metaDescription
-    );
+            model:
+              AI_MODEL,
 
-    // ============================================================
-    // RETURN FINAL DATA
-    // ============================================================
+            groq_status:
+              status,
+          },
+          status === 429
+            ? 429
+            : 500
+        );
+      }
 
-    return jsonResponse({
-      success: true,
+      // ======================================================
+      // PARSE AI JSON
+      // ======================================================
 
-      model: AI_MODEL,
+      const parsed =
+        extractJSON(
+          aiResult.content
+        );
 
-      data: {
-        // ------------------------------------------
-        // Extracted facts
-        // ------------------------------------------
+      if (
+        !parsed ||
+        typeof parsed !== 'object'
+      ) {
 
-        name: cleanText(facts.name),
+        console.error(
+          'Invalid AI JSON:',
+          aiResult.content
+        );
 
-        industry: cleanText(facts.industry),
+        return jsonResponse(
+          {
+            success: false,
 
-        website: cleanText(facts.website),
+            error:
+              'AI returned invalid JSON',
 
-        streetAddress: cleanText(
-          facts.streetAddress
-        ),
+            model:
+              AI_MODEL,
+          },
+          422
+        );
+      }
 
-        area: cleanText(facts.area),
+      // ======================================================
+      // NORMALIZE
+      // ======================================================
 
-        locality: cleanText(facts.locality),
+      const facts: any = {
 
-        district: cleanText(facts.district),
+        name:
+          cleanText(
+            parsed.name
+          ),
 
-        postalCode: cleanText(
-          facts.postalCode
-        ),
+        industry:
+          cleanText(
+            parsed.industry
+          ),
 
-        postalArea: cleanText(
-          facts.postalArea
-        ),
+        website:
+          cleanText(
+            parsed.website
+          ),
+
+        streetAddress:
+          cleanText(
+            parsed.streetAddress
+          ),
+
+        area:
+          cleanText(
+            parsed.area
+          ),
+
+        locality:
+          cleanText(
+            parsed.locality
+          ),
+
+        district:
+          cleanText(
+            parsed.district
+          ),
+
+        postalCode:
+          cleanText(
+            parsed.postalCode
+          ),
+
+        postalArea:
+          cleanText(
+            parsed.postalArea
+          ),
 
         country:
-          cleanText(facts.country) || 'TZ',
+          cleanText(
+            parsed.country
+          ) || 'TZ',
 
-        foundedYear: cleanText(
-          facts.foundedYear
-        ),
+        foundedYear:
+          cleanText(
+            parsed.foundedYear
+          ),
 
-        employeeCount: cleanText(
-          facts.employeeCount
-        ),
+        employeeCount:
+          cleanText(
+            parsed.employeeCount
+          ),
 
-        ownership: cleanText(
-          facts.ownership
-        ),
+        ownership:
+          cleanText(
+            parsed.ownership
+          ),
 
-        services: facts.services
-          .map(cleanText)
-          .filter(Boolean),
+        services:
+          Array.isArray(
+            parsed.services
+          )
+            ? parsed.services
+                .map(cleanText)
+                .filter(Boolean)
+            : [],
 
-        specialties: facts.specialties
-          .map(cleanText)
-          .filter(Boolean),
+        specialties:
+          Array.isArray(
+            parsed.specialties
+          )
+            ? parsed.specialties
+                .map(cleanText)
+                .filter(Boolean)
+            : [],
 
         industriesServed:
-          facts.industriesServed
-            .map(cleanText)
-            .filter(Boolean),
+          Array.isArray(
+            parsed.industriesServed
+          )
+            ? parsed.industriesServed
+                .map(cleanText)
+                .filter(Boolean)
+            : [],
 
         nearbyLocations:
-          facts.nearbyLocations
-            .map(cleanText)
-            .filter(Boolean),
+          Array.isArray(
+            parsed.nearbyLocations
+          )
+            ? parsed.nearbyLocations
+                .map(cleanText)
+                .filter(Boolean)
+            : [],
 
         keyEntities:
-          facts.keyEntities
-            .map(cleanText)
-            .filter(Boolean),
+          Array.isArray(
+            parsed.keyEntities
+          )
+            ? parsed.keyEntities
+                .map(cleanText)
+                .filter(Boolean)
+            : [],
 
-        // ------------------------------------------
-        // Generated content
-        // ------------------------------------------
+      };
 
-        description,
+      // ======================================================
+      // FALLBACK COMPANY NAME
+      // ======================================================
 
-        shortDescription,
+      if (!facts.name) {
 
-        metaTitle,
+        facts.name =
+          sourceText
+            .substring(
+              0,
+              100
+            )
+            .split(
+              /[.,\n]/
+            )[0]
+            .replace(
+              /Company Name[:|\s]*/i,
+              ''
+            )
+            .trim();
+      }
 
-        metaDescription,
-      },
-    });
-  } catch (err) {
-    console.error('Groq API error:', err);
+      // ======================================================
+      // DESCRIPTION
+      // ======================================================
 
-    const errorMessage =
-      err instanceof Error
-        ? err.message
-        : 'Unknown error';
+      let description =
+        cleanText(
+          parsed.description
+        );
 
-    // Give frontend a useful error instead of hiding
-    // the actual Groq/Cloudflare problem.
-    return jsonResponse(
-      {
-        success: false,
+      if (
+        !description ||
+        description.length < 50
+      ) {
 
-        error: 'AI service unavailable',
+        description =
+          sourceText.substring(
+            0,
+            800
+          );
+      }
 
-        details: errorMessage,
+      // ======================================================
+      // SHORT DESCRIPTION
+      // ======================================================
 
-        model: AI_MODEL,
-      },
-      500
-    );
-  }
-};
+      const shortDescription =
+        cleanText(
+          parsed.shortDescription
+        );
+
+      // ======================================================
+      // META TITLE
+      // ======================================================
+
+      const metaTitle =
+        cleanText(
+          parsed.metaTitle
+        ) ||
+        `${facts.name} - ${
+          facts.industry ||
+          'Company Profile'
+        } | JobsReport`;
+
+      // ======================================================
+      // META DESCRIPTION
+      // ======================================================
+
+      const metaDescription =
+        cleanText(
+          parsed.metaDescription
+        );
+
+      // ======================================================
+      // RETURN
+      // ======================================================
+
+      return jsonResponse(
+        {
+          success: true,
+
+          model:
+            AI_MODEL,
+
+          data: {
+
+            name:
+              facts.name,
+
+            industry:
+              facts.industry,
+
+            website:
+              facts.website,
+
+            streetAddress:
+              facts.streetAddress,
+
+            area:
+              facts.area,
+
+            locality:
+              facts.locality,
+
+            district:
+              facts.district,
+
+            postalCode:
+              facts.postalCode,
+
+            postalArea:
+              facts.postalArea,
+
+            country:
+              facts.country,
+
+            foundedYear:
+              facts.foundedYear,
+
+            employeeCount:
+              facts.employeeCount,
+
+            ownership:
+              facts.ownership,
+
+            services:
+              facts.services,
+
+            specialties:
+              facts.specialties,
+
+            industriesServed:
+              facts.industriesServed,
+
+            nearbyLocations:
+              facts.nearbyLocations,
+
+            keyEntities:
+              facts.keyEntities,
+
+            description,
+
+            shortDescription,
+
+            metaTitle,
+
+            metaDescription,
+          },
+        },
+        200
+      );
+
+    } catch (err: any) {
+
+      console.error(
+        'Company API error:',
+        err
+      );
+
+      return jsonResponse(
+        {
+          success: false,
+
+          error:
+            'AI service unavailable',
+
+          details:
+            err?.message ||
+            'Unknown error',
+
+          model:
+            AI_MODEL,
+        },
+        500
+      );
+    }
+  };
