@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { MapPin, Building2, Briefcase, ArrowLeft, Globe, AlertCircle } from 'lucide-react';
+import { MapPin, Building2, Briefcase, ArrowLeft, Globe, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import SEO from '../components/SEO';
 import { useCountry } from '../context/CountryContext';
 
@@ -20,6 +20,7 @@ interface Job {
   city?: string;
   region?: string;
   country?: string;
+  workplace_type?: string;
 }
 
 const getJobSlug = (job: Job): string => {
@@ -28,9 +29,12 @@ const getJobSlug = (job: Job): string => {
   const titleSlug = job.title
     ?.toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-+/g, '-')
     .replace(/^-|-$/g, '');
-  return `/market/${titleSlug}-${job.id}`;
+  return `/market/${titleSlug}-job-${job.id}`;
 };
+
+const JOBS_PER_PAGE = 5;
 
 export default function RegionPage() {
   const { countrySlug, regionSlug } = useParams();
@@ -39,11 +43,8 @@ export default function RegionPage() {
   const [loading, setLoading] = useState(true);
   const [locationInfo, setLocationInfo] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pagination, setPagination] = useState({
-    page: 1,
-    totalPages: 1,
-    hasMore: false
-  });
+  const [jobPage, setJobPage] = useState(1);
+  const [totalJobs, setTotalJobs] = useState(0);
 
   const regionName = regionSlug
     ? regionSlug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
@@ -70,31 +71,23 @@ export default function RegionPage() {
         setLoading(true);
         setError(null);
         
-        // Fetch region jobs directly from optimized API
+        // Fetch region jobs with pagination
         const response = await fetch(
-          `/api/market?location=${encodeURIComponent(regionName)}&limit=50`
+          `/api/market?location=${encodeURIComponent(regionName)}&limit=${JOBS_PER_PAGE}&page=${jobPage}`
         );
         
         if (response.ok) {
           const data = await response.json();
           const regionJobs = data.jobs || [];
           
-          // Set location info (can be enhanced with separate location lookup if needed)
           setLocationInfo({
             name: regionName,
             country: countryFromSlug,
             postcode: regionJobs[0]?.postcode || ''
           });
           
-          // Set jobs directly from API (already filtered)
           setJobs(regionJobs);
-          
-          // Set pagination info
-          setPagination({
-            page: data.stats?.page || 1,
-            totalPages: data.stats?.totalPages || 1,
-            hasMore: data.stats?.hasMore || false
-          });
+          setTotalJobs(data.stats?.totalJobs || 0);
           
           setLoading(false);
         } else {
@@ -110,10 +103,11 @@ export default function RegionPage() {
     };
 
     fetchRegionData();
-  }, [regionName, regionSlug, countryFromSlug]);
+  }, [regionName, regionSlug, countryFromSlug, jobPage]);
 
   const activeJobs = jobs.filter(j => j.active !== false);
   const expiredJobs = jobs.filter(j => j.active === false);
+  const totalPages = Math.ceil(totalJobs / JOBS_PER_PAGE);
 
   if (loading) {
     return (
@@ -174,14 +168,14 @@ export default function RegionPage() {
             Jobs in {regionName}
           </h1>
           <p className="text-gray-400 text-lg max-w-2xl">
-            Browse <span className="text-white font-bold">{activeJobs.length}</span> active job opportunities in {regionName}, {countryFromSlug}.
+            Browse <span className="text-white font-bold">{totalJobs}</span> active job opportunities in {regionName}, {countryFromSlug}.
             {locationInfo?.postcode && <span className="text-gray-500"> Postcode: {locationInfo.postcode}</span>}
           </p>
           
           <div className="flex gap-6 mt-4">
             <div className="flex items-center gap-2 text-sm">
               <Briefcase size={16} className="text-amber-500" />
-              <span className="text-gray-400"><span className="text-white font-bold">{activeJobs.length}</span> Active Jobs</span>
+              <span className="text-gray-400"><span className="text-white font-bold">{totalJobs}</span> Active Jobs</span>
             </div>
             <div className="flex items-center gap-2 text-sm">
               <Building2 size={16} className="text-blue-500" />
@@ -215,7 +209,7 @@ export default function RegionPage() {
               <section>
                 <h2 className="text-lg font-bold text-white uppercase tracking-widest mb-4 flex items-center gap-3">
                   <div className="w-1.5 h-6 bg-amber-500"></div>
-                  Active Jobs in {regionName} ({activeJobs.length})
+                  Active Jobs in {regionName} ({totalJobs})
                 </h2>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -258,51 +252,48 @@ export default function RegionPage() {
                     </motion.div>
                   ))}
                 </div>
-              </section>
-            )}
 
-            {/* Expired Jobs */}
-            {expiredJobs.length > 0 && (
-              <section>
-                <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                  Expired Listings ({expiredJobs.length})
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 opacity-50">
-                  {expiredJobs.map((job: Job) => (
-                    <div key={job.id} className="block p-4 bg-white/[0.005] border border-white/5 rounded-2xl">
-                      <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
-                          <div className="w-full h-full bg-white/5 flex items-center justify-center text-xs font-bold text-gray-600">
-                            {job.company?.charAt(0)?.toUpperCase() || '?'}
-                          </div>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <span className="px-1.5 py-0.5 rounded text-[7px] font-bold bg-red-500/10 text-red-400 uppercase">EXPIRED</span>
-                          <h3 className="text-sm font-bold text-gray-500 truncate mt-1">{job.title}</h3>
-                          <div className="flex items-center gap-2 mt-1.5 text-[10px] text-gray-600">
-                            <span>{job.company}</span><span>{job.location}</span>
-                          </div>
-                        </div>
-                      </div>
+                {/* Jobs Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-2 mt-8">
+                    <button 
+                      onClick={() => setJobPage(Math.max(1, jobPage - 1))}
+                      disabled={jobPage === 1}
+                      className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all uppercase tracking-wider flex items-center gap-1"
+                    >
+                      <ChevronLeft size={14} /> Prev
+                    </button>
+                    
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                        <button 
+                          key={p}
+                          onClick={() => setJobPage(p)}
+                          className={`w-10 h-10 rounded-xl text-xs font-bold transition-all ${
+                            jobPage === p 
+                              ? 'bg-amber-600 text-white shadow-sm shadow-amber-500/20' 
+                              : 'bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                    
+                    <button 
+                      onClick={() => setJobPage(Math.min(totalPages, jobPage + 1))}
+                      disabled={jobPage === totalPages}
+                      className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all uppercase tracking-wider flex items-center gap-1"
+                    >
+                      Next <ChevronRight size={14} />
+                    </button>
+                  </div>
+                )}
               </section>
             )}
-          </>
-        )}
 
-        {/* Pagination - if needed */}
-        {pagination.hasMore && (
-          <div className="text-center py-6">
-            <Link 
-              to="/market" 
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-amber-600/10 border border-amber-600/30 text-amber-400 hover:bg-amber-600/20 transition-all text-xs font-bold uppercase tracking-wider"
-            >
-              View All Jobs in Market
-              <ArrowLeft size={14} className="rotate-180" />
-            </Link>
-          </div>
+            {/* Expired Jobs - Hidden by default since we only fetch active jobs */}
+          </>
         )}
 
         {/* Ad removed */}
