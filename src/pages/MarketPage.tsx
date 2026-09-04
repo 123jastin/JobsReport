@@ -33,7 +33,6 @@ export default function MarketPage() {
   const currentPage = pageParam ? parseInt(pageParam) : 1;
   
   const [jobs, setJobs] = useState<RawJob[]>([]);
-  const [companies, setCompanies] = useState<Company[]>([]);
   const [roles, setRoles] = useState<string[]>(['All']);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -59,22 +58,79 @@ export default function MarketPage() {
     async function loadMarketData() {
       setLoading(true);
       try {
-        const response = await fetch(`/api/market?limit=${JOBS_PER_PAGE}&page=${currentPage}`);
+        // Build query parameters for server-side filtering
+        const params = new URLSearchParams({
+          limit: JOBS_PER_PAGE.toString(),
+          page: currentPage.toString()
+        });
+        
+        // Add role filter
+        if (selectedRole !== 'All') {
+          params.append('role', selectedRole);
+        }
+        
+        // Add country filter
+        if (selectedCountry !== 'Worldwide') {
+          params.append('country', selectedCountry);
+        }
+        
+        // Add category filter
+        if (categorySlug) {
+          const categoryName = categorySlug.replace(/-/g, ' ');
+          params.append('category', categoryName);
+        }
+        
+        // Add search query
+        if (searchQuery && searchQuery.trim()) {
+          params.append('search', searchQuery.trim());
+        }
+        
+        // Fetch jobs with filters
+        const response = await fetch(`/api/market?${params.toString()}`);
+        
         if (response.ok) {
           const data = await response.json();
-          setJobs(Array.isArray(data.activeJobs) ? data.activeJobs : (Array.isArray(data.jobs) ? data.jobs : []));
-          setCompanies(Array.isArray(data.companies) ? data.companies : []);
-          setRoles(['All', ...(Array.isArray(data.roles) ? data.roles : [])]);
+          setJobs(Array.isArray(data.jobs) ? data.jobs : []);
           setTotalJobs(data.stats?.totalJobs || 0);
           setTotalActiveJobs(data.stats?.totalJobs || 0);
+          
+          // If roles not provided in response, fetch from filters endpoint
+          if (data.roles && Array.isArray(data.roles)) {
+            setRoles(['All', ...data.roles]);
+          }
         }
-      } catch (err) {} finally {
+      } catch (err) {
+        console.error('Failed to load market data:', err);
+        setJobs([]);
+      } finally {
         setLoading(false);
       }
     }
     loadMarketData();
     window.scrollTo(0, 0);
-  }, [currentPage]);
+  }, [currentPage, selectedRole, selectedCountry, categorySlug]);
+
+  // Load roles from filters endpoint if not provided by market API
+  useEffect(() => {
+    async function loadRoles() {
+      try {
+        const filtersRes = await fetch('/api/filters');
+        if (filtersRes.ok) {
+          const filtersData = await filtersRes.json();
+          if (filtersData.roles && Array.isArray(filtersData.roles)) {
+            setRoles(['All', ...filtersData.roles]);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load roles:', err);
+      }
+    }
+    
+    // Only load roles if we don't have them yet
+    if (roles.length <= 1) {
+      loadRoles();
+    }
+  }, []);
 
   useEffect(() => {
     if (currentPage !== 1 && (searchQuery || selectedRole !== 'All' || selectedCountry !== 'Worldwide')) {
@@ -102,9 +158,14 @@ export default function MarketPage() {
     else navigate(`${basePath}/page/${page}`);
   };
 
-  const getCompanyLogo = (companyName: string) => {
-    const foundCo = companies.find(c => c.name.toLowerCase() === companyName.toLowerCase());
-    return foundCo?.logoUrl;
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    // Reload with search query
+    if (searchQuery.trim()) {
+      navigate(`/market/search/${encodeURIComponent(searchQuery.trim().replace(/\s+/g, '-'))}`);
+    } else {
+      navigate('/market');
+    }
   };
 
   const activeJobs = jobs.filter(j => j.active !== false);
@@ -184,14 +245,13 @@ export default function MarketPage() {
   };
 
   const JobCard = ({ job, idx }: { job: RawJob; idx: number }) => {
-    const companyLogo = getCompanyLogo(job.company);
     return (
       <motion.div layout initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0, transition: { delay: Math.min(idx * 0.04, 0.4) } }}
         exit={{ opacity: 0, scale: 0.95 }} key={job.id || idx}
         className="group p-5 bg-white/[0.01] border hover:bg-white/[0.03] border-white/5 rounded-3xl transition-all duration-300">
         <div className="flex gap-4 items-start">
           <div className="flex-shrink-0 w-12 h-12 rounded-2xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center p-0.5 mt-0.5">
-            {companyLogo ? <img src={companyLogo} alt={`${job.company} logo`} className="w-full h-full object-cover rounded-xl" />
+            {job.logoUrl ? <img src={job.logoUrl} alt={`${job.company} logo`} className="w-full h-full object-cover rounded-xl" />
               : <div className="w-full h-full bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400 font-mono">{job.company?.charAt(0)?.toUpperCase() || '?'}</div>}
           </div>
           <div className="flex-1 min-w-0">
@@ -266,12 +326,12 @@ export default function MarketPage() {
         </div>
 
         <div className="flex flex-col md:flex-row gap-4 items-center justify-between p-4 bg-white/[0.02] border border-white/5 rounded-3xl">
-          <div className="relative w-full md:w-80">
+          <form onSubmit={handleSearch} className="relative w-full md:w-80">
             <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
             <input type="text" placeholder="Search title or company..." value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-white/5 border border-white/10 rounded-2xl pl-11 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors font-mono" />
-          </div>
+          </form>
           <div className="flex gap-1.5 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 scrollbar-none">
             {roles.map(role => (
               <button key={role} onClick={() => handleRoleSelect(role)}
