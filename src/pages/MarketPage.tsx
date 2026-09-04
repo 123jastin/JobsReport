@@ -10,14 +10,19 @@ import SEO from '../components/SEO';
 import { useCountry } from '../context/CountryContext';
 
 const getJobSlug = (job: RawJob): string => {
+  // Use the slug from API if available (already in correct format)
   if ((job as any).slug) {
     return `/market/${(job as any).slug}`;
   }
+  
+  // Fallback: Generate with -job- prefix to match existing URL format
   const titleSlug = job.title
     ?.toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
-  return `/market/${titleSlug}-${job.id}`;
+  
+  // IMPORTANT: Include -job- before the ID to match existing URLs
+  return `/market/${titleSlug}-job-${job.id}`;
 };
 
 const JOBS_PER_PAGE = 15;
