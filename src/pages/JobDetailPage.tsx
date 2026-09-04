@@ -54,7 +54,11 @@ export default function JobDetailPage() {
         }
         
         setJob(null);
-      } catch (err) {} finally { setLoading(false); }
+      } catch (err) {
+        console.error('Error loading job:', err);
+      } finally {
+        setLoading(false);
+      }
     }
     if (jobId) loadJob();
     window.scrollTo(0, 0);
@@ -62,7 +66,15 @@ export default function JobDetailPage() {
   
   const getRelatedJobs = () => {
     if (!job || allJobs.length === 0) return [];
-    return allJobs.filter(j => j.id !== job.id).slice(0, 6);
+    
+    return allJobs
+      .filter(j => j.id !== job.id)
+      .filter(j => {
+        // Only return active, non-expired jobs
+        const isJobExpired = j.active === false || (j.expiresAt && new Date(j.expiresAt) < new Date());
+        return !isJobExpired;
+      })
+      .slice(0, 6);
   };
 
   const relatedJobs = getRelatedJobs();
@@ -100,7 +112,7 @@ export default function JobDetailPage() {
   const isEmailLink = job.url && job.url.startsWith('mailto:');
   const salaryDisplay = job.salary || null;
   const currencyFlag = job.salary_currency_flag || '🇹🇿';
-  const jobUrl = job.slug ? `https://jobsreport.online/market/${job.slug}` : `https://jobsreport.online/market/${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${job.id}`;
+  const jobUrl = job.slug ? `https://jobsreport.online/market/${job.slug}` : `https://jobsreport.online/market/${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-job-${job.id}`;
   const hasWhatsApp = job.whatsapp_number && job.whatsapp_number.trim().length > 6;
   const hasInstructions = job.application_instructions && job.application_instructions.trim().length > 0;
   const hasUrl = job.url && !hasWhatsApp;
@@ -381,23 +393,43 @@ export default function JobDetailPage() {
         </div>
       </div>
 
+      {/* Related Jobs - Only Active Jobs */}
       {relatedJobs.length > 0 && (
         <div className="px-4 py-8 border-t border-white/5">
-          <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Briefcase size={18} className="text-blue-500" />{isExpired ? 'Similar Active Jobs' : 'Related Jobs'}</h3>
-          <p className="text-xs text-gray-500 mb-4">{isExpired ? 'This job has expired. Here are similar active opportunities.' : `Explore more ${job.role || ''} jobs similar to this one.`}</p>
+          <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+            <Briefcase size={18} className="text-blue-500" />
+            {isExpired ? 'Similar Active Jobs' : 'Related Jobs'}
+          </h3>
+          <p className="text-xs text-gray-500 mb-4">
+            {isExpired ? 'This job has expired. Here are similar active opportunities.' : `Explore more ${job.role || ''} jobs similar to this one.`}
+          </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {relatedJobs.map((rj: any) => {
-              const rjUrl = rj.slug ? `/market/${rj.slug}` : `/market/${rj.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${rj.id}`;
-              const rjExpired = rj.active === false || (rj.expiresAt && new Date(rj.expiresAt) < new Date());
+              const rjUrl = rj.slug 
+                ? `/market/${rj.slug}` 
+                : `/market/${rj.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-job-${rj.id}`;
+              
               return (
-                <Link key={rj.id} to={rjUrl} className={`p-4 rounded-xl border transition-all group ${rjExpired ? 'border-white/5 bg-white/[0.005] opacity-60' : 'border-white/5 bg-white/[0.01] hover:bg-white/[0.03] hover:border-blue-500/30'}`}>
+                <Link 
+                  key={rj.id} 
+                  to={rjUrl} 
+                  className="p-4 rounded-xl border border-white/5 bg-white/[0.01] hover:bg-white/[0.03] hover:border-blue-500/30 transition-all group"
+                >
                   <div className="flex items-start justify-between mb-2">
-                    <div className="font-bold text-white text-sm group-hover:text-blue-400 transition-colors truncate pr-2">{rj.title}</div>
-                    {rjExpired && <span className="text-[9px] text-red-400 bg-red-500/10 px-2 py-0.5 rounded whitespace-nowrap">Expired</span>}
+                    <div className="font-bold text-white text-sm group-hover:text-blue-400 transition-colors truncate pr-2">
+                      {rj.title}
+                    </div>
+                    <span className="text-[9px] text-green-400 bg-green-500/10 px-2 py-0.5 rounded whitespace-nowrap">
+                      Active
+                    </span>
                   </div>
                   <div className="flex items-center gap-3 text-[11px] text-gray-400">
-                    <span className="flex items-center gap-1"><Building2 size={11} />{rj.company}</span>
-                    <span className="flex items-center gap-1"><MapPin size={11} />{rj.location || 'Remote'}</span>
+                    <span className="flex items-center gap-1">
+                      <Building2 size={11} />{rj.company}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <MapPin size={11} />{rj.location || 'Remote'}
+                    </span>
                   </div>
                   {rj.salary && <div className="text-[10px] text-emerald-400 mt-1.5 font-mono">{rj.salary}</div>}
                 </Link>
