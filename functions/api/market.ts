@@ -35,32 +35,38 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const role = url.searchParams.get('role');
   const location = url.searchParams.get('location');
   const workplaceType = url.searchParams.get('workplace_type');
+  const search = url.searchParams.get('search');
 
   try {
     // Build WHERE clause
     let whereClause = 'WHERE j.is_active = 1';
     const bindParams: any[] = [];
     
-    if (category && category !== 'all') {
-      whereClause += ' AND j.job_category = ?';
+    if (category && category !== 'all' && category !== '') {
+      whereClause += ' AND LOWER(j.job_category) = LOWER(?)';
       bindParams.push(category);
     }
-    if (role && role !== 'all') {
-      whereClause += ' AND r.name = ?';
+    if (role && role !== 'all' && role !== '') {
+      whereClause += ' AND LOWER(r.name) = LOWER(?)';
       bindParams.push(role);
     }
-    if (company && company !== 'all') {
-      whereClause += ' AND c.name = ?';
+    if (company && company !== 'all' && company !== '') {
+      whereClause += ' AND LOWER(c.name) = LOWER(?)';
       bindParams.push(company);
     }
-    if (workplaceType && workplaceType !== 'all') {
+    if (workplaceType && workplaceType !== 'all' && workplaceType !== '') {
       whereClause += ' AND j.workplace_type = ?';
       bindParams.push(workplaceType);
     }
-    if (location && location !== 'all') {
+    if (location && location !== 'all' && location !== '') {
       whereClause += ' AND (j.location LIKE ? OR j.city LIKE ? OR j.region LIKE ? OR j.country LIKE ?)';
       const locPattern = `%${location}%`;
       bindParams.push(locPattern, locPattern, locPattern, locPattern);
+    }
+    if (search && search.trim() !== '') {
+      whereClause += ' AND (j.title LIKE ? OR c.name LIKE ?)';
+      const searchPattern = `%${search.trim()}%`;
+      bindParams.push(searchPattern, searchPattern);
     }
 
     // Run only 2 queries (count + jobs)
@@ -96,36 +102,46 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
     const totalActiveJobs = totalResult.results[0]?.total || 0;
 
-    // Map jobs - no need for separate image query for listing
-    const jobs = jobsResult.results.map((job: any) => ({
-      id: job.id,
-      title: job.title,
-      role: job.role,
-      company: job.company,
-      companyId: job.company_id,
-      logoUrl: job.logo_url || '',
-      companyWebsite: job.website || '',
-      location: job.location || 'Remote',
-      url: job.apply_url,
-      salary: formatSalary(job),
-      salary_min: job.salary_min,
-      salary_max: job.salary_max,
-      salary_currency: job.salary_currency || 'TZS',
-      job_category: job.job_category || 'Other',
-      employment_type: job.employment_type || 'FULL_TIME',
-      workplace_type: job.workplace_type || 'Onsite',
-      slug: job.canonical_url ? 
-        job.canonical_url.split('/').pop() : 
-        `${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${job.id}`,
-      postedAt: job.posted_at,
-      expiresAt: job.expires_at,
-      active: job.is_active === 1,
-      whatsapp_number: job.whatsapp_number || '',
-      application_instructions: job.application_instructions || '',
-      city: job.city || '',
-      region: job.region || '',
-      country: job.country || 'Tanzania'
-    }));
+    // Map jobs with correct slug format
+    const jobs = jobsResult.results.map((job: any) => {
+      // Generate slug with -job- prefix
+      const titleSlug = job.title
+        ?.toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+      
+      return {
+        id: job.id,
+        title: job.title,
+        role: job.role,
+        company: job.company,
+        companyId: job.company_id,
+        logoUrl: job.logo_url || '',
+        companyWebsite: job.website || '',
+        location: job.location || 'Remote',
+        url: job.apply_url,
+        salary: formatSalary(job),
+        salary_min: job.salary_min,
+        salary_max: job.salary_max,
+        salary_currency: job.salary_currency || 'TZS',
+        job_category: job.job_category || 'Other',
+        employment_type: job.employment_type || 'FULL_TIME',
+        workplace_type: job.workplace_type || 'Onsite',
+        
+        // ✅ CORRECT SLUG FORMAT with -job- prefix
+        slug: `${titleSlug}-job-${job.id}`,
+        
+        postedAt: job.posted_at,
+        expiresAt: job.expires_at,
+        active: job.is_active === 1,
+        whatsapp_number: job.whatsapp_number || '',
+        application_instructions: job.application_instructions || '',
+        city: job.city || '',
+        region: job.region || '',
+        country: job.country || 'Tanzania'
+      };
+    });
 
     return new Response(JSON.stringify({
       jobs,
