@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { motion, AnimatePresence } from 'motion/react';
-import { MapPin, Building2, Briefcase, ArrowLeft, Globe } from 'lucide-react';
+import { motion } from 'motion/react';
+import { MapPin, Building2, Briefcase, ArrowLeft, Globe, AlertCircle } from 'lucide-react';
 import SEO from '../components/SEO';
 import { useCountry } from '../context/CountryContext';
 
@@ -16,9 +16,15 @@ interface Job {
   logoUrl?: string;
   expiresAt?: string;
   postedAt?: string;
+  slug?: string;
+  city?: string;
+  region?: string;
+  country?: string;
 }
 
 const getJobSlug = (job: Job): string => {
+  if (job.slug) return `/market/${job.slug}`;
+  
   const titleSlug = job.title
     ?.toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
@@ -32,6 +38,12 @@ export default function RegionPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [locationInfo, setLocationInfo] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    totalPages: 1,
+    hasMore: false
+  });
 
   const regionName = regionSlug
     ? regionSlug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
@@ -49,49 +61,56 @@ export default function RegionPage() {
 
   useEffect(() => {
     const fetchRegionData = async () => {
+      if (!regionName) {
+        setLoading(false);
+        return;
+      }
+
       try {
-        const [locationsRes, marketRes] = await Promise.all([
-          fetch('/api/locations'),
-          fetch('/api/market')
-        ]);
-
-        if (locationsRes.ok && marketRes.ok) {
-          const locations = await locationsRes.json();
-          const marketData = await marketRes.json();
-          const allJobs = marketData.jobs || [];
-
-          const regionNameLower = regionName.toLowerCase();
-          const matchedLocation = locations.find((loc: any) => 
-            loc.name.toLowerCase() === regionNameLower ||
-            loc.name.toLowerCase().replace(/\s+/g, '-') === regionSlug?.toLowerCase()
-          );
+        setLoading(true);
+        setError(null);
+        
+        // Fetch region jobs directly from optimized API
+        const response = await fetch(
+          `/api/market?location=${encodeURIComponent(regionName)}&limit=50`
+        );
+        
+        if (response.ok) {
+          const data = await response.json();
+          const regionJobs = data.jobs || [];
           
-          setLocationInfo(matchedLocation);
-
-          const regionJobs = allJobs.filter((job: any) => {
-            if (!job.location) return false;
-            const loc = job.location.toLowerCase();
-            return loc.includes(regionNameLower) || 
-                   (matchedLocation?.region && loc.includes(matchedLocation.region.toLowerCase()));
+          // Set location info (can be enhanced with separate location lookup if needed)
+          setLocationInfo({
+            name: regionName,
+            country: countryFromSlug,
+            postcode: regionJobs[0]?.postcode || ''
           });
-
-          const sorted = regionJobs.sort((a: any, b: any) => {
-            if (a.active && !b.active) return -1;
-            if (!a.active && b.active) return 1;
-            return 0;
+          
+          // Set jobs directly from API (already filtered)
+          setJobs(regionJobs);
+          
+          // Set pagination info
+          setPagination({
+            page: data.stats?.page || 1,
+            totalPages: data.stats?.totalPages || 1,
+            hasMore: data.stats?.hasMore || false
           });
-
-          setJobs(sorted);
+          
+          setLoading(false);
+        } else {
+          throw new Error('Failed to fetch region jobs');
         }
       } catch (err) {
         console.error('Failed to load region data:', err);
+        setError('Failed to load jobs for this region. Please try again later.');
+        setJobs([]);
       } finally {
         setLoading(false);
       }
     };
 
-    if (regionName) fetchRegionData();
-  }, [regionName, regionSlug]);
+    fetchRegionData();
+  }, [regionName, regionSlug, countryFromSlug]);
 
   const activeJobs = jobs.filter(j => j.active !== false);
   const expiredJobs = jobs.filter(j => j.active === false);
@@ -99,7 +118,27 @@ export default function RegionPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="w-8 h-8 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+        <div className="w-8 h-8 rounded-full border-2 border-amber-500 border-t-transparent animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-4">
+        <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mb-4">
+          <AlertCircle size={24} className="text-red-400" />
+        </div>
+        <h2 className="text-2xl font-bold text-white mb-2">Error Loading Region</h2>
+        <p className="text-gray-400 mb-6 text-center max-w-md">{error}</p>
+        <div className="flex gap-3">
+          <Link to="/regions" className="px-6 py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl text-sm uppercase tracking-wider transition-colors">
+            ← Browse All Regions
+          </Link>
+          <Link to="/market" className="px-6 py-3 bg-white/5 hover:bg-white/10 text-gray-300 font-bold rounded-xl text-sm uppercase tracking-wider transition-colors">
+            View All Jobs
+          </Link>
+        </div>
       </div>
     );
   }
@@ -165,8 +204,8 @@ export default function RegionPage() {
             <h3 className="text-lg font-bold text-white mb-2">No Jobs in {regionName}</h3>
             <p className="text-gray-500 text-sm mb-6">No job listings available for this region yet.</p>
             <div className="flex items-center justify-center gap-4">
-              <Link to="/regions" className="text-blue-500 hover:text-blue-400 font-bold uppercase tracking-wider text-sm">← Browse Other Regions</Link>
-              <Link to="/market" className="text-blue-500 hover:text-blue-400 font-bold uppercase tracking-wider text-sm">View All Jobs →</Link>
+              <Link to="/regions" className="text-amber-500 hover:text-amber-400 font-bold uppercase tracking-wider text-sm">← Browse Other Regions</Link>
+              <Link to="/market" className="text-amber-500 hover:text-amber-400 font-bold uppercase tracking-wider text-sm">View All Jobs →</Link>
             </div>
           </div>
         ) : (
@@ -203,6 +242,9 @@ export default function RegionPage() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
                               <span className="px-1.5 py-0.5 rounded text-[7px] font-bold bg-amber-500/10 text-amber-400 uppercase">{job.role || 'General'}</span>
+                              {job.workplace_type && (
+                                <span className="px-1.5 py-0.5 rounded text-[7px] font-bold bg-blue-500/10 text-blue-400 uppercase">{job.workplace_type}</span>
+                              )}
                             </div>
                             <h3 className="text-sm font-bold text-white group-hover:text-amber-400 transition-colors truncate">{job.title}</h3>
                             <div className="flex items-center gap-2 mt-1.5 text-[10px] text-gray-500">
@@ -248,6 +290,19 @@ export default function RegionPage() {
               </section>
             )}
           </>
+        )}
+
+        {/* Pagination - if needed */}
+        {pagination.hasMore && (
+          <div className="text-center py-6">
+            <Link 
+              to="/market" 
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-amber-600/10 border border-amber-600/30 text-amber-400 hover:bg-amber-600/20 transition-all text-xs font-bold uppercase tracking-wider"
+            >
+              View All Jobs in Market
+              <ArrowLeft size={14} className="rotate-180" />
+            </Link>
+          </div>
         )}
 
         {/* Ad removed */}
