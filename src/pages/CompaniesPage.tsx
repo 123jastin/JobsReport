@@ -49,8 +49,8 @@ interface Job {
   slug?: string;
 }
 
-const COMPANIES_PER_PAGE = 5; // Changed to 5
-const JOBS_PER_PAGE = 5; // Added for jobs pagination
+const COMPANIES_PER_PAGE = 5;
+const JOBS_PER_PAGE = 5;
 
 export default function CompaniesPage() {
   const navigate = useNavigate();
@@ -62,7 +62,7 @@ export default function CompaniesPage() {
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [jobPage, setJobPage] = useState(1); // Added for jobs pagination
+  const [jobPage, setJobPage] = useState(1);
   const [totalActiveJobs, setTotalActiveJobs] = useState(0);
 
   useEffect(() => {
@@ -71,6 +71,7 @@ export default function CompaniesPage() {
         const res = await fetch('/api/companies-jobs');
         if (res.ok) {
           const companiesList = await res.json();
+          console.log('Companies list:', companiesList); // Debug
           setCompanies(Array.isArray(companiesList) ? companiesList : []);
           const totalActive = companiesList.reduce((sum: number, c: Company) => sum + (c.activeJobs || 0), 0);
           setTotalActiveJobs(totalActive);
@@ -87,7 +88,7 @@ export default function CompaniesPage() {
   useEffect(() => {
     if (selectedCompany) {
       fetchCompanyJobs(selectedCompany.id);
-      setJobPage(1); // Reset job page when company changes
+      setJobPage(1);
     }
   }, [selectedCompany]);
 
@@ -107,13 +108,22 @@ export default function CompaniesPage() {
 
   const fetchCompanyJobs = async (companyId: string) => {
     try {
-      const res = await fetch(`/api/company-jobs/${companyId}`);
+      console.log('Fetching jobs for company ID:', companyId); // Debug
+      
+      // ✅ CORRECT URL: /api/companies-jobs/{companyId}
+      const res = await fetch(`/api/companies-jobs/${companyId}`);
+      
       if (res.ok) {
         const companyJobs = await res.json();
+        console.log('Company jobs:', companyJobs); // Debug
         setJobs(Array.isArray(companyJobs) ? companyJobs : []);
+      } else {
+        console.error('Failed to fetch company jobs:', res.status);
+        setJobs([]);
       }
     } catch (err) {
-      console.error('Failed to fetch company jobs:', err);
+      console.error('Error fetching company jobs:', err);
+      setJobs([]);
     }
   };
 
@@ -145,7 +155,9 @@ export default function CompaniesPage() {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/-+/g, '-')
       .replace(/^-|-$/g, '');
-    return `/market/${titleSlug}-job-${job.id}`;
+    
+    // job.id already contains 'job-' prefix
+    return `/market/${titleSlug}-${job.id}`;
   };
 
   const pageTitle = selectedCompany 
@@ -349,7 +361,7 @@ export default function CompaniesPage() {
               </h3>
 
               {activeJobs.length === 0 ? (
-                <div className="text-center py-12 text-gray-500 text-sm">No job listings available for this company.</div>
+                <div className="text-center py-12 text-gray-500 text-sm">No active job listings available for this company.</div>
               ) : (
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
