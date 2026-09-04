@@ -5,16 +5,18 @@ type Env = {
   DB: D1Database;
 };
 
+// Server-side cache
 let filtersCache: {
   data: any;
   timestamp: number;
 } | null = null;
 
-const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+const CACHE_TTL = 60 * 60 * 1000; // 1 hour cache
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
   
+  // Return cached data if fresh
   if (filtersCache && (Date.now() - filtersCache.timestamp) < CACHE_TTL) {
     return new Response(JSON.stringify(filtersCache.data), {
       headers: { 
@@ -77,11 +79,13 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         LIMIT 100
       `).all(),
       
-      // ✅ FIXED: Just return locations directly (no EXISTS subquery)
+      // ✅ FIXED: Locations using direct job_id JOIN (not LIKE '%...%')
       DB.prepare(`
-        SELECT name, region, country, postcode
-        FROM locations
-        ORDER BY name
+        SELECT DISTINCT l.name, l.region, l.country, l.postcode
+        FROM locations l
+        INNER JOIN jobs j ON l.job_id = j.id
+        WHERE j.is_active = 1
+        ORDER BY l.name
         LIMIT 100
       `).all()
     ]);
@@ -110,6 +114,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       }))
     };
 
+    // Update cache
     filtersCache = {
       data: filters,
       timestamp: Date.now()
@@ -126,6 +131,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
   } catch (err) {
     console.error('Filters API Error:', err);
+    
+    // Return empty filters on error
     return new Response(JSON.stringify({
       categories: [],
       workplaceTypes: [],
