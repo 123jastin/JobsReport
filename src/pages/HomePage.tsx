@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Sparkles, TrendingUp, RefreshCw, ArrowRight, Zap, BarChart3, Building2, Globe, Clock, MapPin, Briefcase, ChevronRight, Search, Code, Calculator, Palette, Headphones, Users, Shield, Truck, Stethoscope, BookOpen, Scale, Leaf, Settings, Utensils, ChevronDown, FileText, MessageCircle, Flag } from 'lucide-react';
+import { Sparkles, TrendingUp, RefreshCw, ArrowRight, Zap, BarChart3, Building2, Globe, Clock, MapPin, Briefcase, ChevronRight, Search, Code, Calculator, Palette, Headphones, Users, Shield, Truck, Stethoscope, BookOpen, Scale, Leaf, Settings, Utensils, ChevronDown, ChevronLeft, FileText, MessageCircle, Flag } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import SEO from '../components/SEO';
 import TrendingCard from '../components/TrendingCard';
@@ -26,9 +26,11 @@ export default function HomePage() {
   const [workplaceTypes, setWorkplaceTypes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAllCategories, setShowAllCategories] = useState(false);
+  const [categoryPage, setCategoryPage] = useState(1);
   const { selectedCountry, setSelectedCountry, currentFlag, countriesList } = useCountry();
 
-  const INITIAL_CATEGORIES_COUNT = 10;
+  const INITIAL_CATEGORIES_COUNT = 4; // Show 4 initially
+  const CATEGORIES_PER_PAGE = 5; // 5 per page when showing all
 
   const countrySlug = selectedCountry === 'Worldwide' 
     ? '' 
@@ -55,14 +57,12 @@ export default function HomePage() {
       try {
         const countryParam = selectedCountry === 'Worldwide' ? '' : selectedCountry;
         
-        // Fetch home data, market jobs (limited), and filters in parallel
         const [homeRes, marketRes, filtersRes] = await Promise.all([
           fetch(`/api/home?country=${encodeURIComponent(countryParam)}`),
           fetch(`/api/market?limit=5&country=${encodeURIComponent(countryParam)}`),
           fetch('/api/filters')
         ]);
         
-        // Process home data
         if (homeRes.ok) {
           const data = await homeRes.json();
           setTrends(Array.isArray(data.trends) ? data.trends : []);
@@ -70,7 +70,6 @@ export default function HomePage() {
           setSpotlightCompanies(Array.isArray(data.spotlightCompanies) ? data.spotlightCompanies : []);
         }
 
-        // Process market jobs (only 5 for homepage)
         if (marketRes.ok) {
           const marketData = await marketRes.json();
           const activeJobs = (marketData.jobs || []).filter((j: any) => j.active !== false);
@@ -78,7 +77,6 @@ export default function HomePage() {
           setDisplayJobs(activeJobs.slice(0, 5));
         }
 
-        // Process filters (categories, workplace types, etc.)
         if (filtersRes.ok) {
           const filtersData = await filtersRes.json();
           setCategories(Array.isArray(filtersData.categories) ? filtersData.categories : []);
@@ -94,9 +92,19 @@ export default function HomePage() {
     fetchDashboardData();
   }, [selectedCountry]);
 
-  const visibleCategories = showAllCategories 
-    ? categories 
-    : categories.slice(0, INITIAL_CATEGORIES_COUNT);
+  // Calculate visible categories based on showAllCategories and categoryPage
+  const getVisibleCategories = () => {
+    if (!showAllCategories) {
+      return categories.slice(0, INITIAL_CATEGORIES_COUNT);
+    }
+    
+    const startIndex = (categoryPage - 1) * CATEGORIES_PER_PAGE;
+    const endIndex = startIndex + CATEGORIES_PER_PAGE;
+    return categories.slice(startIndex, endIndex);
+  };
+
+  const visibleCategories = getVisibleCategories();
+  const totalCategoryPages = Math.ceil(categories.length / CATEGORIES_PER_PAGE);
 
   const structuredData = {
     "@context": "https://schema.org",
@@ -189,17 +197,20 @@ export default function HomePage() {
               </h2>
               <p className="text-xs text-gray-500 mt-1 font-mono">
                 {showAllCategories 
-                  ? `Showing all ${categories.length} categories` 
-                  : `Top ${Math.min(INITIAL_CATEGORIES_COUNT, categories.length)} of ${categories.length} categories`}
+                  ? `Showing ${visibleCategories.length} of ${categories.length} categories (Page ${categoryPage} of ${totalCategoryPages})` 
+                  : `Top ${INITIAL_CATEGORIES_COUNT} categories`}
               </p>
             </div>
             {categories.length > INITIAL_CATEGORIES_COUNT && (
-              <button onClick={() => setShowAllCategories(!showAllCategories)}
+              <button onClick={() => {
+                setShowAllCategories(!showAllCategories);
+                setCategoryPage(1); // Reset to first page
+              }}
                 className="flex items-center gap-1.5 text-[10px] text-blue-500 hover:text-blue-400 font-bold uppercase tracking-wider transition-colors group">
                 {showAllCategories ? (
                   <><span>Show Less</span><ChevronDown size={14} className="rotate-180" /></>
                 ) : (
-                  <><span>See More ({categories.length - INITIAL_CATEGORIES_COUNT} more)</span><ChevronDown size={14} /></>
+                  <><span>See All ({categories.length})</span><ChevronDown size={14} /></>
                 )}
               </button>
             )}
@@ -208,37 +219,66 @@ export default function HomePage() {
           {categories.length === 0 ? (
             <div className="text-center py-12 text-gray-500 text-sm font-mono">No job categories available yet.</div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {visibleCategories.map((cat, index) => {
-                const iconName = getIconForRole(cat.name, cat.slug);
-                const IconComponent = ICON_COMPONENTS[iconName] || Briefcase;
-                return (
-                  <motion.div key={cat.slug} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.03, duration: 0.2 }}>
-                    <Link to={`/category/${cat.slug}`}
-                      className="group p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-blue-500/30 transition-all h-full flex flex-col">
-                      <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                        <IconComponent size={20} className="text-blue-400" />
-                      </div>
-                      <h3 className="text-sm font-bold text-white mb-1 group-hover:text-blue-400 transition-colors truncate">{cat.name}</h3>
-                      <p className="text-[10px] text-gray-500 font-mono uppercase tracking-wider mt-auto">
-                        <span><span className="text-white font-bold">{cat.activeCount || 0}</span> active job{(cat.activeCount || 0) !== 1 ? 's' : ''}</span>
-                      </p>
-                    </Link>
-                  </motion.div>
-                );
-              })}
-            </div>
-          )}
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                {visibleCategories.map((cat, index) => {
+                  const iconName = getIconForRole(cat.name, cat.slug);
+                  const IconComponent = ICON_COMPONENTS[iconName] || Briefcase;
+                  return (
+                    <motion.div key={cat.slug} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.03, duration: 0.2 }}>
+                      <Link to={`/category/${cat.slug}`}
+                        className="group p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-blue-500/30 transition-all h-full flex flex-col">
+                        <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                          <IconComponent size={20} className="text-blue-400" />
+                        </div>
+                        <h3 className="text-sm font-bold text-white mb-1 group-hover:text-blue-400 transition-colors truncate">{cat.name}</h3>
+                        <p className="text-[10px] text-gray-500 font-mono uppercase tracking-wider mt-auto">
+                          <span><span className="text-white font-bold">{cat.activeCount || 0}</span> active job{(cat.activeCount || 0) !== 1 ? 's' : ''}</span>
+                        </p>
+                      </Link>
+                    </motion.div>
+                  );
+                })}
+              </div>
 
-          {categories.length > INITIAL_CATEGORIES_COUNT && (
-            <div className="mt-4 text-center">
-              <button onClick={() => setShowAllCategories(!showAllCategories)}
-                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-white/[0.02] border border-white/10 hover:bg-white/[0.05] hover:border-blue-500/30 text-xs font-bold text-gray-400 hover:text-white uppercase tracking-wider transition-all group">
-                {showAllCategories ? <><span>Show Less</span><ChevronDown size={14} className="rotate-180" /></>
-                  : <><span>See All {categories.length} Categories</span><ChevronDown size={14} /></>}
-              </button>
-            </div>
+              {/* Pagination for categories */}
+              {showAllCategories && totalCategoryPages > 1 && (
+                <div className="flex items-center justify-center gap-2 mt-6">
+                  <button 
+                    onClick={() => setCategoryPage(Math.max(1, categoryPage - 1))}
+                    disabled={categoryPage === 1}
+                    className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all uppercase tracking-wider flex items-center gap-1"
+                  >
+                    <ChevronLeft size={14} /> Prev
+                  </button>
+                  
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalCategoryPages }, (_, i) => i + 1).map((p) => (
+                      <button 
+                        key={p}
+                        onClick={() => setCategoryPage(p)}
+                        className={`w-10 h-10 rounded-xl text-xs font-bold transition-all ${
+                          categoryPage === p 
+                            ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20' 
+                            : 'bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10'
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                  
+                  <button 
+                    onClick={() => setCategoryPage(Math.min(totalCategoryPages, categoryPage + 1))}
+                    disabled={categoryPage === totalCategoryPages}
+                    className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all uppercase tracking-wider flex items-center gap-1"
+                  >
+                    Next <ChevronRight size={14} />
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </section>
 
@@ -266,8 +306,11 @@ export default function HomePage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {displayJobs.map((job: any) => (
-                <Link key={job.id} to={`/market/${job.slug || job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${job.id}`}
-                  className="block p-4 bg-white/[0.01] border border-white/5 rounded-2xl hover:bg-white/[0.03] transition-all group">
+                <Link 
+                  key={job.id} 
+                  to={`/market/${job.slug || job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-job-${job.id}`}
+                  className="block p-4 bg-white/[0.01] border border-white/5 rounded-2xl hover:bg-white/[0.03] transition-all group"
+                >
                   <div className="flex items-start gap-3">
                     <div className="w-10 h-10 rounded-xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
                       {job.logoUrl ? <img src={job.logoUrl} alt={job.company} className="w-full h-full object-cover rounded-xl" />
