@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { Sparkles, TrendingUp, RefreshCw, ArrowRight, Zap, BarChart3, Building2, Globe, Clock, MapPin, Briefcase, ChevronRight, Search, Code, Calculator, Palette, Headphones, Users, Shield, Truck, Stethoscope, BookOpen, Scale, Leaf, Settings, Utensils, ChevronDown, FileText, MessageCircle, Flag } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import SEO from '../components/SEO';
@@ -23,6 +23,7 @@ export default function HomePage() {
   const [allActiveJobs, setAllActiveJobs] = useState<any[]>([]);
   const [spotlightCompanies, setSpotlightCompanies] = useState<string[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [workplaceTypes, setWorkplaceTypes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAllCategories, setShowAllCategories] = useState(false);
   const { selectedCountry, setSelectedCountry, currentFlag, countriesList } = useCountry();
@@ -53,12 +54,15 @@ export default function HomePage() {
     const fetchDashboardData = async () => {
       try {
         const countryParam = selectedCountry === 'Worldwide' ? '' : selectedCountry;
-        const [homeRes, marketRes, categoriesRes] = await Promise.all([
+        
+        // Fetch home data, market jobs (limited), and filters in parallel
+        const [homeRes, marketRes, filtersRes] = await Promise.all([
           fetch(`/api/home?country=${encodeURIComponent(countryParam)}`),
-          fetch(`/api/market?limit=5`),
-          fetch('/api/categories')
+          fetch(`/api/market?limit=5&country=${encodeURIComponent(countryParam)}`),
+          fetch('/api/filters')
         ]);
         
+        // Process home data
         if (homeRes.ok) {
           const data = await homeRes.json();
           setTrends(Array.isArray(data.trends) ? data.trends : []);
@@ -66,18 +70,23 @@ export default function HomePage() {
           setSpotlightCompanies(Array.isArray(data.spotlightCompanies) ? data.spotlightCompanies : []);
         }
 
+        // Process market jobs (only 5 for homepage)
         if (marketRes.ok) {
           const marketData = await marketRes.json();
-          const activeJobs = (marketData.activeJobs || marketData.jobs || []).filter((j: any) => j.active !== false);
+          const activeJobs = (marketData.jobs || []).filter((j: any) => j.active !== false);
           setAllActiveJobs(activeJobs);
           setDisplayJobs(activeJobs.slice(0, 5));
         }
 
-        if (categoriesRes.ok) {
-          const categoriesData = await categoriesRes.json();
-          setCategories(Array.isArray(categoriesData) ? categoriesData : []);
+        // Process filters (categories, workplace types, etc.)
+        if (filtersRes.ok) {
+          const filtersData = await filtersRes.json();
+          setCategories(Array.isArray(filtersData.categories) ? filtersData.categories : []);
+          setWorkplaceTypes(Array.isArray(filtersData.workplaceTypes) ? filtersData.workplaceTypes : []);
         }
-      } catch (err) {} finally {
+      } catch (err) {
+        console.error('Error fetching dashboard data:', err);
+      } finally {
         setLoading(false);
       }
     };
@@ -213,7 +222,7 @@ export default function HomePage() {
                       </div>
                       <h3 className="text-sm font-bold text-white mb-1 group-hover:text-blue-400 transition-colors truncate">{cat.name}</h3>
                       <p className="text-[10px] text-gray-500 font-mono uppercase tracking-wider mt-auto">
-                        <span><span className="text-white font-bold">{cat.activeCount || cat.count || 0}</span> active job{(cat.activeCount || cat.count) !== 1 ? 's' : ''}</span>
+                        <span><span className="text-white font-bold">{cat.activeCount || 0}</span> active job{(cat.activeCount || 0) !== 1 ? 's' : ''}</span>
                       </p>
                     </Link>
                   </motion.div>
@@ -257,7 +266,7 @@ export default function HomePage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {displayJobs.map((job: any) => (
-                <Link key={job.id} to={`/market/${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${job.id}`}
+                <Link key={job.id} to={`/market/${job.slug || job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${job.id}`}
                   className="block p-4 bg-white/[0.01] border border-white/5 rounded-2xl hover:bg-white/[0.03] transition-all group">
                   <div className="flex items-start gap-3">
                     <div className="w-10 h-10 rounded-xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
