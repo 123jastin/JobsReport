@@ -30,6 +30,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { slug } = context.params;
 
   try {
+    // Get report with role info
     const reportRes = await DB.prepare(`
       SELECT r.*, roles.name as role
       FROM reports r
@@ -45,17 +46,25 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       });
     }
 
-    // GET JOBS - MATCH BY ROLE NAME
+    // Get active jobs only - already filtered in SQL
+    // Added expires_at filter to exclude expired jobs at database level
     const jobsRes = await DB.prepare(`
-      SELECT j.*, c.name as company, c.logo_url, c.website
+      SELECT 
+        j.id, j.title, j.location, j.apply_url, j.salary,
+        j.posted_at, j.expires_at, j.is_active,
+        j.company_id,
+        c.name as company, c.logo_url, c.website
       FROM jobs j
       JOIN companies c ON j.company_id = c.id
       JOIN roles r ON j.role_id = r.id
-      WHERE LOWER(r.name) = LOWER(?) AND j.is_active = 1
+      WHERE LOWER(r.name) = LOWER(?) 
+        AND j.is_active = 1
+        AND (j.expires_at IS NULL OR j.expires_at >= date('now'))
       ORDER BY j.posted_at DESC
       LIMIT 50
     `).bind(reportRes.role).all();
 
+    // Map jobs - only active, non-expired jobs
     const jobs = jobsRes.results.map((j: any) => ({
       id: j.id,
       title: j.title,
@@ -65,10 +74,11 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       salary: j.salary,
       postedAt: j.posted_at,
       expiresAt: j.expires_at,
-      active: j.is_active === 1,
+      active: true, // All jobs are active since we filtered in SQL
       logoUrl: j.logo_url || ''
     }));
 
+    // Get unique companies from active jobs
     const companiesSet = new Set(jobs.map((j: any) => j.company));
     const stats = {
       companies: companiesSet.size,
@@ -78,14 +88,19 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     const chartData = jobs.length > 0 ? groupJobsByMonth(jobsRes.results) : [{ name: 'No Data', demand: 0 }];
     const distribution = jobs.length > 0 ? groupByLocation(jobsRes.results) : [{ name: 'No Data', value: 1 }];
 
+    // Build companies list from active jobs
     const companiesMap = new Map();
     jobsRes.results.forEach((j: any) => {
       if (!companiesMap.has(j.company_id)) {
-        companiesMap.set(j.company_id, { name: j.company, url: j.website || j.apply_url || '' });
+        companiesMap.set(j.company_id, { 
+          name: j.company, 
+          url: j.website || j.apply_url || '' 
+        });
       }
     });
     const companies = Array.from(companiesMap.values());
 
+    // Return response with only active jobs
     return new Response(JSON.stringify({
       id: reportRes.id,
       title: reportRes.title,
@@ -100,9 +115,13 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       chartData,
       distribution,
       companies,
-      jobs
+      jobs // Only active jobs are returned
     }), {
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      headers: { 
+        'Content-Type': 'application/json', 
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'public, max-age=300' // Cache for 5 minutes
+      }
     });
 
   } catch (err) {
