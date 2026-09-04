@@ -10,12 +10,23 @@ import SEO from '../components/SEO';
 import { useCountry } from '../context/CountryContext';
 
 const getJobSlug = (job: RawJob): string => {
-  // Use slug from API if available
-  if ((job as any).slug) {
-    return `/market/${(job as any).slug}`;
+  // Check if API provided slug
+  const apiSlug = (job as any).slug;
+  if (apiSlug) {
+    // Make sure it has -job- prefix
+    if (apiSlug.includes('-job-')) {
+      return `/market/${apiSlug}`;
+    }
+    // If missing -job-, add it
+    const lastDash = apiSlug.lastIndexOf('-');
+    if (lastDash > 0) {
+      const titlePart = apiSlug.substring(0, lastDash);
+      const idPart = apiSlug.substring(lastDash + 1);
+      return `/market/${titlePart}-job-${idPart}`;
+    }
   }
   
-  // Generate in the OLD format: title-slug-job-id
+  // Generate with -job- prefix (MANDATORY)
   const titleSlug = job.title
     ?.toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
@@ -63,37 +74,43 @@ export default function MarketPage() {
     async function loadMarketData() {
       setLoading(true);
       try {
+        // Build query parameters for server-side filtering
         const params = new URLSearchParams({
           limit: JOBS_PER_PAGE.toString(),
           page: currentPage.toString()
         });
         
+        // Add role filter
         if (selectedRole !== 'All') {
           params.append('role', selectedRole);
         }
         
+        // Add country filter
         if (selectedCountry !== 'Worldwide') {
           params.append('country', selectedCountry);
         }
         
+        // Add category filter
         if (categorySlug) {
           const categoryName = categorySlug.replace(/-/g, ' ');
           params.append('category', categoryName);
         }
         
+        // Add search query
         if (searchQuery && searchQuery.trim()) {
           params.append('search', searchQuery.trim());
         }
         
+        // Fetch jobs with filters
         const response = await fetch(`/api/market?${params.toString()}`);
         
         if (response.ok) {
           const data = await response.json();
-          console.log('First job from API:', data.jobs?.[0]); // Debug
           setJobs(Array.isArray(data.jobs) ? data.jobs : []);
           setTotalJobs(data.stats?.totalJobs || 0);
           setTotalActiveJobs(data.stats?.totalJobs || 0);
           
+          // If roles not provided in response, fetch from filters endpoint
           if (data.roles && Array.isArray(data.roles)) {
             setRoles(['All', ...data.roles]);
           }
@@ -109,6 +126,7 @@ export default function MarketPage() {
     window.scrollTo(0, 0);
   }, [currentPage, selectedRole, selectedCountry, categorySlug]);
 
+  // Load roles from filters endpoint if not provided by market API
   useEffect(() => {
     async function loadRoles() {
       try {
@@ -124,6 +142,7 @@ export default function MarketPage() {
       }
     }
     
+    // Only load roles if we don't have them yet
     if (roles.length <= 1) {
       loadRoles();
     }
@@ -157,6 +176,7 @@ export default function MarketPage() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
+    // Reload with search query
     if (searchQuery.trim()) {
       navigate(`/market/search/${encodeURIComponent(searchQuery.trim().replace(/\s+/g, '-'))}`);
     } else {
@@ -242,7 +262,6 @@ export default function MarketPage() {
 
   const JobCard = ({ job, idx }: { job: RawJob; idx: number }) => {
     const jobUrl = getJobSlug(job);
-    console.log('Job URL generated:', jobUrl); // Debug log
     
     return (
       <motion.div layout initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0, transition: { delay: Math.min(idx * 0.04, 0.4) } }}
