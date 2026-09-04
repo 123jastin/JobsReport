@@ -12,17 +12,33 @@ import { useCountry } from '../context/CountryContext';
 const getJobSlug = (job: RawJob): string => {
   // Use slug from API if available
   if ((job as any).slug) {
-    return `/market/${(job as any).slug}`;
+    const apiSlug = (job as any).slug;
+    // Check if slug already has 'job-'
+    if (apiSlug.includes('-job-')) {
+      return `/market/${apiSlug}`;
+    }
+    // Add 'job-' if missing
+    const lastDash = apiSlug.lastIndexOf('-');
+    if (lastDash > 0) {
+      const titlePart = apiSlug.substring(0, lastDash);
+      const idPart = apiSlug.substring(lastDash + 1);
+      return `/market/${titlePart}-job-${idPart}`;
+    }
   }
   
-  // Generate with title + job.id (job.id already contains 'job-')
+  // Generate from title and ID
   const titleSlug = job.title
     ?.toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '');
   
-  return `/market/${titleSlug}-${job.id}`;
+  // Check if job.id already has 'job-'
+  if (job.id.startsWith('job-')) {
+    return `/market/${titleSlug}-${job.id}`;
+  } else {
+    return `/market/${titleSlug}-job-${job.id}`;
+  }
 };
 
 const JOBS_PER_PAGE = 15;
@@ -89,6 +105,7 @@ export default function MarketPage() {
         
         if (response.ok) {
           const data = await response.json();
+          console.log('First job from API:', data.jobs?.[0]); // Debug log
           setJobs(Array.isArray(data.jobs) ? data.jobs : []);
           setTotalJobs(data.stats?.totalJobs || 0);
           setTotalActiveJobs(data.stats?.totalJobs || 0);
@@ -241,6 +258,7 @@ export default function MarketPage() {
 
   const JobCard = ({ job, idx }: { job: RawJob; idx: number }) => {
     const jobUrl = getJobSlug(job);
+    console.log('Job URL generated:', jobUrl); // Debug log
     
     return (
       <motion.div layout initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0, transition: { delay: Math.min(idx * 0.04, 0.4) } }}
