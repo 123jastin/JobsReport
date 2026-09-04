@@ -15,7 +15,6 @@ const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
   
-  // Return cached if fresh
   if (filtersCache && (Date.now() - filtersCache.timestamp) < CACHE_TTL) {
     return new Response(JSON.stringify(filtersCache.data), {
       headers: { 
@@ -78,20 +77,11 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         LIMIT 100
       `).all(),
       
-      // Locations with active jobs (optimized)
+      // ✅ FIXED: Just return locations directly (no EXISTS subquery)
       DB.prepare(`
-        SELECT DISTINCT l.name, l.region, l.country, l.postcode
-        FROM locations l
-        WHERE EXISTS (
-          SELECT 1 FROM jobs j 
-          WHERE j.is_active = 1 
-            AND (
-              LOWER(j.location) LIKE '%' || LOWER(l.name) || '%'
-              OR LOWER(j.city) LIKE '%' || LOWER(l.name) || '%'
-              OR LOWER(j.region) LIKE '%' || LOWER(l.name) || '%'
-            )
-        )
-        ORDER BY l.name
+        SELECT name, region, country, postcode
+        FROM locations
+        ORDER BY name
         LIMIT 100
       `).all()
     ]);
