@@ -10,18 +10,18 @@ import SEO from '../components/SEO';
 import { useCountry } from '../context/CountryContext';
 
 const getJobSlug = (job: RawJob): string => {
-  // Use the slug from API if available (already in correct format)
+  // Use slug from API if available
   if ((job as any).slug) {
     return `/market/${(job as any).slug}`;
   }
   
-  // Fallback: Generate with -job- prefix to match existing URL format
+  // Generate in the OLD format: title-slug-job-id
   const titleSlug = job.title
     ?.toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-+/g, '-')
     .replace(/^-|-$/g, '');
   
-  // IMPORTANT: Include -job- before the ID to match existing URLs
   return `/market/${titleSlug}-job-${job.id}`;
 };
 
@@ -63,43 +63,37 @@ export default function MarketPage() {
     async function loadMarketData() {
       setLoading(true);
       try {
-        // Build query parameters for server-side filtering
         const params = new URLSearchParams({
           limit: JOBS_PER_PAGE.toString(),
           page: currentPage.toString()
         });
         
-        // Add role filter
         if (selectedRole !== 'All') {
           params.append('role', selectedRole);
         }
         
-        // Add country filter
         if (selectedCountry !== 'Worldwide') {
           params.append('country', selectedCountry);
         }
         
-        // Add category filter
         if (categorySlug) {
           const categoryName = categorySlug.replace(/-/g, ' ');
           params.append('category', categoryName);
         }
         
-        // Add search query
         if (searchQuery && searchQuery.trim()) {
           params.append('search', searchQuery.trim());
         }
         
-        // Fetch jobs with filters
         const response = await fetch(`/api/market?${params.toString()}`);
         
         if (response.ok) {
           const data = await response.json();
+          console.log('First job from API:', data.jobs?.[0]); // Debug
           setJobs(Array.isArray(data.jobs) ? data.jobs : []);
           setTotalJobs(data.stats?.totalJobs || 0);
           setTotalActiveJobs(data.stats?.totalJobs || 0);
           
-          // If roles not provided in response, fetch from filters endpoint
           if (data.roles && Array.isArray(data.roles)) {
             setRoles(['All', ...data.roles]);
           }
@@ -115,7 +109,6 @@ export default function MarketPage() {
     window.scrollTo(0, 0);
   }, [currentPage, selectedRole, selectedCountry, categorySlug]);
 
-  // Load roles from filters endpoint if not provided by market API
   useEffect(() => {
     async function loadRoles() {
       try {
@@ -131,7 +124,6 @@ export default function MarketPage() {
       }
     }
     
-    // Only load roles if we don't have them yet
     if (roles.length <= 1) {
       loadRoles();
     }
@@ -165,7 +157,6 @@ export default function MarketPage() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    // Reload with search query
     if (searchQuery.trim()) {
       navigate(`/market/search/${encodeURIComponent(searchQuery.trim().replace(/\s+/g, '-'))}`);
     } else {
@@ -250,6 +241,9 @@ export default function MarketPage() {
   };
 
   const JobCard = ({ job, idx }: { job: RawJob; idx: number }) => {
+    const jobUrl = getJobSlug(job);
+    console.log('Job URL generated:', jobUrl); // Debug log
+    
     return (
       <motion.div layout initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0, transition: { delay: Math.min(idx * 0.04, 0.4) } }}
         exit={{ opacity: 0, scale: 0.95 }} key={job.id || idx}
@@ -264,7 +258,7 @@ export default function MarketPage() {
               <span className="px-2 py-0.5 rounded text-[8px] font-bold bg-blue-500/10 text-blue-400 font-mono uppercase">{job.role || 'Unknown'}</span>
               <span className="text-[10px] text-gray-500 font-mono flex items-center gap-1"><Clock size={11} />{job.postedAt || 'Recent'}</span>
             </div>
-            <Link to={getJobSlug(job)}>
+            <Link to={jobUrl}>
               <h3 className="font-bold text-white text-base leading-tight hover:text-blue-400 transition-colors cursor-pointer">{job.title}</h3>
             </Link>
             <div className="flex items-center gap-2 mt-2">
