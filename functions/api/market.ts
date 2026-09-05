@@ -20,6 +20,14 @@ function formatSalary(job: any): string {
   return '';
 }
 
+// Server-side cache for unfiltered count
+let marketCountCache = {
+  data: null as any,
+  timestamp: 0
+};
+
+const COUNT_CACHE_TTL = 60 * 1000; // 1 minute cache for count
+
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
   const url = new URL(context.request.url);
@@ -36,6 +44,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const location = url.searchParams.get('location');
   const workplaceType = url.searchParams.get('workplace_type');
   const search = url.searchParams.get('search');
+
+  // Check if this is an unfiltered request
+  const isUnfiltered = !category && !company && !role && !location && !workplaceType && !search;
 
   try {
     // Build WHERE clause
@@ -69,36 +80,50 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       bindParams.push(searchPattern, searchPattern);
     }
 
-    // Run only 2 queries (count + jobs)
-    const [totalResult, jobsResult] = await Promise.all([
-      DB.prepare(`
+    // Get total count (use cache for unfiltered requests)
+    let totalResult;
+    
+    if (isUnfiltered && marketCountCache.data && (Date.now() - marketCountCache.timestamp) < COUNT_CACHE_TTL) {
+      // Use cached count
+      totalResult = marketCountCache.data;
+    } else {
+      totalResult = await DB.prepare(`
         SELECT COUNT(*) as total 
         FROM jobs j
         JOIN roles r ON j.role_id = r.id
         JOIN companies c ON j.company_id = c.id
         ${whereClause}
-      `).bind(...bindParams).all(),
+      `).bind(...bindParams).all();
       
-      DB.prepare(`
-        SELECT 
-          j.id, j.title, j.job_category, j.employment_type, 
-          j.workplace_type, j.salary_min, j.salary_max, 
-          j.salary_currency, j.city, j.region, j.country,
-          j.posted_at, j.expires_at, j.is_active, 
-          j.location, j.salary, j.apply_url,
-          j.whatsapp_number, j.application_instructions,
-          j.canonical_url, j.street_address, j.postcode,
-          r.name as role,
-          c.name as company, c.id as company_id, 
-          c.logo_url, c.website
-        FROM jobs j
-        JOIN roles r ON j.role_id = r.id
-        JOIN companies c ON j.company_id = c.id
-        ${whereClause}
-        ORDER BY j.posted_at DESC
-        LIMIT ? OFFSET ?
-      `).bind(...bindParams, limit, offset).all()
-    ]);
+      // Cache only unfiltered count
+      if (isUnfiltered) {
+        marketCountCache = {
+          data: totalResult,
+          timestamp: Date.now()
+        };
+      }
+    }
+
+    // Get jobs
+    const jobsResult = await DB.prepare(`
+      SELECT 
+        j.id, j.title, j.job_category, j.employment_type, 
+        j.workplace_type, j.salary_min, j.salary_max, 
+        j.salary_currency, j.city, j.region, j.country,
+        j.posted_at, j.expires_at, j.is_active, 
+        j.location, j.salary, j.apply_url,
+        j.whatsapp_number, j.application_instructions,
+        j.canonical_url, j.street_address, j.postcode,
+        r.name as role,
+        c.name as company, c.id as company_id, 
+        c.logo_url, c.website
+      FROM jobs j
+      JOIN roles r ON j.role_id = r.id
+      JOIN companies c ON j.company_id = c.id
+      ${whereClause}
+      ORDER BY j.posted_at DESC
+      LIMIT ? OFFSET ?
+    `).bind(...bindParams, limit, offset).all();
 
     const totalActiveJobs = totalResult.results[0]?.total || 0;
 
