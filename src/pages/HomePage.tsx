@@ -29,8 +29,8 @@ export default function HomePage() {
   const [categoryPage, setCategoryPage] = useState(1);
   const { selectedCountry, setSelectedCountry, currentFlag, countriesList } = useCountry();
 
-  const INITIAL_CATEGORIES_COUNT = 4; // Show 4 initially
-  const CATEGORIES_PER_PAGE = 5; // 5 per page when showing all
+  const INITIAL_CATEGORIES_COUNT = 4;
+  const CATEGORIES_PER_PAGE = 5;
 
   const countrySlug = selectedCountry === 'Worldwide' 
     ? '' 
@@ -92,7 +92,6 @@ export default function HomePage() {
     fetchDashboardData();
   }, [selectedCountry]);
 
-  // Calculate visible categories based on showAllCategories and categoryPage
   const getVisibleCategories = () => {
     if (!showAllCategories) {
       return categories.slice(0, INITIAL_CATEGORIES_COUNT);
@@ -204,7 +203,7 @@ export default function HomePage() {
             {categories.length > INITIAL_CATEGORIES_COUNT && (
               <button onClick={() => {
                 setShowAllCategories(!showAllCategories);
-                setCategoryPage(1); // Reset to first page
+                setCategoryPage(1);
               }}
                 className="flex items-center gap-1.5 text-[10px] text-blue-500 hover:text-blue-400 font-bold uppercase tracking-wider transition-colors group">
                 {showAllCategories ? (
@@ -242,7 +241,6 @@ export default function HomePage() {
                 })}
               </div>
 
-              {/* Pagination for categories */}
               {showAllCategories && totalCategoryPages > 1 && (
                 <div className="flex items-center justify-center gap-2 mt-6">
                   <button 
@@ -308,7 +306,7 @@ export default function HomePage() {
               {displayJobs.map((job: any) => (
                 <Link 
                   key={job.id} 
-                  to={`/market/${job.slug || job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-job-${job.id}`}
+                  to={`/market/${job.slug || job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${job.id}`}
                   className="block p-4 bg-white/[0.01] border border-white/5 rounded-2xl hover:bg-white/[0.03] transition-all group"
                 >
                   <div className="flex items-start gap-3">
