@@ -306,7 +306,7 @@ export default function HomePage() {
               {displayJobs.map((job: any) => (
                 <Link 
                   key={job.id} 
-                  to={`/market/${job.slug || job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${job.id}`}
+                  to={`/market/${job.slug || `${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${job.id}`}`}
                   className="block p-4 bg-white/[0.01] border border-white/5 rounded-2xl hover:bg-white/[0.03] transition-all group"
                 >
                   <div className="flex items-start gap-3">
