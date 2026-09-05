@@ -11,7 +11,7 @@ let filtersCache: {
   timestamp: number;
 } | null = null;
 
-const CACHE_TTL = 60 * 60 * 1000; // 1 hour cache
+const CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours cache (was 1 hour)
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
@@ -22,7 +22,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       headers: { 
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
-        'Cache-Control': 'public, max-age=3600',
+        'Cache-Control': 'public, max-age=21600',
         'X-Cache': 'HIT'
       }
     });
@@ -79,11 +79,11 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         LIMIT 100
       `).all(),
       
-      // ✅ FIXED: Locations using direct job_id JOIN (not LIKE '%...%')
+      // ✅ FIXED: Locations using direct job_id JOIN
       DB.prepare(`
         SELECT DISTINCT l.name, l.region, l.country, l.postcode
         FROM locations l
-        INNER JOIN jobs j ON l.job_id = j.id
+        INNER JOIN jobs j ON l.job_id = 'loc-' || j.id
         WHERE j.is_active = 1
         ORDER BY l.name
         LIMIT 100
@@ -124,7 +124,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       headers: { 
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
-        'Cache-Control': 'public, max-age=3600',
+        'Cache-Control': 'public, max-age=21600',
         'X-Cache': 'MISS'
       }
     });
