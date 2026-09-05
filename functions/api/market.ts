@@ -102,9 +102,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
     const totalActiveJobs = totalResult.results[0]?.total || 0;
 
-    // Map jobs with correct slug format
+    // Map jobs
     const jobs = jobsResult.results.map((job: any) => {
-      // Generate slug with -job- prefix
       const titleSlug = job.title
         ?.toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
@@ -129,8 +128,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         employment_type: job.employment_type || 'FULL_TIME',
         workplace_type: job.workplace_type || 'Onsite',
         
-        // ✅ CORRECT SLUG FORMAT with -job- prefix
-        slug: `${titleSlug}-job-${job.id}`,
+        // ✅ FIXED: Just use title + job.id (job.id already has 'job-')
+        slug: `${titleSlug}-${job.id}`,
         
         postedAt: job.posted_at,
         expiresAt: job.expires_at,
