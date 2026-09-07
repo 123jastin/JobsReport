@@ -26,7 +26,7 @@ let marketCountCache = {
   timestamp: 0
 };
 
-const COUNT_CACHE_TTL = 60 * 1000; // 1 minute cache for count
+const COUNT_CACHE_TTL = 5 * 60 * 1000; // ✅ 5 minutes cache (was 1 minute)
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
