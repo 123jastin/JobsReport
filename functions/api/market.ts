@@ -26,7 +26,14 @@ let marketCountCache = {
   timestamp: 0
 };
 
-const COUNT_CACHE_TTL = 5 * 60 * 1000; // ✅ 5 minutes cache (was 1 minute)
+// Server-side cache for auxiliary data (roles, companies, categories, etc.)
+let auxiliaryDataCache = {
+  data: null as any,
+  timestamp: 0
+};
+
+const COUNT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache
+const AUX_CACHE_TTL = 30 * 60 * 1000; // 30 minutes cache for auxiliary data
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
@@ -45,7 +52,6 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const workplaceType = url.searchParams.get('workplace_type');
   const search = url.searchParams.get('search');
 
-  // Check if this is an unfiltered request
   const isUnfiltered = !category && !company && !role && !location && !workplaceType && !search;
 
   try {
@@ -84,7 +90,6 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     let totalResult;
     
     if (isUnfiltered && marketCountCache.data && (Date.now() - marketCountCache.timestamp) < COUNT_CACHE_TTL) {
-      // Use cached count
       totalResult = marketCountCache.data;
     } else {
       totalResult = await DB.prepare(`
@@ -95,7 +100,6 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         ${whereClause}
       `).bind(...bindParams).all();
       
-      // Cache only unfiltered count
       if (isUnfiltered) {
         marketCountCache = {
           data: totalResult,
@@ -152,10 +156,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         job_category: job.job_category || 'Other',
         employment_type: job.employment_type || 'FULL_TIME',
         workplace_type: job.workplace_type || 'Onsite',
-        
-        // ✅ FIXED: Just use title + job.id (job.id already has 'job-')
         slug: `${titleSlug}-${job.id}`,
-        
         postedAt: job.posted_at,
         expiresAt: job.expires_at,
         active: job.is_active === 1,
@@ -167,12 +168,57 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       };
     });
 
+    // Get auxiliary data (cached for 30 minutes)
+    let auxiliaryData;
+    
+    if (auxiliaryDataCache.data && (Date.now() - auxiliaryDataCache.timestamp) < AUX_CACHE_TTL) {
+      auxiliaryData = auxiliaryDataCache.data;
+    } else {
+      const [rolesResult, companiesResult, categoriesResult, workplaceResult, currenciesResult] = await Promise.all([
+        DB.prepare('SELECT name FROM roles ORDER BY name').all(),
+        DB.prepare('SELECT id, name, logo_url, website FROM companies ORDER BY name').all(),
+        DB.prepare("SELECT DISTINCT job_category FROM jobs WHERE job_category != '' AND job_category != 'Other' AND is_active = 1").all(),
+        DB.prepare("SELECT DISTINCT workplace_type FROM jobs WHERE workplace_type != '' AND is_active = 1").all(),
+        DB.prepare('SELECT code, name, symbol, flag FROM currencies ORDER BY name').all()
+      ]);
+      
+      auxiliaryData = {
+        roles: rolesResult.results.map((r: any) => r.name),
+        companies: companiesResult.results.map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          logoUrl: c.logo_url || '',
+          url: c.website || ''
+        })),
+        jobCategories: categoriesResult.results.map((c: any) => c.job_category),
+        workplaceTypes: workplaceResult.results.map((w: any) => w.workplace_type),
+        currencies: currenciesResult.results.map((c: any) => ({
+          code: c.code,
+          name: c.name,
+          symbol: c.symbol,
+          flag: c.flag || ''
+        }))
+      };
+      
+      auxiliaryDataCache = {
+        data: auxiliaryData,
+        timestamp: Date.now()
+      };
+    }
+
     return new Response(JSON.stringify({
       jobs,
       activeJobs: jobs,
+      roles: auxiliaryData.roles,
+      companies: auxiliaryData.companies,
+      jobCategories: auxiliaryData.jobCategories,
+      workplaceTypes: auxiliaryData.workplaceTypes,
+      currencies: auxiliaryData.currencies,
       stats: {
         totalJobs: totalActiveJobs,
         activeJobs: jobs.length,
+        totalCompanies: auxiliaryData.companies.length,
+        totalRoles: auxiliaryData.roles.length,
         page,
         totalPages: Math.ceil(totalActiveJobs / limit),
         hasMore: offset + jobs.length < totalActiveJobs
@@ -190,7 +236,12 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     return new Response(JSON.stringify({
       jobs: [],
       activeJobs: [],
-      stats: { totalJobs: 0, activeJobs: 0 },
+      roles: [],
+      companies: [],
+      jobCategories: [],
+      workplaceTypes: [],
+      currencies: [],
+      stats: { totalJobs: 0, activeJobs: 0, totalCompanies: 0, totalRoles: 0 },
       error: err instanceof Error ? err.message : 'Failed to load market data'
     }), { 
       status: 200, 
