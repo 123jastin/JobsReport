@@ -6,46 +6,107 @@ type Env = {
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
+  const url = new URL(context.request.url);
+
+  // ✅ Pagination params
+  const limit = Math.min(parseInt(url.searchParams.get('limit') || '20'), 100);
+  const page = Math.max(parseInt(url.searchParams.get('page') || '1'), 1);
+  const offset = (page - 1) * limit;
+  const search = url.searchParams.get('search') || '';
+  const all = url.searchParams.get('all') === 'true'; // For backward compatibility
 
   try {
-    const result = await DB.prepare(`
-      SELECT 
-        id, name, logo_url, website,
-        description, street_address, area, locality, district,
-        postal_code, postal_area, country, industry,
-        founded_year, employee_count
-      FROM companies 
-      ORDER BY name
-    `).all();
-    
-    const companies = result.results.map((c: any) => ({
-      id: c.id,
-      name: c.name,
-      logoUrl: c.logo_url || '',
-      url: c.website || '',
-      description: c.description || '',
-      streetAddress: c.street_address || '',
-      area: c.area || '',
-      locality: c.locality || '',
-      district: c.district || '',
-      postalCode: c.postal_code || '',
-      postalArea: c.postal_area || '',
-      country: c.country || 'TZ',
-      industry: c.industry || '',
-      foundedYear: c.founded_year || '',
-      employeeCount: c.employee_count || ''
-    }));
+    // If "all=true" is passed, return everything (for admin/legacy compatibility)
+    if (all) {
+      const result = await DB.prepare(`
+        SELECT 
+          id, name, logo_url, website,
+          description, street_address, area, locality, district,
+          postal_code, postal_area, country, industry,
+          founded_year, employee_count
+        FROM companies 
+        ORDER BY name
+      `).all();
+      
+      const companies = result.results.map(mapCompany);
+      return new Response(JSON.stringify(companies), {
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      });
+    }
 
-    return new Response(JSON.stringify(companies), {
+    // ✅ Paginated response
+    let whereClause = '';
+    const bindParams: any[] = [];
+
+    if (search.trim()) {
+      whereClause = 'WHERE name LIKE ?';
+      bindParams.push(`%${search.trim()}%`);
+    }
+
+    const [countResult, companiesResult] = await Promise.all([
+      DB.prepare(`SELECT COUNT(*) as total FROM companies ${whereClause}`)
+        .bind(...bindParams).first(),
+
+      DB.prepare(`
+        SELECT 
+          id, name, logo_url, website,
+          description, street_address, area, locality, district,
+          postal_code, postal_area, country, industry,
+          founded_year, employee_count
+        FROM companies 
+        ${whereClause}
+        ORDER BY name
+        LIMIT ? OFFSET ?
+      `).bind(...bindParams, limit, offset).all()
+    ]);
+
+    const total = (countResult as any)?.total || 0;
+    const companies = companiesResult.results.map(mapCompany);
+
+    return new Response(JSON.stringify({
+      companies,
+      stats: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        hasMore: offset + companies.length < total
+      }
+    }), {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
+
   } catch (err) {
     console.error('Companies GET error:', err);
-    return new Response(JSON.stringify([]), {
+    return new Response(JSON.stringify({
+      companies: [],
+      stats: { total: 0, page: 1, limit: 20, totalPages: 0, hasMore: false }
+    }), {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
   }
 };
+
+// ✅ Helper to map company row to API response
+function mapCompany(c: any) {
+  return {
+    id: c.id,
+    name: c.name,
+    logoUrl: c.logo_url || '',
+    url: c.website || '',
+    description: c.description || '',
+    streetAddress: c.street_address || '',
+    area: c.area || '',
+    locality: c.locality || '',
+    district: c.district || '',
+    postalCode: c.postal_code || '',
+    postalArea: c.postal_area || '',
+    country: c.country || 'TZ',
+    industry: c.industry || '',
+    foundedYear: c.founded_year || '',
+    employeeCount: c.employee_count || ''
+  };
+}
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
@@ -133,7 +194,6 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
 
   try {
-    // Extract company ID from URL: /api/admin/companies/:id
     const url = new URL(context.request.url);
     const pathParts = url.pathname.split('/');
     const companyId = pathParts[pathParts.length - 1];
@@ -155,7 +215,6 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       });
     }
 
-    // Check if company exists
     const existing = await DB.prepare(
       'SELECT id FROM companies WHERE id = ?'
     ).bind(companyId).first();
@@ -167,7 +226,6 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       });
     }
 
-    // Update company
     await DB.prepare(`
       UPDATE companies SET
         name = ?, logo_url = ?, website = ?,
@@ -227,7 +285,6 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
 
   try {
-    // Extract company ID from URL: /api/admin/companies/:id
     const url = new URL(context.request.url);
     const pathParts = url.pathname.split('/');
     const companyId = pathParts[pathParts.length - 1];
@@ -239,7 +296,6 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
       });
     }
 
-    // Check if company has associated jobs
     const jobsResult = await DB.prepare(
       'SELECT COUNT(*) as count FROM jobs WHERE company_id = ?'
     ).bind(companyId).first();
@@ -254,7 +310,6 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
       });
     }
 
-    // Delete company
     await DB.prepare(
       'DELETE FROM companies WHERE id = ?'
     ).bind(companyId).run();
