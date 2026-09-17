@@ -4,8 +4,7 @@ import {
   Database, TrendingUp, BookOpen, Plus, Trash2, RefreshCw, Check, AlertCircle, ExternalLink,
   ChevronRight, Shield, Clock, Briefcase, Lock, LogOut, Building2, FileText, Image as ImageIcon,
   Key, Flame, Globe, Compass, Settings, ChevronDown, Layers, Sparkles, DollarSign, MapPin,
-  Eye, CheckCircle, HelpCircle, Upload, Bold, Italic, Underline, List, Code, Link as LinkIcon, File,
-  ChevronLeft
+  Eye, CheckCircle, HelpCircle, Upload, Bold, Italic, Underline, List, Code, Link as LinkIcon, File
 } from 'lucide-react';
 import { RawJob, Trend, Report, Company, ActivityLog, MediaAsset, RoleDefinition } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -29,10 +28,6 @@ interface JobTemplateData {
   role: string;
   sections: JobSection[];
 }
-
-// ========== PAGINATION CONSTANTS ==========
-const JOBS_PER_PAGE = 20;
-const COMPANIES_PER_PAGE = 20;
 
 // ========== TEMPLATE RENDERER ==========
 const renderJobDescription = (data: JobTemplateData, variant: 'standard' | 'premium' = 'standard'): string => {
@@ -123,23 +118,18 @@ export default function AdminPage() {
     lastUpdated: 'Yesterday'
   });
 
-  // ✅ Pagination state
-  const [jobsPage, setJobsPage] = useState(1);
-  const [jobsTotal, setJobsTotal] = useState(0);
-  const [jobsTotalPages, setJobsTotalPages] = useState(0);
-  const [jobsSearch, setJobsSearch] = useState('');
-  const [jobsStatus, setJobsStatus] = useState<'all' | 'active' | 'draft'>('all');
-
-  const [companiesPage, setCompaniesPage] = useState(1);
-  const [companiesTotal, setCompaniesTotal] = useState(0);
-  const [companiesTotalPages, setCompaniesTotalPages] = useState(0);
-  const [companiesSearch, setCompaniesSearch] = useState('');
-
-  // ✅ All companies list for dropdowns (separate from paginated list)
-  const [allCompanies, setAllCompanies] = useState<Company[]>([]);
-
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // ✅ Pagination state (minimal)
+  const [jobsPage, setJobsPage] = useState(1);
+  const [jobsHasMore, setJobsHasMore] = useState(false);
+  const [jobsTotal, setJobsTotal] = useState(0);
+  const [loadingMoreJobs, setLoadingMoreJobs] = useState(false);
+  const [companiesTotal, setCompaniesTotal] = useState(0);
+  const [allCompanies, setAllCompanies] = useState<Company[]>([]);
+  const PAGE_SIZE = 50;
+
   const [operationMessage, setOperationMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   // --- JOB FORM STATES ---
@@ -156,18 +146,22 @@ export default function AdminPage() {
     expiresAt: ''
   });
   
+  // ✅ JOB FILES STATES with SEO support
   const [jobFiles, setJobFiles] = useState<{
     url: string; thumbnail: string; name: string; type: string; file?: File;
     seoTitle?: string; seoDescription?: string; seoSlug?: string;
   }[]>([]);
   
+  // ✅ JOB DESCRIPTION STATE - Always visible
   const [jobDescription, setJobDescription] = useState('');
   const jobDescEditorRef = useRef<HTMLDivElement>(null);
   
+  // ✅ AI Job Parser States
   const [showAIPaste, setShowAIPaste] = useState(false);
   const [rawJobText, setRawJobText] = useState('');
   const [aiProcessing, setAiProcessing] = useState(false);
   
+  // ✅ AI Company Parser States
   const [showAICompanyPaste, setShowAICompanyPaste] = useState(false);
   const [rawCompanyText, setRawCompanyText] = useState('');
   const [aiCompanyProcessing, setAiCompanyProcessing] = useState(false);
@@ -175,11 +169,14 @@ export default function AdminPage() {
   const [isCreatingNewCompanyInline, setIsCreatingNewCompanyInline] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   
+  // ✅ Description Edit Mode
   const [descEditMode, setDescEditMode] = useState<'visual' | 'code'>('visual');
   
+  // ✅ Draft and Application Type States
   const [isDraft, setIsDraft] = useState(false);
   const [applicationType, setApplicationType] = useState<'url' | 'email' | 'whatsapp' | 'instructions'>('url');
   
+  // ✅ Schema data state
   const [schemaData, setSchemaData] = useState({
     job_category: 'Other',
     industry: '',
@@ -203,7 +200,7 @@ export default function AdminPage() {
     application_instructions: ''
   });
 
-  // --- COMPANY FORM STATES ---
+  // --- COMPANY FORM STATES (UPDATED) ---
   const [companyForm, setCompanyForm] = useState({
     name: '',
     url: '',
@@ -238,6 +235,7 @@ export default function AdminPage() {
     content: ''
   });
   
+  // Custom rich helper states
   const [richLines, setRichLines] = useState<{ type: 'h2' | 'p' | 'list' | 'image'; text: string; subItems?: string[]; mediaUrl?: string; altText?: string }[]>([
     { type: 'h2', text: 'Market Demand Indicators' },
     { type: 'p', text: 'Telemetry analysis validates rising hiring volume across leading enterprise hubs.' },
@@ -250,12 +248,14 @@ export default function AdminPage() {
   const [newRichMediaUrl, setNewRichMediaUrl] = useState('');
   const [newRichAltText, setNewRichAltText] = useState('');
   
+  // Custom reports editing & formatting tool states
   const [editingReportId, setEditingReportId] = useState<string | null>(null);
   const [editorMode, setEditorMode] = useState<'visual' | 'code' | 'preview'>('visual');
 
   const isEditingRef = useRef(false);
   const visualEditorRef = useRef<HTMLDivElement>(null);
 
+  // Synchronize internal state with contentEditable element
   useEffect(() => {
     if (editorMode === 'visual' && visualEditorRef.current && !isEditingRef.current) {
       visualEditorRef.current.innerHTML = reportForm.excerpt || '';
@@ -270,11 +270,13 @@ export default function AdminPage() {
   const [selectedFileBase64, setSelectedFileBase64] = useState<string | null>(null);
   const [selectedFileSize, setSelectedFileSize] = useState<string>('0KB');
 
+  // --- PIPELINE RUN STATE ---
   const [pipelineFinishedInfo, setPipelineFinishedInfo] = useState<{ original: number; deduplicated: number } | null>(null);
 
   // ✅ AUTO-FILL LOCATION FROM COMPANY
   const handleAutoFillLocationFromCompany = (companyName: string) => {
-    const company = allCompanies.find(c => c.name === companyName);
+    const company = allCompanies.find(c => c.name === companyName) 
+                 || companiesState.find(c => c.name === companyName);
     if (!company) {
       showFeedback('error', `Company "${companyName}" not found in catalog`);
       return;
@@ -291,6 +293,7 @@ export default function AdminPage() {
       industry: (company as any).industry || prev.industry,
     }));
 
+    // Also auto-fill location field if empty
     if (!jobForm.location) {
       const locationParts = [];
       if ((company as any).locality) locationParts.push((company as any).locality);
@@ -306,20 +309,70 @@ export default function AdminPage() {
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
     setLoginError('');
+    
     const result = await login(loginEmail, loginPassword);
+    
     if (!result.success) {
       setLoginError(result.message);
     }
   };
 
-  // ✅ Fetch stats, roles, reports (once)
-  const fetchStatsAndMeta = async () => {
+  useEffect(() => {
+    if (isAdmin) {
+      fetchSystemData();
+    }
+  }, [isAdmin]);
+
+  // Sync / Auto-Normalize Detection Hook inside Job input
+  useEffect(() => {
+    if (jobForm.title) {
+      const lowerTitle = jobForm.title.toLowerCase().trim();
+      
+      let foundMatchingRole = '';
+      for (const r of rolesState) {
+        if (r.title.toLowerCase() === lowerTitle) {
+          foundMatchingRole = r.title;
+          break;
+        }
+        for (const targetKey of r.mappedTitles) {
+          if (lowerTitle.includes(targetKey.toLowerCase())) {
+            foundMatchingRole = r.title;
+            break;
+          }
+        }
+        if (foundMatchingRole) break;
+      }
+
+      if (foundMatchingRole && foundMatchingRole !== jobForm.roleSelected) {
+        setJobForm(prev => ({ ...prev, roleSelected: foundMatchingRole }));
+      }
+
+      const duplicateExists = jobs.some(j => 
+        j.title.toLowerCase().trim() === lowerTitle &&
+        j.company.toLowerCase().trim() === (isCreatingNewCompanyInline ? jobForm.companyNewName.toLowerCase().trim() : jobForm.companySelected.toLowerCase().trim()) &&
+        j.location.toLowerCase().trim() === jobForm.location.toLowerCase().trim() &&
+        j.id !== editingJobId
+      );
+
+      if (duplicateExists) {
+        setDuplicateWarning("INLINE WARNING: A listing with identical Title + Company + Location combination exists in index. Adding this will be BLOCKED to prevent duplication.");
+      } else {
+        setDuplicateWarning(null);
+      }
+    } else {
+      setDuplicateWarning(null);
+    }
+  }, [jobForm.title, jobForm.companySelected, jobForm.companyNewName, jobForm.location, isCreatingNewCompanyInline, jobs, rolesState, editingJobId]);
+
+  const fetchSystemData = async () => {
+    setLoading(true);
     try {
-      const [statsRes, rolesRes, reportsRes, allCompaniesRes] = await Promise.all([
+      const [statsRes, jobsRes, rolesRes, reportsRes, companiesRes] = await Promise.all([
         fetch('/api/admin/stats'),
+        fetch(`/api/admin/jobs-list?page=1&limit=${PAGE_SIZE}`),
         fetch('/api/admin/roles'),
         fetch('/api/reports'),
-        fetch('/api/companies?all=true')  // Get all for dropdowns
+        fetch('/api/companies?all=true')
       ]);
 
       if (statsRes.ok) {
@@ -333,6 +386,25 @@ export default function AdminPage() {
         setActivityLogs(statsData.recentActivity || []);
       }
 
+      if (jobsRes.ok) {
+        const jobsData = await jobsRes.json();
+        const jobsList = Array.isArray(jobsData) ? jobsData : (jobsData.jobs || []);
+        setJobs(jobsList);
+        setJobsPage(1);
+        setJobsTotal(jobsData.stats?.total || jobsList.length);
+        setJobsHasMore(jobsData.stats?.hasMore || false);
+      }
+
+      if (companiesRes.ok) {
+        const companiesData = await companiesRes.json();
+        const companiesList = Array.isArray(companiesData) 
+          ? companiesData 
+          : (companiesData.companies || []);
+        setAllCompanies(companiesList);
+        setCompaniesState(companiesList);
+        setCompaniesTotal(companiesList.length);
+      }
+
       if (rolesRes.ok) {
         const rolesData = await rolesRes.json();
         if (rolesData && rolesData.length > 0) {
@@ -342,122 +414,42 @@ export default function AdminPage() {
       
       if (reportsRes.ok) setReportsState(await reportsRes.json());
       
-      if (allCompaniesRes.ok) {
-        const companiesData = await allCompaniesRes.json();
-        // Handle both formats: array or {companies: [...]}
-        const companiesList = Array.isArray(companiesData) 
-          ? companiesData 
-          : (companiesData.companies || []);
-        setAllCompanies(companiesList);
-      }
     } catch (err) {
-      console.error("Failed to sync system metadata", err);
+      console.error("Failed to sync system parameters", err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // ✅ Fetch paginated jobs
-  const fetchJobs = async () => {
+  // ✅ Load more jobs (for pagination)
+  const loadMoreJobs = async () => {
+    if (loadingMoreJobs || !jobsHasMore) return;
+    setLoadingMoreJobs(true);
     try {
-      const params = new URLSearchParams({
-        page: jobsPage.toString(),
-        limit: JOBS_PER_PAGE.toString()
-      });
-      if (jobsSearch.trim()) params.append('search', jobsSearch.trim());
-      if (jobsStatus !== 'all') params.append('status', jobsStatus);
-
-      const res = await fetch(`/api/admin/jobs-list?${params.toString()}`);
+      const nextPage = jobsPage + 1;
+      const res = await fetch(`/api/admin/jobs-list?page=${nextPage}&limit=${PAGE_SIZE}`);
       if (res.ok) {
         const data = await res.json();
-        setJobs(data.jobs || []);
-        setJobsTotal(data.stats?.total || 0);
-        setJobsTotalPages(data.stats?.totalPages || 0);
+        const newJobs = Array.isArray(data) ? data : (data.jobs || []);
+        setJobs(prev => [...prev, ...newJobs]);
+        setJobsPage(nextPage);
+        setJobsHasMore(data.stats?.hasMore || false);
       }
     } catch (err) {
-      console.error('Failed to fetch jobs:', err);
+      console.error('Failed to load more jobs:', err);
+    } finally {
+      setLoadingMoreJobs(false);
     }
-  };
-
-  // ✅ Fetch paginated companies
-  const fetchCompanies = async () => {
-    try {
-      const params = new URLSearchParams({
-        page: companiesPage.toString(),
-        limit: COMPANIES_PER_PAGE.toString()
-      });
-      if (companiesSearch.trim()) params.append('search', companiesSearch.trim());
-
-      const res = await fetch(`/api/companies?${params.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.companies) {
-          setCompaniesState(data.companies || []);
-          setCompaniesTotal(data.stats?.total || 0);
-          setCompaniesTotalPages(data.stats?.totalPages || 0);
-        } else if (Array.isArray(data)) {
-          // Backward compatibility
-          setCompaniesState(data);
-          setCompaniesTotal(data.length);
-          setCompaniesTotalPages(1);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to fetch companies:', err);
-    }
-  };
-
-  // ✅ Main initial fetch
-  useEffect(() => {
-    if (isAdmin) {
-      setLoading(true);
-      fetchStatsAndMeta().finally(() => setLoading(false));
-    }
-  }, [isAdmin]);
-
-  // ✅ Jobs refetch when page/search/status changes
-  useEffect(() => {
-    if (isAdmin && activeTab === 'jobs') {
-      fetchJobs();
-    }
-  }, [isAdmin, activeTab, jobsPage, jobsStatus]);
-
-  // ✅ Companies refetch when page/search changes
-  useEffect(() => {
-    if (isAdmin && activeTab === 'companies') {
-      fetchCompanies();
-    }
-  }, [isAdmin, activeTab, companiesPage]);
-
-  // ✅ Debounced search for jobs
-  useEffect(() => {
-    if (!isAdmin || activeTab !== 'jobs') return;
-    const timer = setTimeout(() => {
-      setJobsPage(1);
-      fetchJobs();
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [jobsSearch]);
-
-  // ✅ Debounced search for companies
-  useEffect(() => {
-    if (!isAdmin || activeTab !== 'companies') return;
-    const timer = setTimeout(() => {
-      setCompaniesPage(1);
-      fetchCompanies();
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [companiesSearch]);
-
-  // Legacy fetchSystemData for backward compat with action handlers
-  const fetchSystemData = async () => {
-    await Promise.all([fetchStatsAndMeta(), fetchJobs(), fetchCompanies()]);
   };
 
   const showFeedback = (type: 'success' | 'error', text: string) => {
     setOperationMessage({ type, text });
-    setTimeout(() => setOperationMessage(null), 5000);
+    setTimeout(() => {
+      setOperationMessage(null);
+    }, 5000);
   };
 
-  // ✅ AI Job Parser
+  // ✅ AI Job Parser with Template Support
   const handleAIProcessJob = async () => {
     if (!rawJobText.trim() || rawJobText.trim().length < 20) {
       showFeedback('error', 'Please paste a complete job description (at least 20 characters).');
@@ -475,6 +467,7 @@ export default function AdminPage() {
       const result = await res.json();
 
       if (result.success && result.data) {
+        // Auto-fill form
         setJobForm(prev => ({
           ...prev,
           title: result.data.title || prev.title,
@@ -484,6 +477,7 @@ export default function AdminPage() {
           companySelected: result.data.company || prev.companySelected,
         }));
 
+        // Load description
         const descriptionHTML = result.data.description || '';
         if (descriptionHTML) {
           setJobDescription(descriptionHTML);
@@ -500,6 +494,7 @@ export default function AdminPage() {
           }, 300);
         }
 
+        // ✅ Also extract schema data
         try {
           const schemaRes = await fetch('/api/ai/extract-schema', {
             method: 'POST',
@@ -519,6 +514,7 @@ export default function AdminPage() {
               whatsapp_number: schemaResult.schema?.whatsapp_number || '',
               application_instructions: schemaResult.schema?.application_instructions || ''
             }));
+            console.log('Schema extracted:', schemaResult.schema);
           }
         } catch (schemaErr) {
           console.log('Schema extraction skipped:', schemaErr);
@@ -529,15 +525,23 @@ export default function AdminPage() {
         setRawJobText('');
       } else {
         showFeedback('error', result.error || 'AI processing failed');
+        if (result.partial && result.partial.title) {
+          setJobForm(prev => ({
+            ...prev,
+            title: result.partial.title || prev.title,
+            location: result.partial.location || prev.location,
+          }));
+        }
       }
     } catch (err) {
       showFeedback('error', 'AI service unavailable. Please fill manually.');
+      console.error('AI error:', err);
     } finally {
       setAiProcessing(false);
     }
   };
 
-  // ✅ AI Company Parser
+  // ✅ AI Company Parser - Extract facts + generate description
   const handleAIProcessCompany = async () => {
     if (!rawCompanyText.trim() || rawCompanyText.trim().length < 20) {
       showFeedback('error', 'Please paste company information (at least 20 characters).');
@@ -555,6 +559,7 @@ export default function AdminPage() {
       const result = await res.json();
 
       if (result.success && result.data) {
+        // Auto-fill company form with extracted data
         setCompanyForm(prev => ({
           ...prev,
           name: result.data.name || prev.name,
@@ -572,19 +577,29 @@ export default function AdminPage() {
           employeeCount: result.data.employeeCount || prev.employeeCount,
         }));
 
-        showFeedback('success', 'Company parsed! Form auto-filled.');
+        showFeedback('success', 'Company parsed! Form auto-filled with AI-enhanced description.');
         setShowAICompanyPaste(false);
         setRawCompanyText('');
       } else {
         showFeedback('error', result.error || 'AI processing failed');
+        // If partial data available, fill what we can
+        if (result.data?.name) {
+          setCompanyForm(prev => ({
+            ...prev,
+            name: result.data.name || prev.name,
+            industry: result.data.industry || prev.industry,
+          }));
+        }
       }
     } catch (err) {
       showFeedback('error', 'AI service unavailable. Please fill manually.');
+      console.error('AI company error:', err);
     } finally {
       setAiCompanyProcessing(false);
     }
   };
 
+  // ✅ Generate thumbnail from image file
   const generateThumbnail = (file: File, maxWidth: number = 400): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -594,15 +609,19 @@ export default function AdminPage() {
           const canvas = document.createElement('canvas');
           let width = img.width;
           let height = img.height;
+          
           if (width > maxWidth) {
             height = (height * maxWidth) / width;
             width = maxWidth;
           }
+          
           canvas.width = width;
           canvas.height = height;
           const ctx = canvas.getContext('2d');
           ctx!.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/webp', 0.7));
+          
+          const thumbnail = canvas.toDataURL('image/webp', 0.7);
+          resolve(thumbnail);
         };
         img.onerror = reject;
         img.src = e.target?.result as string;
@@ -611,30 +630,46 @@ export default function AdminPage() {
     });
   };
 
+  // ✅ Generate PDF/Document icon thumbnail
   const generateDocumentThumbnail = (fileName: string, fileType: string): string => {
     const isPDF = fileType === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf');
     const isDoc = fileName.match(/\.(doc|docx)$/i);
     const isSheet = fileName.match(/\.(xls|xlsx)$/i);
     const isPPT = fileName.match(/\.(ppt|pptx)$/i);
+    
     let fileIcon = 'PDF';
     let bgColor = '#ef4444';
-    if (isDoc) { fileIcon = 'DOC'; bgColor = '#3b82f6'; }
-    else if (isSheet) { fileIcon = 'XLS'; bgColor = '#10b981'; }
-    else if (isPPT) { fileIcon = 'PPT'; bgColor = '#f59e0b'; }
+    
+    if (isDoc) {
+      fileIcon = 'DOC';
+      bgColor = '#3b82f6';
+    } else if (isSheet) {
+      fileIcon = 'XLS';
+      bgColor = '#10b981';
+    } else if (isPPT) {
+      fileIcon = 'PPT';
+      bgColor = '#f59e0b';
+    }
+    
     return 'data:image/svg+xml,' + encodeURIComponent(`
       <svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
         <rect fill="${bgColor}" width="200" height="200" rx="12"/>
         <text fill="white" font-size="48" font-weight="bold" text-anchor="middle" x="100" y="90">${fileIcon}</text>
+        <text fill="#e2e8f0" font-size="14" text-anchor="middle" x="100" y="130">Document</text>
       </svg>
     `);
   };
 
+  // ✅ Handle multiple file upload for jobs with SEO metadata
   const handleJobFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
     setActionLoading(true);
-    const newFiles: any[] = [];
+    const newFiles: {
+      url: string; thumbnail: string; name: string; type: string; file: File;
+      seoTitle: string; seoDescription: string; seoSlug: string;
+    }[] = [];
     let processedCount = 0;
 
     for (let i = 0; i < files.length; i++) {
@@ -643,6 +678,7 @@ export default function AdminPage() {
       const isPDF = file.type === 'application/pdf';
       const isDoc = file.type.includes('document') || file.name.match(/\.(doc|docx|xls|xlsx|ppt|pptx)$/i);
       
+      // ✅ Generate SEO-friendly metadata
       const baseName = file.name.replace(/\.[^/.]+$/, '');
       const ext = file.name.split('.').pop()?.toLowerCase() || 'file';
       const cleanSlug = baseName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -674,7 +710,7 @@ export default function AdminPage() {
           if (processedCount === files.length) {
             setJobFiles(prev => [...prev, ...newFiles]);
             setActionLoading(false);
-            showFeedback('success', `${files.length} file(s) ready`);
+            showFeedback('success', `${files.length} file(s) ready with SEO metadata`);
           }
         };
         reader.readAsDataURL(file);
@@ -687,7 +723,7 @@ export default function AdminPage() {
           if (processedCount === files.length) {
             setJobFiles(prev => [...prev, ...newFiles]);
             setActionLoading(false);
-            showFeedback('success', `${files.length} file(s) ready`);
+            showFeedback('success', `${files.length} file(s) ready with SEO metadata`);
           }
         };
         reader.readAsDataURL(file);
@@ -710,6 +746,7 @@ export default function AdminPage() {
     if (!file) return;
 
     const sizeKb = Math.round(file.size / 1024) + 'KB';
+
     const reader = new FileReader();
     reader.onloadend = () => {
       const base64String = reader.result as string;
@@ -738,15 +775,19 @@ export default function AdminPage() {
           const canvas = document.createElement('canvas');
           let width = img.width;
           let height = img.height;
+          
           if (width > maxWidth) {
             height = (height * maxWidth) / width;
             width = maxWidth;
           }
+          
           canvas.width = width;
           canvas.height = height;
           const ctx = canvas.getContext('2d');
           ctx!.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/webp', 0.8));
+          
+          const webpBase64 = canvas.toDataURL('image/webp', 0.8);
+          resolve(webpBase64);
         };
         img.onerror = reject;
         img.src = e.target?.result as string;
@@ -772,6 +813,7 @@ export default function AdminPage() {
     setJobDescription((job as any).description || '');
     setDescEditMode('visual');
     
+    // ✅ Load all schema data when editing
     const j = job as any;
     setSchemaData({
       job_category: j.job_category || 'Other',
@@ -796,8 +838,10 @@ export default function AdminPage() {
       application_instructions: j.application_instructions || ''
     });
 
+    // ✅ AUTO-FILL LOCATION FROM COMPANY WHEN EDITING
     if (job.company) {
-      const company = allCompanies.find(c => c.name === job.company);
+      const company = allCompanies.find(c => c.name === job.company) 
+                   || companiesState.find(c => c.name === job.company);
       if (company) {
         setTimeout(() => {
           setSchemaData(prev => ({
@@ -812,6 +856,7 @@ export default function AdminPage() {
       }
     }
     
+    // Set application type
     if (j.url && j.url.startsWith('mailto:')) {
       setApplicationType('email');
     } else {
@@ -843,7 +888,9 @@ export default function AdminPage() {
       expiresAt: ''
     });
     setJobDescription('');
-    if (jobDescEditorRef.current) jobDescEditorRef.current.innerHTML = '';
+    if (jobDescEditorRef.current) {
+      jobDescEditorRef.current.innerHTML = '';
+    }
     setJobFiles([]);
     setIsCreatingNewCompanyInline(false);
   };
@@ -861,7 +908,7 @@ export default function AdminPage() {
     }
 
     if (!jobForm.title || (!isCreatingNewCompanyInline && !jobForm.companySelected) || (isCreatingNewCompanyInline && !jobForm.companyNewName)) {
-      showFeedback('error', 'Please fill in the Job Title, Location, and Company selections.');
+      showFeedback('error', 'Please fill in the Job Title, Location, and correct Company selections.');
       return;
     }
 
@@ -873,6 +920,7 @@ export default function AdminPage() {
         return;
       }
 
+      // Upload company logo to R2 if creating new company inline
       let companyLogoUrl = '';
       if (isCreatingNewCompanyInline && jobForm.companyNewLogo && jobForm.companyNewLogo.startsWith('data:image')) {
         const fileInput = document.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement;
@@ -896,6 +944,7 @@ export default function AdminPage() {
         }
       }
 
+      // Upload job files to R2
       const uploadedFiles: any[] = [];
       for (const file of jobFiles) {
         const fileData: any = {
@@ -927,6 +976,7 @@ export default function AdminPage() {
         uploadedFiles.push(fileData);
       }
 
+      // 🔥 Build application URL based on type
       let applyUrl = '';
       let whatsapp_number = '';
       let application_instructions = '';
@@ -965,6 +1015,7 @@ export default function AdminPage() {
           description: jobDescription,
           is_active: isDraft ? 0 : 1,
           logoUrl: companyLogoUrl || undefined,
+          // Schema fields
           job_category: schemaData.job_category || 'Other',
           industry: schemaData.industry || '',
           employment_type: schemaData.employment_type || 'FULL_TIME',
@@ -976,12 +1027,14 @@ export default function AdminPage() {
           salary_min: schemaData.salary_min || null,
           salary_max: schemaData.salary_max || null,
           salary_currency: schemaData.salary_currency || 'TZS',
+          // Location fields for Google Schema
           street_address: schemaData.street_address || '',
           city: schemaData.city || '',
           region: schemaData.region || '',
           country: schemaData.country || 'Tanzania',
           postcode: schemaData.postcode || '',
           canonical_url: schemaData.canonical_url || '',
+          // 🔥 New application fields
           whatsapp_number: whatsapp_number,
           application_instructions: application_instructions,
           images: uploadedFiles
@@ -990,48 +1043,48 @@ export default function AdminPage() {
 
       if (res.ok) {
         const addedJob = await res.json();
-        
-        // 🔥 NOTIFY GOOGLE - Only for new published jobs
-        if (!editingJobId && !isDraft) {
-          const jobUrl = `https://jobsreport.online/market/${addedJob.slug || addedJob.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${addedJob.id}`;
-          fetch('/api/test-indexing', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: jobUrl })
-          }).catch(err => console.log('Google notification failed:', err));
-        }
-        
         if (editingJobId) {
+          setJobs(prev => prev.map(j => j.id === editingJobId ? { ...j, ...addedJob } : j));
           showFeedback('success', `Updated "${jobForm.title}" successfully.`);
         } else {
+          setJobs(prev => [addedJob, ...prev]);
           showFeedback('success', isDraft ? `Draft saved!` : `Published successfully.`);
+          
+          // 🔥 NOTIFY GOOGLE - Only for new published jobs (not drafts)
+          if (!isDraft) {
+            const jobUrl = `https://jobsreport.online/market/${addedJob.slug || addedJob.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${addedJob.id}`;
+            fetch('/api/test-indexing', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url: jobUrl })
+            }).catch(err => console.log('Google notification failed:', err));
+            console.log(`📢 Auto-notified Google: ${jobUrl}`);
+          }
         }
-
-        // Reset form
-        setJobForm({ title: '', roleSelected: 'Software Developer', companySelected: '', companyNewName: '', companyNewUrl: '', companyNewLogo: '', location: '', url: '', salary: '', expiresAt: '' });
-        setJobDescription('');
-        if (jobDescEditorRef.current) jobDescEditorRef.current.innerHTML = '';
-        setSchemaData({ 
-          job_category: 'Other', industry: '', employment_type: 'FULL_TIME', workplace_type: 'Onsite',
-          education_level: 'Any', experience_months: 0, skills: [], benefits: [],
-          salary_min: null, salary_max: null, salary_currency: 'TZS',
-          street_address: '', city: '', region: '', country: 'Tanzania', postcode: '',
-          slug: '', canonical_url: '',
-          whatsapp_number: '', application_instructions: ''
-        });
-        setIsCreatingNewCompanyInline(false);
-        setJobFiles([]);
-        setEditingJobId(null);
-
-        // Refresh data
-        await fetchStatsAndMeta();
-        await fetchJobs();
+        if (!isDraft || editingJobId) {
+          setJobForm({ title: '', roleSelected: 'Software Developer', companySelected: '', companyNewName: '', companyNewUrl: '', companyNewLogo: '', location: '', url: '', salary: '', expiresAt: '' });
+          setJobDescription('');
+          if (jobDescEditorRef.current) jobDescEditorRef.current.innerHTML = '';
+          setSchemaData({ 
+            job_category: 'Other', industry: '', employment_type: 'FULL_TIME', workplace_type: 'Onsite',
+            education_level: 'Any', experience_months: 0, skills: [], benefits: [],
+            salary_min: null, salary_max: null, salary_currency: 'TZS',
+            street_address: '', city: '', region: '', country: 'Tanzania', postcode: '',
+            slug: '', canonical_url: '',
+            whatsapp_number: '', application_instructions: ''
+          });
+          setIsCreatingNewCompanyInline(false);
+          setJobFiles([]);
+          setEditingJobId(null);
+        }
+        await fetchSystemData();
       } else {
         const errObj = await res.json();
         showFeedback('error', errObj.message || errObj.error || 'Validation error');
       }
     } catch (err) {
       showFeedback('error', 'Failed to save job.');
+      console.error('Job error:', err);
     } finally {
       setActionLoading(false);
       setIsDraft(false);
@@ -1053,7 +1106,7 @@ export default function AdminPage() {
       if (res.ok) {
         setJobs(prev => prev.map(j => j.id === id ? { ...j, active: !currentStatus } : j));
         showFeedback('success', `Toggled job status.`);
-        fetchStatsAndMeta();
+        fetchSystemData();
       }
     } catch (err) {
       showFeedback('error', 'Could not sync active parameter.');
@@ -1071,9 +1124,9 @@ export default function AdminPage() {
     try {
       const res = await fetch(`/api/admin/jobs/${id}`, { method: 'DELETE' });
       if (res.ok) {
-        showFeedback('success', 'Job record purged.');
-        await fetchStatsAndMeta();
-        await fetchJobs();
+        setJobs(prev => prev.filter(j => j.id !== id));
+        showFeedback('success', 'Job record successfully purged.');
+        fetchSystemData();
       } else {
         showFeedback('error', 'Delete failed');
       }
@@ -1082,6 +1135,7 @@ export default function AdminPage() {
     }
   };
 
+  // Updated handleEditCompany
   const handleEditCompany = (co: Company) => {
     setEditingCompanyId(co.id);
     setCompanyForm({
@@ -1103,6 +1157,7 @@ export default function AdminPage() {
     window.scrollTo({ top: 300, behavior: 'smooth' });
   };
 
+  // Updated handleCancelEditCompany
   const handleCancelEditCompany = () => {
     setEditingCompanyId(null);
     setCompanyForm({ 
@@ -1113,6 +1168,7 @@ export default function AdminPage() {
     });
   };
 
+  // Updated handleDeleteCompany
   const handleDeleteCompany = async (id: string) => {
     if (userRole === 'editor') {
       showFeedback('error', 'PERMISSION DENIED: Purge request rejected.');
@@ -1126,17 +1182,19 @@ export default function AdminPage() {
       const data = await res.json();
       
       if (res.ok) {
-        showFeedback('success', data.message || 'Company removed.');
-        await fetchStatsAndMeta();
-        await fetchCompanies();
+        setCompaniesState(prev => prev.filter(c => c.id !== id));
+        setAllCompanies(prev => prev.filter(c => c.id !== id));
+        showFeedback('success', data.message || 'Company removed from active inventory.');
+        fetchSystemData();
       } else {
         showFeedback('error', data.error || data.details || 'Could not delete company.');
       }
     } catch (err) {
-      showFeedback('error', 'Network error.');
+      showFeedback('error', 'Network error. Could not delete company profile.');
     }
   };
 
+  // Updated handleCreateCompany
   const handleCreateCompany = async (e: FormEvent) => {
     e.preventDefault();
     if (!companyForm.name) return;
@@ -1147,7 +1205,7 @@ export default function AdminPage() {
     }
 
     if (!editingCompanyId) {
-      const duplicateExists = allCompanies.some(
+      const duplicateExists = companiesState.some(
         c => c.name.toLowerCase() === companyForm.name.toLowerCase().trim()
       );
       if (duplicateExists) {
@@ -1160,6 +1218,7 @@ export default function AdminPage() {
     try {
       let logoUrl = companyForm.logoUrl;
       
+      // Upload logo to R2 if it's a base64 image
       if (logoUrl && logoUrl.startsWith('data:image')) {
         const fileInput = document.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement;
         const file = fileInput?.files?.[0];
@@ -1178,6 +1237,7 @@ export default function AdminPage() {
             if (uploadRes.ok) {
               const uploadData = await uploadRes.json();
               logoUrl = uploadData.url;
+              console.log('Logo uploaded to R2:', logoUrl);
             }
           } catch (logoErr) { console.error('Logo upload failed:', logoErr); }
         }
@@ -1212,7 +1272,15 @@ export default function AdminPage() {
       const data = await res.json();
       
       if (res.ok) {
-        showFeedback('success', editingCompanyId ? `Updated ${companyForm.name}.` : `Created ${companyForm.name}.`);
+        if (editingCompanyId) {
+          setCompaniesState(prev => prev.map(c => c.id === editingCompanyId ? { ...c, ...data, logoUrl: data.logoUrl || c.logoUrl } : c));
+          setAllCompanies(prev => prev.map(c => c.id === editingCompanyId ? { ...c, ...data, logoUrl: data.logoUrl || c.logoUrl } : c));
+          showFeedback('success', `Updated ${companyForm.name}.`);
+        } else {
+          setCompaniesState(prev => [...prev, { ...data, logoUrl: data.logoUrl || '' }]);
+          setAllCompanies(prev => [...prev, { ...data, logoUrl: data.logoUrl || '' }]);
+          showFeedback('success', `Created ${companyForm.name}.`);
+        }
         setCompanyForm({ 
           name: '', url: '', logoUrl: '', description: '',
           streetAddress: '', area: '', locality: '', district: '',
@@ -1220,13 +1288,13 @@ export default function AdminPage() {
           foundedYear: '', employeeCount: ''
         });
         setEditingCompanyId(null);
-        await fetchStatsAndMeta();
-        await fetchCompanies();
+        fetchSystemData();
       } else {
         showFeedback('error', data.error || data.details || 'Failed to save company');
       }
     } catch (err) {
-      showFeedback('error', 'Error establishing corporate reference.');
+      showFeedback('error', 'Error establishing corporate database reference.');
+      console.error('Company save error:', err);
     } finally {
       setActionLoading(false);
     }
@@ -1255,7 +1323,7 @@ export default function AdminPage() {
     if (!roleForm.title) return;
 
     if (userRole === 'editor') {
-      showFeedback('error', 'PERMISSION DENIED.');
+      showFeedback('error', 'PERMISSION DENIED: Core normalization charts are read-only for Editors.');
       return;
     }
 
@@ -1272,9 +1340,9 @@ export default function AdminPage() {
       });
 
       if (res.ok) {
-        showFeedback('success', `Normalization mapping saved: [${roleForm.title}]`);
+        showFeedback('success', `Normalization mapping saved for: [${roleForm.title}]`);
         setRoleForm({ title: '', keywordInput: '', growth: 15, keywords: [] });
-        fetchStatsAndMeta();
+        fetchSystemData();
       }
     } catch (err) {
       showFeedback('error', 'Failed saving mapped configuration.');
@@ -1285,11 +1353,11 @@ export default function AdminPage() {
 
   const handleDeleteRole = async (id: string) => {
     if (userRole === 'editor') {
-      showFeedback('error', 'PERMISSION DENIED.');
+      showFeedback('error', 'PERMISSION DENIED: Role expulsion rejected.');
       return;
     }
 
-    if (!confirm("Delete this role?")) return;
+    if (!confirm("Delete this role? Jobs using this role will need to be reassigned first.")) return;
 
     try {
       const res = await fetch(`/api/admin/roles/${id}`, { method: 'DELETE' });
@@ -1297,22 +1365,22 @@ export default function AdminPage() {
       
       if (res.ok) {
         setRolesState(prev => prev.filter(r => r.id !== id));
-        showFeedback('success', 'Role deleted.');
-        fetchStatsAndMeta();
+        showFeedback('success', 'Role deleted successfully.');
+        fetchSystemData();
       } else if (res.status === 409) {
-        showFeedback('error', data.error || 'Jobs are using this role.');
+        showFeedback('error', data.error || 'Jobs are using this role. Reassign them first.');
       } else {
         showFeedback('error', data.error || 'Could not delete role.');
       }
     } catch (err) {
-      showFeedback('error', 'Network error.');
+      showFeedback('error', 'Network error. Could not delete role.');
     }
   };
 
   const handlePostReport = async (e: FormEvent) => {
     e.preventDefault();
     if (!reportForm.title || !reportForm.roleSelected) {
-      showFeedback('error', 'Report title and role are required.');
+      showFeedback('error', 'Report title and target role categorizations are required.');
       return;
     }
 
@@ -1322,9 +1390,11 @@ export default function AdminPage() {
       
       if (editorMode === 'visual' && visualEditorRef.current) {
         finalContent = visualEditorRef.current.innerHTML;
-      } else if (editorMode === 'code') {
+      } 
+      else if (editorMode === 'code') {
         finalContent = reportForm.excerpt;
-      } else {
+      }
+      else {
         finalContent = reportForm.excerpt;
       }
 
@@ -1342,7 +1412,7 @@ export default function AdminPage() {
             });
             compiledHtml += `</ul></div>`;
           } else if (line.type === 'image') {
-            compiledHtml += `<div class="my-6 rounded-3xl overflow-hidden border border-white/10 relative"><img src="${line.mediaUrl}" alt="${line.text}" referrerPolicy="no-referrer" class="w-full object-cover max-h-72" /></div>`;
+            compiledHtml += `<div class="my-6 rounded-3xl overflow-hidden border border-white/10 relative"><img src="${line.mediaUrl}" alt="${line.text}" referrerPolicy="no-referrer" class="w-full object-cover max-h-72" /><div class="absolute bottom-3 left-4 px-2.5 py-1 bg-black/80 backdrop-blur text-[9px] text-gray-400 font-mono tracking-widest uppercase rounded-lg">ALT TAG: ${line.text}</div></div>`;
           }
         }
         finalContent = compiledHtml;
@@ -1370,7 +1440,12 @@ export default function AdminPage() {
       });
 
       if (res.ok) {
-        showFeedback('success', editingReportId ? `Report updated!` : `Report published!`);
+        const savedReport = await res.json();
+        
+        const msg = editingReportId 
+          ? `Insight Report "${reportForm.title}" updated successfully!` 
+          : `Insight Report "${reportForm.title}" published!`;
+        showFeedback('success', msg);
         
         setReportForm({
           title: '',
@@ -1381,19 +1456,22 @@ export default function AdminPage() {
         });
         setRichLines([
           { type: 'h2', text: 'Market Demand Indicators' },
-          { type: 'p', text: 'Telemetry analysis validates rising hiring volume.' }
+          { type: 'p', text: 'Telemetry analysis validates rising hiring volume across leading enterprise hubs.' }
         ]);
         setEditingReportId(null);
         
-        if (visualEditorRef.current) visualEditorRef.current.innerHTML = '';
+        if (visualEditorRef.current) {
+          visualEditorRef.current.innerHTML = '';
+        }
         
-        await fetchStatsAndMeta();
+        await fetchSystemData();
         setActiveTab('dashboard');
       } else {
         const errData = await res.json();
         showFeedback('error', errData.error || 'Error saving report.');
       }
     } catch (err) {
+      console.error('Report save error:', err);
       showFeedback('error', 'Network failure.');
     } finally {
       setActionLoading(false);
@@ -1428,9 +1506,12 @@ export default function AdminPage() {
         if (res.ok) {
           const added = await res.json();
           setMediaAssets(prev => [added, ...prev]);
-          showFeedback('success', `Saved asset "${mediaForm.name}".`);
+          showFeedback('success', `Saved asset "${mediaForm.name}" to media vault.`);
           setMediaForm({ name: '', altText: '' });
           setSelectedFileBase64(null);
+          fetchSystemData();
+        } else {
+          showFeedback('error', 'Failed to upload media.');
         }
       } else {
         const formData = new FormData();
@@ -1446,29 +1527,32 @@ export default function AdminPage() {
         if (res.ok) {
           const added = await res.json();
           setMediaAssets(prev => [added, ...prev]);
-          showFeedback('success', `Uploaded "${added.name}"`);
+          showFeedback('success', `Uploaded "${added.name}" to media.jobsreport.online`);
           setMediaForm({ name: '', altText: '' });
           setSelectedFileBase64(null);
+          fetchSystemData();
         } else {
           const errData = await res.json();
           showFeedback('error', errData.error || 'Upload failed');
         }
       }
     } catch (err) {
-      showFeedback('error', 'Error uploading.');
+      showFeedback('error', 'Error uploading to media server.');
+      console.error('Upload error:', err);
     } finally {
       setActionLoading(false);
     }
   };
 
   const handleDeleteMedia = async (id: string) => {
-    if (!confirm("Purge this image?")) return;
+    if (!confirm("Are you sure you want to purge this image from media library?")) return;
 
     try {
       const res = await fetch(`/api/media/${id}`, { method: 'DELETE' });
       if (res.ok) {
         setMediaAssets(prev => prev.filter(m => m.id !== id));
-        showFeedback('success', 'Media asset removed.');
+        showFeedback('success', 'Media asset removed from standard catalog.');
+        fetchSystemData();
       }
     } catch (err) {
       showFeedback('error', 'Purge error.');
@@ -1484,7 +1568,7 @@ export default function AdminPage() {
       excerpt: rep.content || rep.excerpt || '',
       content: rep.content || ''
     });
-    showFeedback('success', `Loaded "${rep.title}"`);
+    showFeedback('success', `Loaded "${rep.title}" into the rich text composer workspace.`);
     window.scrollTo({ top: 300, behavior: 'smooth' });
   };
 
@@ -1500,12 +1584,16 @@ export default function AdminPage() {
   };
 
   const handleDeleteReport = async (id: string) => {
-    if (!window.confirm("Delete this report permanently?")) return;
+    if (!window.confirm("Are you sure you want to delete this intelligence report permanently?")) return;
     try {
-      const res = await fetch(`/api/reports/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/reports/${id}`, {
+        method: 'DELETE'
+      });
       if (res.ok) {
-        showFeedback('success', 'Report deleted.');
-        fetchStatsAndMeta();
+        showFeedback('success', 'Report permanently decommissioned.');
+        fetchSystemData();
+      } else {
+        showFeedback('error', 'Failed to delete report.');
       }
     } catch (err) {
       showFeedback('error', 'Network error.');
@@ -1536,22 +1624,24 @@ export default function AdminPage() {
   const handleInsertTemplate = (type: 'insights' | 'segmented' | 'standard') => {
     let tpl = '';
     if (type === 'insights') {
-      tpl = `<h2>Market Demand Vectors</h2>\n<p>Our analytics indicate rising demand in specialized technical operations.</p>`;
+      tpl = `<h2>Market Demand Vectors</h2>\n<p>Our analytics systems indicate a rising demand velocity in specialized technical operations. Here are the core metrics for this sector:</p>\n<ul>\n  <li><strong>Remote Placements:</strong> Growth represents 64% of active quarterly listings</li>\n  <li><strong>Stack Priority:</strong> Senior React frameworks coupled with backend cloud services</li>\n  <li><strong>Time-to-Hire:</strong> Dropped by 12 days, validating intense corporate competition</li>\n</ul>`;
     } else if (type === 'segmented') {
-      tpl = `<h2>Functional Breakdown</h2>\n<p>Hiring indexes remain concentrated in leading regional hubs.</p>`;
+      tpl = `<h2>Functional Breakdown of Regional Placements</h2>\n<p>Hiring indexes remain concentrated in leading regional commerce ports and enterprise hubs. Let us look at specific segments:</p>\n<h3>1. Software Engineering</h3>\n<p>Modern applications require highly robust API interfaces and structured database architectures. Companies are investing heavily in refactoring legacy stacks here.</p>\n<h3>2. Infrastructure Specialists</h3>\n<p>Security protocols and reliable container delivery pipelines stand out as high prioritizations.</p>`;
     } else {
-      tpl = `<p>The current landscape indicates significant growth spikes in active listings.</p>`;
+      tpl = `<p>The current landscape indicates a significant growth spike in active listings. As enterprise teams continue to scale, hiring velocity is projected to sustain its upwards trajectory over the upcoming quarters. Below, our dynamic normalizer provides live telemetry on corporate placements.</p>`;
     }
     const newExcerpt = reportForm.excerpt + (reportForm.excerpt ? '\n\n' : '') + tpl;
     setReportForm(prev => ({ ...prev, excerpt: newExcerpt }));
     if (editorMode === 'visual' && visualEditorRef.current) {
       visualEditorRef.current.innerHTML = newExcerpt;
     }
-    showFeedback('success', 'Template inserted.');
+    showFeedback('success', 'Template inserted into content.');
   };
 
   const executeFormatting = (command: string, value: string = '') => {
-    if (visualEditorRef.current) visualEditorRef.current.focus();
+    if (visualEditorRef.current) {
+      visualEditorRef.current.focus();
+    }
     let finalValue = value;
     if (command === 'formatBlock') {
       const lower = value.toLowerCase();
@@ -1599,12 +1689,11 @@ export default function AdminPage() {
           original: result.originalCount,
           deduplicated: result.deduplicatedCount
         });
-        showFeedback('success', `Pipeline completed!`);
-        fetchStatsAndMeta();
-        fetchJobs();
+        showFeedback('success', `Pipeline completed! Deduplicated index sizes: ${result.deduplicatedCount} entries.`);
+        fetchSystemData();
       }
     } catch (err) {
-      showFeedback('error', 'Execution error.');
+      showFeedback('error', 'Execution error on backend system script.');
     } finally {
       setActionLoading(false);
     }
@@ -1615,7 +1704,10 @@ export default function AdminPage() {
   const getDynamicBarChartData = () => {
     return rolesState.map(r => {
       const activeCount = jobs.filter(j => j.role.toLowerCase() === r.title.toLowerCase() && j.active).length;
-      return { role: r.title, listings: activeCount || Math.floor(Math.random() * 5) + 1 };
+      return {
+        role: r.title,
+        listings: activeCount || Math.floor(Math.random() * 5) + 1
+      };
     });
   };
 
@@ -1634,66 +1726,6 @@ export default function AdminPage() {
       return rolesState.map(r => ({ name: r.title, value: Math.floor(Math.random() * 12) + 4 }));
     }
     return parsedArray;
-  };
-
-  // ========== PAGINATION CONTROLS COMPONENT ==========
-  const PaginationControls = ({ 
-    currentPage, 
-    totalPages, 
-    onPageChange,
-    accentColor = 'blue'
-  }: { 
-    currentPage: number; 
-    totalPages: number; 
-    onPageChange: (p: number) => void;
-    accentColor?: 'blue' | 'violet' | 'emerald';
-  }) => {
-    if (totalPages <= 1) return null;
-
-    const activeColor = accentColor === 'violet' ? 'bg-violet-600' : 
-                       accentColor === 'emerald' ? 'bg-emerald-600' : 'bg-blue-600';
-
-    return (
-      <div className="flex items-center justify-center gap-2 pt-4 flex-wrap">
-        <button
-          onClick={() => onPageChange(Math.max(1, currentPage - 1))}
-          disabled={currentPage === 1}
-          className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all uppercase tracking-wider flex items-center gap-1"
-        >
-          <ChevronLeft size={12} /> Prev
-        </button>
-        
-        <div className="flex items-center gap-1">
-          {Array.from({ length: totalPages }, (_, i) => i + 1)
-            .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 2)
-            .map((p, idx, arr) => (
-              <div key={p} className="flex items-center gap-1">
-                {idx > 0 && arr[idx - 1] !== p - 1 && (
-                  <span className="text-gray-600 px-1 text-xs">...</span>
-                )}
-                <button
-                  onClick={() => onPageChange(p)}
-                  className={`w-9 h-9 rounded-xl text-xs font-bold transition-all ${
-                    currentPage === p 
-                      ? `${activeColor} text-white shadow-sm` 
-                      : 'bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10'
-                  }`}
-                >
-                  {p}
-                </button>
-              </div>
-            ))}
-        </div>
-        
-        <button
-          onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
-          disabled={currentPage === totalPages}
-          className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all uppercase tracking-wider flex items-center gap-1"
-        >
-          Next <ChevronRight size={12} />
-        </button>
-      </div>
-    );
   };
 
   if (!isAdmin) {
@@ -1757,6 +1789,10 @@ export default function AdminPage() {
             >
               Authenticate to Console
             </button>
+            
+            <p className="text-[9px] text-gray-600 text-center font-mono uppercase tracking-wider">
+              Secure Telemetry Access • Session Persists 30 Days
+            </p>
           </form>
         </motion.div>
       </div>
@@ -1766,7 +1802,7 @@ export default function AdminPage() {
   return (
     <div className="space-y-8 pb-12 mt-4 text-white">
       
-      {/* Permissions Banner */}
+      {/* Admin & Editor Permissions Banner Toggle */}
       <div className="p-4 bg-orange-950/20 border border-orange-500/20 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="p-2 h-10 w-10 flex items-center justify-center bg-orange-500/10 text-orange-400 rounded-full border border-orange-500/25">
@@ -1775,28 +1811,36 @@ export default function AdminPage() {
           <div>
             <span className="text-[10px] font-extrabold text-orange-500 font-mono tracking-widest uppercase">DEMO PERMISSIONS CONTROLLER</span>
             <h4 className="text-sm font-black tracking-tight leading-tight uppercase text-stone-200">Test Multi-Role Capabilities</h4>
+            <p className="text-xs text-gray-400">Simulate permissions constraints requested in specs. Toggle instantly to test validation feedback and blocks.</p>
           </div>
         </div>
         
         <div className="flex items-center gap-1 bg-black/40 p-1.5 rounded-2xl border border-white/5 font-mono shrink-0">
           <button 
             type="button" 
-            onClick={() => { setUserRole('admin'); showFeedback('success', 'Switched to Admin'); }}
-            className={`px-3 py-1.5 rounded-xl text-[10px] font-extrabold uppercase tracking-widest transition-colors ${userRole === 'admin' ? 'bg-blue-600 text-stone-100' : 'text-gray-500 hover:text-gray-300'}`}
+            onClick={() => {
+              setUserRole('admin');
+              showFeedback('success', 'Switched simulated status: Administrator level authorization applied.');
+            }}
+            className={`px-3 py-1.5 rounded-xl text-[10px] font-extrabold uppercase tracking-widest transition-colors ${userRole === 'admin' ? 'bg-blue-600 text-stone-100 shadow-md shadow-blue-600/10' : 'text-gray-500 hover:text-gray-300'}`}
           >
             SYSTEM ADMIN
           </button>
+          
           <button 
             type="button" 
-            onClick={() => { setUserRole('editor'); showFeedback('success', 'Switched to Editor'); }}
-            className={`px-3 py-1.5 rounded-xl text-[10px] font-extrabold uppercase tracking-widest transition-colors ${userRole === 'editor' ? 'bg-violet-600 text-stone-100' : 'text-gray-500 hover:text-gray-300'}`}
+            onClick={() => {
+              setUserRole('editor');
+              showFeedback('success', 'Switched simulated status: Staff Editor level applied. Data index modification is locked.');
+            }}
+            className={`px-3 py-1.5 rounded-xl text-[10px] font-extrabold uppercase tracking-widest transition-colors ${userRole === 'editor' ? 'bg-violet-600 text-stone-100 shadow-md shadow-violet-600/10' : 'text-gray-500 hover:text-gray-300'}`}
           >
             STAFF EDITOR
           </button>
         </div>
       </div>
 
-      {/* Feedback Toast */}
+      {/* Active Feedback Toast Marker */}
       <AnimatePresence>
         {operationMessage && (
           <motion.div 
@@ -1815,7 +1859,7 @@ export default function AdminPage() {
         )}
       </AnimatePresence>
 
-      {/* Header */}
+      {/* Hero control dashboard banner */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-white/10 pb-6">
         <div>
           <div className="flex items-center gap-2 text-xs font-bold text-blue-500 uppercase tracking-[0.2em] mb-1 font-mono">
@@ -1831,16 +1875,23 @@ export default function AdminPage() {
             </span>
             
             <button
-              onClick={() => { triggerLogout(); showFeedback('success', 'Logged out'); }}
+              onClick={() => {
+                triggerLogout();
+                showFeedback('success', 'Logged out successfully');
+              }}
               className="px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all ml-4"
             >
               <LogOut size={12} />
               Logout
             </button>
           </div>
+
+          <p className="text-xs text-gray-500 mt-2 max-w-xl font-mono leading-relaxed">
+            Deduplicate listings, map normalized roles, direct custom images and documents, catalog company spotlights, and write dynamic charts insight articles.
+          </p>
         </div>
 
-        <div className="flex flex-col gap-1 shrink-0 w-full md:w-auto">
+        <div className="flex flex-col gap-1 shrink-0 w-full md:w-auto mt-2 md:mt-0">
           <button
             onClick={handleTriggerPipeline}
             disabled={actionLoading}
@@ -1849,478 +1900,1875 @@ export default function AdminPage() {
             <RefreshCw size={13} className={actionLoading ? "animate-spin" : ""} />
             <span>TRIGGER DEDUPLICATION PIPE</span>
           </button>
+          
+          <p className="text-[10px] text-gray-500 font-mono text-center md:text-right">
+            Last execution sweep: Today
+          </p>
         </div>
       </div>
 
       {pipelineFinishedInfo && (
         <div className="p-5 rounded-2xl bg-gradient-to-r from-blue-950/20 to-violet-950/20 border border-blue-500/25 grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
           <div className="flex items-center gap-2 text-blue-400 font-bold text-xs uppercase tracking-wider font-mono">
-            <CheckCircle size={16} /> Pipeline Executed
+            <CheckCircle size={16} /> Pipeline Executed Silently
           </div>
           <div className="text-xs font-mono text-gray-400">
-            Original: <span className="font-bold text-white">{pipelineFinishedInfo.original}</span>
+            Total original telemetry: <span className="font-bold text-white font-sans">{pipelineFinishedInfo.original}</span> jobs found.
           </div>
           <div className="text-xs font-mono text-gray-400 text-right">
-            After dedup: <span className="font-bold text-green-400">{pipelineFinishedInfo.deduplicated}</span>
+            Cleaned post-deduplication database count: <span className="font-bold text-green-400 font-sans">{pipelineFinishedInfo.deduplicated}</span> active index jobs.
           </div>
         </div>
       )}
 
-      {/* Tabs */}
+      {/* Matrix Tab Selection Navigation */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-2 border-b border-white/5 pb-2">
         {(['dashboard', 'jobs', 'companies', 'roles', 'reports', 'media'] as const).map((tab) => (
           <button
             key={tab}
-            onClick={() => { setActiveTab(tab); setOperationMessage(null); }}
+            onClick={() => {
+              setActiveTab(tab);
+              setOperationMessage(null);
+            }}
             className={`py-3 px-3.5 rounded-2xl font-bold font-mono text-[10px] uppercase tracking-widest transition-all ${
               activeTab === tab 
                 ? 'bg-white/5 text-blue-400 border border-blue-500/30' 
                 : 'text-gray-500 hover:text-white bg-white/[0.01] border border-transparent'
             }`}
           >
-            {tab === 'dashboard' && '📊 KPI'}
-            {tab === 'jobs' && '📥 Jobs'}
+            {tab === 'dashboard' && '📊 KPI Overview'}
+            {tab === 'jobs' && '📥 Job Input'}
             {tab === 'companies' && '🏢 Companies'}
-            {tab === 'roles' && '⚙️ Roles'}
-            {tab === 'reports' && '📰 Reports'}
-            {tab === 'media' && '🖼️ Media'}
+            {tab === 'roles' && '⚙️ Role Normalizer'}
+            {tab === 'reports' && '📰 Report Editor'}
+            {tab === 'media' && '🖼️ Media Vault'}
           </button>
         ))}
       </div>
 
-      {/* ========== TAB: DASHBOARD ========== */}
+      {/* TAB 1: DASHBOARD OVERVIEW SECTION */}
       {activeTab === 'dashboard' && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="space-y-8"
+        >
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl">
+            <div className="p-6 bg-white/[0.01] border hover:border-white/15 border-white/5 rounded-3xl relative overflow-hidden transition-all group duration-300">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-full blur-2xl pointer-events-none group-hover:bg-blue-500/10 transition-colors" />
               <p className="text-[10px] text-gray-500 uppercase tracking-widest font-extrabold font-mono">Today's Ingestion</p>
-              <p className="text-4xl font-extrabold text-blue-400 tracking-tight mt-2 font-mono">{stats.addedToday}</p>
+              <p className="text-4xl font-extrabold text-blue-400 tracking-tight mt-2 font-mono">{jobs.length}</p>
+              <div className="flex items-center gap-1.5 mt-2.5 text-[9px] text-green-400 font-mono tracking-widest uppercase">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-ping"></span>
+                ACTIVE FEED ACTIVE
+              </div>
             </div>
-            <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl">
-              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-extrabold font-mono">Active Listings</p>
-              <p className="text-4xl font-extrabold text-violet-400 tracking-tight mt-2 font-mono">{stats.activeJobs}</p>
+
+            <div className="p-6 bg-white/[0.01] border hover:border-white/15 border-white/5 rounded-3xl relative overflow-hidden transition-all group duration-300">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-violet-500/5 rounded-full blur-2xl pointer-events-none group-hover:bg-violet-500/10 transition-colors" />
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-extrabold font-mono">Active Index Listings</p>
+              <p className="text-4xl font-extrabold text-violet-400 tracking-tight mt-2 font-mono">{jobs.filter(j => j.active).length}</p>
+              <div className="flex items-center gap-1 mt-2.5 text-[9px] text-gray-500 font-mono tracking-wider uppercase">
+                <span>Deduplicated in real-time</span>
+              </div>
             </div>
-            <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl">
-              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-extrabold font-mono">Companies</p>
-              <p className="text-4xl font-extrabold text-emerald-400 tracking-tight mt-2 font-mono">{stats.totalCompanies}</p>
+
+            <div className="p-6 bg-white/[0.01] border hover:border-white/15 border-white/5 rounded-3xl relative overflow-hidden transition-all group duration-300">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none group-hover:bg-emerald-500/10 transition-colors" />
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-extrabold font-mono">Unique Corporate Nodes</p>
+              <p className="text-4xl font-extrabold text-emerald-400 tracking-tight mt-2 font-mono">{companiesState.length}</p>
+              <div className="flex items-center gap-1 mt-2.5 text-[9px] text-gray-500 font-mono tracking-wider uppercase">
+                <span>Domain map synchronized</span>
+              </div>
             </div>
-            <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl">
-              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-extrabold font-mono">Roles</p>
+
+            <div className="p-6 bg-white/[0.01] border hover:border-white/15 border-white/5 rounded-3xl relative overflow-hidden transition-all group duration-300">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-full blur-2xl pointer-events-none group-hover:bg-amber-500/10 transition-colors" />
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-extrabold font-mono">Target Growth Sectors</p>
               <p className="text-4xl font-extrabold text-amber-500 tracking-tight mt-2 font-mono">{rolesState.length}</p>
+              <div className="flex items-center gap-1 mt-2.5 text-[9px] text-gray-500 font-mono tracking-wider uppercase">
+                <span>Mapping normalization: active</span>
+              </div>
             </div>
           </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl lg:col-span-8 space-y-4">
+              <p className="text-xs font-bold text-white uppercase tracking-widest font-mono flex items-center gap-2">
+                <span className="w-1.5 h-3 bg-blue-500"></span> Sector Ingestion distribution (Live Telemetry Indices)
+              </p>
+              
+              <div className="h-68 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={getDynamicBarChartData()}>
+                    <XAxis dataKey="role" stroke="#52525b" fontSize={10} tickLine={false} />
+                    <YAxis stroke="#52525b" fontSize={10} tickLine={false} />
+                    <Tooltip cursor={{ fill: 'rgba(255,r255,255,0.02)' }} contentStyle={{ backgroundColor: '#0c0a09', borderColor: '#27272a' }} />
+                    <Bar dataKey="listings" fill="#2563eb" radius={[6, 6, 0, 0]}>
+                      {getDynamicBarChartData().map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl lg:col-span-4 space-y-4">
+              <p className="text-xs font-bold text-white uppercase tracking-widest font-mono">Role allocation share</p>
+              <div className="h-44 flex items-center justify-center">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={getDynamicPieChartData()}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={45}
+                      outerRadius={65}
+                      paddingAngle={4}
+                      dataKey="value"
+                    >
+                      {getDynamicPieChartData().map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{ backgroundColor: '#0c0a09', borderColor: '#27272a' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+      
+              <div className="grid grid-cols-2 gap-2 pt-2">
+                {getDynamicPieChartData().map((item, idx) => (
+                  <div key={item.name} className="flex items-center gap-2 text-[10px] text-gray-400">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: CHART_COLORS[idx % CHART_COLORS.length] }}></span>
+                    <span className="truncate">{item.name} ({item.value})</span>
+                  </div>
+                ))}
+              </div>
+              
+            </div>
+
+          </div>
+
+          {/* Google Indexing API Test */}
+          <div className="p-5 rounded-2xl bg-white/[0.01] border border-white/5 space-y-3">
+            <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+              <Globe size={14} className="text-green-400" />
+              🧪 Google Indexing API Test
+            </h4>
+            <div className="flex gap-2">
+              <input 
+                type="text" 
+                id="test-indexing-url"
+                placeholder="Job URL to notify Google..."
+                defaultValue="https://jobsreport.online/"
+                className="flex-1 bg-black/40 border border-white/10 px-3 py-2 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-green-500/50"
+              />
+              <button
+                onClick={async () => {
+                  const url = (document.getElementById('test-indexing-url') as HTMLInputElement).value;
+                  if (!url) { showFeedback('error', 'Please enter a URL'); return; }
+                  setActionLoading(true);
+                  try {
+                    const res = await fetch('/api/test-indexing', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ url })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                      showFeedback('success', `✅ Google notified: ${url}`);
+                    } else {
+                      showFeedback('error', `❌ Failed: ${JSON.stringify(data.error || data)}`);
+                    }
+                  } catch (err) {
+                    showFeedback('error', 'Network error');
+                  } finally {
+                    setActionLoading(false);
+                  }
+                }}
+                disabled={actionLoading}
+                className="px-4 py-2 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all whitespace-nowrap"
+              >
+                {actionLoading ? 'Testing...' : '🚀 Notify Google'}
+              </button>
+            </div>
+            <p className="text-[9px] text-gray-500 font-mono">
+              Sends URL to Google Indexing API for instant crawling
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
+              <p className="text-xs font-bold text-white uppercase tracking-widest font-mono flex items-center gap-2">
+                <Flame size={14} className="text-amber-500" /> Active Trending roles (Automatic priority Matrix)
+              </p>
+
+              <div className="space-y-2">
+                {rolesState.sort((a,b) => b.growth - a.growth).slice(0, 5).map((role, idx) => {
+                  const jobMatches = jobs.filter(j => j.role.toLowerCase() === role.title.toLowerCase() && j.active).length;
+                  const uniqueCos = new Set(jobs.filter(j => j.role.toLowerCase() === role.title.toLowerCase() && j.active).map(j => j.company)).size;
+                  
+                  return (
+                    <div 
+                      key={role.id}
+                      className="p-3 bg-white/[0.02] border border-white/5 rounded-2xl flex items-center justify-between gap-3 hover:bg-white/[0.04] transition-all"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-mono font-bold text-gray-500">0{idx + 1}</span>
+                        <div>
+                          <span className="text-xs font-bold text-stone-100">{role.title}</span>
+                          <span className="block text-[8px] text-gray-400 font-mono uppercase mt-0.5">
+                            {role.mappedTitles.length} keywords mapped • {uniqueCos} tracking companies
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <span className="text-xs font-mono font-bold text-emerald-400">+{role.growth}%</span>
+                        <span className="block text-[9px] text-gray-500 font-mono uppercase mt-0.5">{jobMatches} active postings</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4 flex flex-col justify-between">
+              <div>
+                <p className="text-xs font-bold text-white uppercase tracking-widest font-mono flex items-center gap-2">
+                  <Database size={13} className="text-blue-500" /> System Aggregator Log Stream
+                </p>
+                
+                <div className="space-y-3.5 mt-4">
+                  {activityLogs.slice(0, 4).map((log) => (
+                    <div key={log.id} className="border-l-2 border-blue-500 pl-3 py-1 space-y-1">
+                      <div className="flex items-center justify-between text-[10px] text-gray-400 font-mono">
+                        <span className="font-bold text-stone-200">{log.action}</span>
+                        <span>{log.timestamp}</span>
+                      </div>
+                      <p className="text-xs text-gray-500 truncate">{log.details}</p>
+                    </div>
+                  ))}
+                  
+                  {activityLogs.length === 0 && (
+                    <p className="text-xs text-gray-500 font-mono text-center py-6">LOG STREAM UNINITIALIZED</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="border-t border-white/5 pt-4 mt-6 text-center">
+                <button 
+                  onClick={handleTriggerPipeline}
+                  className="text-[10px] text-blue-500 hover:text-blue-400 font-bold uppercase tracking-widest flex items-center justify-center gap-1.5 mx-auto"
+                >
+                  <span>Force Aggregate Telemetry</span>
+                  <ChevronRight size={12} />
+                </button>
+              </div>
+            </div>
+
+          </div>
+
         </motion.div>
       )}
 
-      {/* ========== TAB: JOBS (with pagination) ========== */}
+      {/* TAB 2: JOB INPUT SYSTEM WITH AI PARSER & FILE UPLOAD - FULL WIDTH */}
       {activeTab === 'jobs' && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-          
-          {/* Job Form */}
-          <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-5">
-            <h3 className="text-base font-extrabold uppercase tracking-widest flex items-center gap-1.5 text-stone-100">
-              <Briefcase size={16} className="text-blue-500" /> {editingJobId ? 'Edit Placement' : 'Ingest Real-Time Placement'}
-            </h3>
-
-            {/* AI Parser */}
-            <div className="pb-4 border-b border-white/5">
-              <button
-                type="button"
-                onClick={() => setShowAIPaste(!showAIPaste)}
-                className="w-full px-4 py-3 rounded-2xl bg-gradient-to-r from-violet-600/10 to-blue-600/10 border border-violet-500/20 hover:border-violet-500/40 text-violet-400 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all"
-              >
-                <Sparkles size={14} />
-                {showAIPaste ? '✕ Close AI Parser' : '⚡ AI Auto-Fill from Job Description'}
-              </button>
-
-              {showAIPaste && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-3 space-y-3 p-4 bg-violet-950/10 border border-violet-500/10 rounded-2xl">
-                  <textarea
-                    value={rawJobText}
-                    onChange={(e) => setRawJobText(e.target.value)}
-                    placeholder="Paste job description here..."
-                    className="w-full h-40 bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-white resize-none focus:outline-none focus:border-violet-500/50 font-mono"
-                    disabled={aiProcessing}
-                  />
-                  <div className="flex justify-end gap-2">
-                    <button type="button" onClick={() => { setRawJobText(''); setShowAIPaste(false); }} className="px-3 py-2 bg-white/5 text-gray-400 text-[10px] font-bold uppercase rounded-xl">Clear</button>
-                    <button type="button" onClick={handleAIProcessJob} disabled={aiProcessing || rawJobText.trim().length < 20} className="px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:bg-gray-800 text-white font-bold text-[10px] uppercase rounded-xl flex items-center gap-2">
-                      {aiProcessing ? <><RefreshCw size={12} className="animate-spin" /> Processing...</> : <><Sparkles size={12} /> Parse with AI</>}
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </div>
-
-            <form onSubmit={handleIngestJob} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Job Title</label>
-                  <input type="text" value={jobForm.title} onChange={(e) => setJobForm(prev => ({ ...prev, title: e.target.value }))} placeholder="e.g. Senior Frontend React Engineer" className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500" required />
-                </div>
-                <div className="space-y-1">
-                  <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Location</label>
-                  <input type="text" value={jobForm.location} onChange={(e) => setJobForm(prev => ({ ...prev, location: e.target.value }))} placeholder="Remote / Dar es Salaam" className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none" required />
-                </div>
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="space-y-8"
+        >
+          {/* Main insertion form - Full width */}
+          <div className="space-y-6">
+            <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-5">
+              <div>
+                <h3 className="text-base font-extrabold uppercase tracking-widest flex items-center gap-1.5 font-sans text-stone-100">
+                  <Briefcase size={16} className="text-blue-500" /> {editingJobId ? 'Edit Placement' : 'Ingest Real-Time Placement'}
+                </h3>
+                <p className="text-xs text-gray-500 mt-1">Automatic categorizations are applied based on keyword matching logic. Supports images, PDFs, Word, Excel, PowerPoint files.</p>
               </div>
 
-              {duplicateWarning && (
-                <div className="p-3 rounded-xl bg-red-950/20 border border-red-500/20 text-[10px] font-mono text-red-400">
-                  <AlertCircle size={12} className="inline mr-1" /> {duplicateWarning}
-                </div>
-              )}
-
-              <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-2">
-                <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Company Source</label>
-                <button type="button" onClick={() => setIsCreatingNewCompanyInline(!isCreatingNewCompanyInline)} className="text-[9px] font-mono font-bold text-blue-500 uppercase hover:text-blue-400">
-                  {isCreatingNewCompanyInline ? "Select Existing" : "+ New Company inline"}
-                </button>
-              </div>
-
-              {isCreatingNewCompanyInline ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-white/[0.02] border border-white/5 rounded-2xl">
-                  <input type="text" value={jobForm.companyNewName} onChange={(e) => setJobForm(prev => ({ ...prev, companyNewName: e.target.value }))} placeholder="New Company Name" className="w-full bg-black/40 border border-white/10 px-3 py-2 rounded-xl text-xs text-white" />
-                  <input type="url" value={jobForm.companyNewUrl} onChange={(e) => setJobForm(prev => ({ ...prev, companyNewUrl: e.target.value }))} placeholder="https://company.com" className="w-full bg-black/40 border border-white/10 px-3 py-2 rounded-xl text-xs text-white" />
-                </div>
-              ) : (
-                <select
-                  value={jobForm.companySelected}
-                  onChange={(e) => { setJobForm(prev => ({ ...prev, companySelected: e.target.value })); handleAutoFillLocationFromCompany(e.target.value); }}
-                  className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white"
-                  required
-                >
-                  <option value="">-- Choose Company --</option>
-                  {allCompanies.map(co => <option key={co.id} value={co.name}>{co.name}</option>)}
-                </select>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <select value={jobForm.roleSelected} onChange={(e) => setJobForm(prev => ({ ...prev, roleSelected: e.target.value }))} className="w-full bg-black/40 border border-white/15 px-3 py-2 rounded-2xl text-xs text-white">
-                  {rolesState.map(r => <option key={r.id} value={r.title}>{r.title}</option>)}
-                </select>
-                <input type="text" value={jobForm.salary} onChange={(e) => setJobForm(prev => ({ ...prev, salary: e.target.value }))} placeholder="Salary (Optional)" className="w-full bg-black/40 border border-white/15 px-3 py-2 rounded-2xl text-xs text-white" />
-              </div>
-
-              {/* Application Type */}
-              <div className="space-y-3 border-t border-white/5 pt-4">
-                <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Application Method</label>
-                <div className="flex flex-wrap bg-black/40 p-1 rounded-xl border border-white/5 gap-1">
-                  {(['url', 'email', 'whatsapp', 'instructions'] as const).map(type => (
-                    <button
-                      key={type}
-                      type="button"
-                      onClick={() => setApplicationType(type)}
-                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
-                        applicationType === type ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'
-                      }`}
-                    >
-                      {type === 'url' && '🔗 URL'}
-                      {type === 'email' && '✉️ Email'}
-                      {type === 'whatsapp' && '💬 WhatsApp'}
-                      {type === 'instructions' && '📋 Instructions'}
-                    </button>
-                  ))}
-                </div>
-
-                {applicationType === 'instructions' ? (
-                  <textarea
-                    value={jobForm.url}
-                    onChange={(e) => setJobForm(prev => ({ ...prev, url: e.target.value }))}
-                    placeholder="Application instructions..."
-                    className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white h-20 resize-none"
-                  />
-                ) : (
-                  <input
-                    type={applicationType === 'email' ? 'email' : 'text'}
-                    value={jobForm.url}
-                    onChange={(e) => setJobForm(prev => ({ ...prev, url: e.target.value }))}
-                    placeholder={
-                      applicationType === 'url' ? 'https://company.com/apply' :
-                      applicationType === 'email' ? 'careers@company.com' :
-                      '+255 612 345 678'
-                    }
-                    className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white"
-                  />
-                )}
-              </div>
-
-              <input type="date" value={jobForm.expiresAt} onChange={(e) => setJobForm(prev => ({ ...prev, expiresAt: e.target.value }))} className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white" required />
-
-              {/* Description */}
-              <div className="space-y-2 border-t border-white/5 pt-4">
-                <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Job Description</label>
-                <div className="p-1.5 bg-black/50 border border-white/10 rounded-xl flex flex-wrap gap-0.5">
-                  <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('bold'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><Bold size={12}/></button>
-                  <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('italic'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><Italic size={12}/></button>
-                  <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('insertUnorderedList'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><List size={12}/></button>
-                </div>
-                <div 
-                  ref={jobDescEditorRef}
-                  contentEditable
-                  suppressContentEditableWarning
-                  className="w-full min-h-[200px] bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-stone-200 focus:outline-none focus:border-blue-500/50"
-                  onInput={() => { if (jobDescEditorRef.current) setJobDescription(jobDescEditorRef.current.innerHTML); }}
-                />
-              </div>
-
-              {/* Actions */}
-              <div className="flex gap-2 pt-2">
-                {editingJobId && (
-                  <button type="button" onClick={handleCancelEditJob} className="flex-1 py-3 bg-white/5 border border-white/10 text-stone-300 font-extrabold text-[11px] uppercase rounded-2xl">Cancel</button>
-                )}
+              {/* AI Job Parser - Smart Paste */}
+              <div className="pb-4 border-b border-white/5">
                 <button
                   type="button"
-                  onClick={async (e) => { setIsDraft(true); await handleIngestJob(e as any); setIsDraft(false); }}
-                  disabled={actionLoading || !jobForm.title}
-                  className="flex-1 py-3 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/30 text-amber-400 font-extrabold text-[10px] uppercase rounded-2xl"
+                  onClick={() => setShowAIPaste(!showAIPaste)}
+                  className="w-full px-4 py-3 rounded-2xl bg-gradient-to-r from-violet-600/10 to-blue-600/10 border border-violet-500/20 hover:border-violet-500/40 text-violet-400 hover:text-violet-300 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all group"
                 >
-                  Save Draft
+                  <Sparkles size={14} className="group-hover:scale-110 transition-transform" />
+                  {showAIPaste ? '✕ Close AI Parser' : '⚡ AI Auto-Fill from Job Description'}
                 </button>
-                <button type="submit" disabled={actionLoading || !!duplicateWarning} className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 text-white font-extrabold text-[10px] uppercase rounded-2xl">
-                  {editingJobId ? 'Update' : 'Publish Job'}
-                </button>
+
+                {showAIPaste && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="mt-3 space-y-3 p-4 bg-violet-950/10 border border-violet-500/10 rounded-2xl"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={12} className="text-violet-400" />
+                      <p className="text-[9px] text-gray-400 font-mono leading-relaxed">
+                        Paste a raw job posting below. AI will extract: <span className="text-violet-400">title, company, location, salary, role, and description</span>.
+                      </p>
+                    </div>
+                    
+                    <textarea
+                      value={rawJobText}
+                      onChange={(e) => setRawJobText(e.target.value)}
+                      placeholder={`Paste job description here...\n\nExample:\n"We are hiring a Senior Accountant in Dar es Salaam. The ideal candidate will have 5+ years experience..."`}
+                      className="w-full h-40 bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-white resize-none focus:outline-none focus:border-violet-500/50 font-mono placeholder:text-gray-600"
+                      style={{ fontSize: '13px', lineHeight: '1.6' }}
+                      disabled={aiProcessing}
+                    />
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-[8px] text-gray-500 font-mono">
+                        {rawJobText.length} characters
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => { setRawJobText(''); setShowAIPaste(false); }}
+                          className="px-3 py-2 bg-white/5 hover:bg-white/10 text-gray-400 text-[10px] font-bold uppercase rounded-xl transition-all"
+                        >
+                          Clear
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleAIProcessJob}
+                          disabled={aiProcessing || rawJobText.trim().length < 20}
+                          className="px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:bg-gray-800 disabled:text-gray-500 text-white font-bold text-[10px] uppercase tracking-wider rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-violet-500/10"
+                        >
+                          {aiProcessing ? (
+                            <>
+                              <RefreshCw size={12} className="animate-spin" />
+                              Processing...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles size={12} />
+                              Parse with AI
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
               </div>
-            </form>
+
+              <form onSubmit={handleIngestJob} className="space-y-4">
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Job Title</label>
+                    <input 
+                      type="text" 
+                      value={jobForm.title}
+                      onChange={(e) => setJobForm(prev => ({ ...prev, title: e.target.value }))}
+                      placeholder="e.g. Senior Frontend React Engineer"
+                      className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors font-sans"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Location parameters</label>
+                    <input 
+                      type="text" 
+                      value={jobForm.location}
+                      onChange={(e) => setJobForm(prev => ({ ...prev, location: e.target.value }))}
+                      placeholder="Remote / Silicon Valley"
+                      className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {jobForm.title && (
+                  <div className="p-3 rounded-xl bg-blue-950/20 border border-blue-500/20 text-[10px] font-mono leading-relaxed space-y-1">
+                    <div className="flex items-center gap-1.5 text-blue-400 uppercase font-extrabold">
+                      <Sparkles size={12} /> Auto-Normalization Engine
+                    </div>
+                    <span className="text-gray-400">
+                      Decoded title keywords will automatically categorize role to: <span className="text-stone-100 font-bold bg-white/10 px-1.5 py-0.5 rounded uppercase font-sans text-[9px] ml-1">{jobForm.roleSelected}</span>
+                    </span>
+                  </div>
+                )}
+
+                {duplicateWarning && (
+                  <div className="p-3 rounded-xl bg-red-950/20 border border-red-500/20 text-[10px] font-mono leading-relaxed space-y-1">
+                    <div className="flex items-center gap-1.5 text-red-400 uppercase font-extrabold">
+                      <AlertCircle size={12} /> DUPLICATE WARNING MATCH
+                    </div>
+                    <span className="text-gray-400">{duplicateWarning}</span>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-2">
+                  <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Company Source</label>
+                  <button 
+                    type="button" 
+                    onClick={() => setIsCreatingNewCompanyInline(!isCreatingNewCompanyInline)}
+                    className="text-[9px] font-mono font-bold text-blue-500 uppercase flex items-center gap-1 hover:text-blue-400"
+                  >
+                    {isCreatingNewCompanyInline ? "Select Existing Node" : "Create New Corporate Spot inline"}
+                  </button>
+                </div>
+
+                {isCreatingNewCompanyInline ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-white/[0.02] border border-white/5 rounded-2xl">
+                    <div className="space-y-1">
+                      <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">New Company Name</label>
+                      <input 
+                        type="text" 
+                        value={jobForm.companyNewName}
+                        onChange={(e) => setJobForm(prev => ({ ...prev, companyNewName: e.target.value }))}
+                        placeholder="e.g. OpenAI Inc"
+                        className="w-full bg-black/40 border border-white/10 px-3 py-2 rounded-xl text-xs text-white"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Careers Page URL</label>
+                      <input 
+                        type="url" 
+                        value={jobForm.companyNewUrl}
+                        onChange={(e) => setJobForm(prev => ({ ...prev, companyNewUrl: e.target.value }))}
+                        placeholder="https://openai.com/careers"
+                        className="w-full bg-black/40 border border-white/10 px-3 py-2 rounded-xl text-xs text-white"
+                      />
+                    </div>
+
+                    <div className="md:col-span-2 space-y-1">
+                      <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Logo (Drag / Click to upload)</label>
+                      <div className="border border-dashed border-white/10 hover:border-white/20 p-4 rounded-xl text-center relative cursor-pointer group">
+                        <input 
+                          type="file" 
+                          accept="image/*"
+                          onChange={(e) => handleFileChange(e, 'company')}
+                          className="absolute inset-0 opacity-0 cursor-pointer"
+                        />
+                        <Upload size={14} className="mx-auto text-gray-500 group-hover:text-white transition-colors mb-2" />
+                        <span className="block text-[10px] text-gray-400">
+                          {jobForm.companyNewLogo ? "✓ LOGO LOADED IN BUFFER" : "Png / Jpg / Svg optimized logo"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Select Company</label>
+                    <select
+                      value={jobForm.companySelected}
+                      onChange={(e) => {
+                        const selectedCompany = e.target.value;
+                        setJobForm(prev => ({ ...prev, companySelected: selectedCompany }));
+                        handleAutoFillLocationFromCompany(selectedCompany);
+                      }}
+                      className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none"
+                      required
+                    >
+                      <option value="">-- Choose Corporate Target --</option>
+                      {allCompanies.map(co => (
+                        <option key={co.id} value={co.name}>{co.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Default Role Match</label>
+                    <select
+                      value={jobForm.roleSelected}
+                      onChange={(e) => setJobForm(prev => ({ ...prev, roleSelected: e.target.value }))}
+                      className="w-full bg-black/40 border border-white/15 px-3 py-2 rounded-2xl text-xs text-white focus:outline-none"
+                    >
+                      {rolesState.map(r => (
+                        <option key={r.id} value={r.title}>{r.title}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Salary estimates (Optional)</label>
+                    <input 
+                      type="text" 
+                      value={jobForm.salary}
+                      onChange={(e) => setJobForm(prev => ({ ...prev, salary: e.target.value }))}
+                      placeholder="e.g. $140,000 - $170,000"
+                      className="w-full bg-black/40 border border-white/15 px-3 py-2 rounded-2xl text-xs text-white focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Apply Method Selection */}
+                <div className="space-y-3 border-t border-white/5 pt-4">
+                  <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">
+                    Application Method
+                  </label>
+                  
+                  {/* 4-Option Toggle */}
+                  <div className="flex flex-wrap bg-black/40 p-1 rounded-xl border border-white/5 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setApplicationType('url')}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
+                        applicationType === 'url' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'
+                      }`}
+                    >
+                      🔗 URL
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setApplicationType('email')}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
+                        applicationType === 'email' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'
+                      }`}
+                    >
+                      ✉️ Email
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setApplicationType('whatsapp')}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
+                        applicationType === 'whatsapp' ? 'bg-green-600 text-white' : 'text-gray-500 hover:text-white'
+                      }`}
+                    >
+                      💬 WhatsApp
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setApplicationType('instructions')}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
+                        applicationType === 'instructions' ? 'bg-violet-600 text-white' : 'text-gray-500 hover:text-white'
+                      }`}
+                    >
+                      📋 Instructions
+                    </button>
+                  </div>
+
+                  {/* URL Input */}
+                  {applicationType === 'url' && (
+                    <div className="space-y-1">
+                      <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Application URL</label>
+                      <input 
+                        type="url" 
+                        value={jobForm.url}
+                        onChange={(e) => setJobForm(prev => ({ ...prev, url: e.target.value }))}
+                        placeholder="https://company.com/careers/apply"
+                        className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                      />
+                    </div>
+                  )}
+
+                  {/* Email Input */}
+                  {applicationType === 'email' && (
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Application Email</label>
+                        <input 
+                          type="email" 
+                          value={jobForm.url}
+                          onChange={(e) => setJobForm(prev => ({ ...prev, url: e.target.value }))}
+                          placeholder="careers@company.com"
+                          className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Email Subject (Optional)</label>
+                        <input 
+                          type="text" 
+                          value={jobForm.companyNewUrl}
+                          onChange={(e) => setJobForm(prev => ({ ...prev, companyNewUrl: e.target.value }))}
+                          placeholder={`Application for ${jobForm.title || 'Position'}`}
+                          className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* WhatsApp Input */}
+                  {applicationType === 'whatsapp' && (
+                    <div className="space-y-1">
+                      <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">WhatsApp Number</label>
+                      <input 
+                        type="text" 
+                        value={jobForm.url}
+                        onChange={(e) => setJobForm(prev => ({ ...prev, url: e.target.value }))}
+                        placeholder="+255 612 345 678"
+                        className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-green-500 transition-colors"
+                      />
+                      <p className="text-[8px] text-gray-500 font-mono mt-1">Applicants will open WhatsApp to contact you</p>
+                    </div>
+                  )}
+
+                  {/* Instructions Input */}
+                  {applicationType === 'instructions' && (
+                    <div className="space-y-1">
+                      <label className="block text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Application Instructions</label>
+                      <textarea
+                        value={jobForm.url}
+                        onChange={(e) => setJobForm(prev => ({ ...prev, url: e.target.value }))}
+                        placeholder="Submit your application to the Secretary's Office at Morning Star School, P.O. Box 123, Dar es Salaam..."
+                        className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-violet-500 transition-colors h-20 resize-none"
+                      />
+                      <p className="text-[8px] text-gray-500 font-mono mt-1">These instructions will be shown to applicants</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Job Expiry Date</label>
+                  <input 
+                    type="date" 
+                    value={jobForm.expiresAt}
+                    onChange={(e) => setJobForm(prev => ({ ...prev, expiresAt: e.target.value }))}
+                    className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors cursor-pointer"
+                    required
+                  />
+                </div>
+
+                {/* Job Files Upload Section */}
+                <div className="space-y-2 border-t border-white/5 pt-4 mt-2">
+                  <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">
+                    Job Listing Files (Images, PDFs, Documents)
+                  </label>
+                  
+                  <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-white/10 hover:border-blue-500/30 rounded-2xl cursor-pointer transition-all group">
+                    <input 
+                      type="file" 
+                      accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx" 
+                      multiple 
+                      onChange={handleJobFileUpload}
+                      className="hidden"
+                    />
+                    <Upload size={16} className="text-gray-500 group-hover:text-blue-400 transition-colors" />
+                    <span className="text-[10px] text-gray-500 group-hover:text-blue-400 font-mono uppercase tracking-wider">
+                      {jobFiles.length > 0 
+                        ? `${jobFiles.length} file(s) selected` 
+                        : 'Click to upload images, PDFs & documents'}
+                    </span>
+                  </label>
+
+                  {jobFiles.length > 0 && (
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mt-2">
+                      {jobFiles.map((file, index) => (
+                        <div key={index} className="relative group/file rounded-xl overflow-hidden border border-white/5 bg-slate-900/50">
+                          {(file.type === 'image') ? (
+                            <img 
+                              src={file.thumbnail || file.url} 
+                              alt={file.name} 
+                              className="w-full h-16 object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-16 flex flex-col items-center justify-center bg-slate-800/50 p-1">
+                              <File size={16} className="text-blue-400" />
+                              <span className="text-[6px] text-gray-400 mt-1 truncate w-full text-center">{file.name.slice(0, 10)}</span>
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveJobFile(index)}
+                            className="absolute top-1 right-1 p-1 bg-red-500/80 hover:bg-red-500 rounded-full text-white opacity-0 group-hover/file:opacity-100 transition-opacity"
+                          >
+                            <Trash2 size={8} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  <p className="text-[9px] text-gray-500 font-mono">
+                    Upload images, PDFs, Word docs, Excel sheets, or PowerPoint files.
+                  </p>
+                </div>
+
+                {/* Job Description Editor - Always Visible with Edit Modes */}
+                <div className="space-y-2 border-t border-white/5 pt-4">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">
+                      Job Description {jobDescription && <span className="text-emerald-400 ml-1">• Ready</span>}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      {/* Edit Mode Toggle */}
+                      {jobDescription && (
+                        <div className="flex bg-black/60 p-0.5 rounded-lg font-mono text-[9px] font-bold">
+                          <button
+                            type="button"
+                            onClick={() => setDescEditMode('visual')}
+                            className={`px-2 py-1 rounded-md uppercase transition-all ${descEditMode === 'visual' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}
+                          >
+                            Visual
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDescEditMode('code');
+                              if (jobDescEditorRef.current) {
+                                setJobDescription(jobDescEditorRef.current.innerHTML);
+                              }
+                            }}
+                            className={`px-2 py-1 rounded-md uppercase transition-all ${descEditMode === 'code' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}
+                          >
+                            HTML
+                          </button>
+                        </div>
+                      )}
+                      {/* Copy button */}
+                      {jobDescription && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(
+                              descEditMode === 'code' ? jobDescription : (jobDescEditorRef.current?.innerHTML || jobDescription)
+                            );
+                            showFeedback('success', 'Description copied!');
+                          }}
+                          className="text-[9px] font-mono font-bold text-gray-500 hover:text-white uppercase flex items-center gap-1 transition-colors"
+                        >
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                          </svg>
+                          Copy
+                        </button>
+                      )}
+                      {/* Clear button */}
+                      {jobDescription && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm('Clear description?')) {
+                              setJobDescription('');
+                              if (jobDescEditorRef.current) {
+                                jobDescEditorRef.current.innerHTML = '';
+                              }
+                            }
+                          }}
+                          className="text-[9px] font-mono font-bold text-red-500 hover:text-red-400 uppercase transition-colors"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Mini Toolbar - Only in visual mode */}
+                  {descEditMode === 'visual' && (
+                    <div className="p-1.5 bg-black/50 border border-white/10 rounded-xl flex flex-wrap items-center gap-0.5">
+                      <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('bold'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><Bold size={12}/></button>
+                      <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('italic'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><Italic size={12}/></button>
+                      <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('underline'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><Underline size={12}/></button>
+                      <span className="w-px h-4 bg-white/10 mx-0.5"/>
+                      <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('formatBlock', false, 'h3'); }} className="p-1.5 hover:bg-white/10 rounded-lg text-[9px] font-bold">H3</button>
+                      <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('formatBlock', false, 'h4'); }} className="p-1.5 hover:bg-white/10 rounded-lg text-[9px] font-bold">H4</button>
+                      <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('formatBlock', false, 'p'); }} className="p-1.5 hover:bg-white/10 rounded-lg text-[9px]">P</button>
+                      <span className="w-px h-4 bg-white/10 mx-0.5"/>
+                      <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('insertUnorderedList'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><List size={12}/></button>
+                      <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('insertOrderedList'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><List size={12}/></button>
+                      <span className="w-px h-4 bg-white/10 mx-0.5"/>
+                      <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('removeFormat'); }} className="p-1.5 hover:bg-white/10 rounded-lg text-[9px] text-gray-400">Clear fmt</button>
+                    </div>
+                  )}
+                  
+                  {/* Visual Editor */}
+                  {descEditMode === 'visual' && (
+                    <div 
+                      ref={jobDescEditorRef}
+                      contentEditable
+                      suppressContentEditableWarning
+                      className="w-full min-h-[250px] bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-stone-200 focus:outline-none focus:border-blue-500/50 overflow-y-auto"
+                      style={{ fontSize: '14px', lineHeight: '1.8' }}
+                      onInput={() => {
+                        if (jobDescEditorRef.current) {
+                          setJobDescription(jobDescEditorRef.current.innerHTML);
+                        }
+                      }}
+                      data-placeholder="Write job description here or use AI Auto-Fill above..."
+                    />
+                  )}
+
+                  {/* Code/HTML Editor */}
+                  {descEditMode === 'code' && (
+                    <textarea
+                      value={jobDescription}
+                      onChange={(e) => {
+                        setJobDescription(e.target.value);
+                        if (jobDescEditorRef.current) {
+                          jobDescEditorRef.current.innerHTML = e.target.value;
+                        }
+                      }}
+                      className="w-full min-h-[250px] bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-blue-400 font-mono focus:outline-none focus:border-blue-500/50 overflow-y-auto resize-none"
+                      style={{ fontSize: '13px', lineHeight: '1.8' }}
+                      placeholder="Edit HTML directly..."
+                    />
+                  )}
+                  
+                  <div className="flex items-center justify-between">
+                    <p className="text-[8px] text-gray-500 font-mono">
+                      {jobDescription ? `${jobDescription.length} characters • ${descEditMode === 'code' ? 'HTML' : 'Visual'} mode` : 'Rich text editor • AI content will appear here'}
+                    </p>
+                    {jobDescription && (
+                      <p className="text-[8px] text-emerald-500 font-mono">
+                        ✓ Ready to save
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Schema & SEO Data Section */}
+                <div className="space-y-2 border-t border-white/5 pt-4">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">
+                      Schema & SEO Data
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const companyName = isCreatingNewCompanyInline ? jobForm.companyNewName : jobForm.companySelected;
+                          if (companyName) handleAutoFillLocationFromCompany(companyName);
+                          else showFeedback('error', 'Select a company first');
+                        }}
+                        className="text-[9px] font-mono font-bold text-emerald-500 hover:text-emerald-400 uppercase flex items-center gap-1 transition-colors"
+                        title="Auto-fill from company address"
+                      >
+                        <MapPin size={10} />
+                        Fill from Company
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!jobForm.title) { showFeedback('error', 'Please enter a job title first'); return; }
+                          setActionLoading(true);
+                          try {
+                            const res = await fetch('/api/ai/extract-schema', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                title: jobForm.title,
+                                description: jobDescription,
+                                location: jobForm.location,
+                                company: isCreatingNewCompanyInline ? jobForm.companyNewName : jobForm.companySelected
+                              })
+                            });
+                            const result = await res.json();
+                            if (result.success && result.schema) {
+                              setSchemaData(prev => ({
+                                ...prev,
+                                job_category: result.schema.job_category || prev.job_category,
+                                industry: result.schema.industry || prev.industry,
+                                employment_type: result.schema.employment_type || prev.employment_type,
+                                workplace_type: result.schema.workplace_type || prev.workplace_type,
+                                education_level: result.schema.education_level || prev.education_level,
+                                experience_months: result.schema.experience_months || prev.experience_months,
+                                skills: Array.isArray(result.schema.skills) ? result.schema.skills : prev.skills,
+                                benefits: Array.isArray(result.schema.benefits) ? result.schema.benefits : prev.benefits,
+                                salary_min: result.schema.salary_min ? Number(result.schema.salary_min) : prev.salary_min,
+                                salary_max: result.schema.salary_max ? Number(result.schema.salary_max) : prev.salary_max,
+                                salary_currency: result.schema.salary_currency || prev.salary_currency,
+                              }));
+                              showFeedback('success', 'Schema extracted! Fill location manually below.');
+                            } else {
+                              showFeedback('error', result.error || 'Schema extraction failed');
+                            }
+                          } catch (err) { showFeedback('error', 'AI service unavailable'); }
+                          finally { setActionLoading(false); }
+                        }}
+                        disabled={actionLoading || !jobForm.title}
+                        className="text-[9px] font-mono font-bold text-violet-500 hover:text-violet-400 disabled:text-gray-600 uppercase flex items-center gap-1 transition-colors"
+                      >
+                        <Sparkles size={12} /> Auto-Extract Schema
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Row 1: Category (FREE TEXT) + Employment + Workplace */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="Category (e.g. IT, Accounting)" 
+                      value={schemaData.job_category || ''} 
+                      onChange={(e) => setSchemaData(prev => ({...prev, job_category: e.target.value}))} 
+                      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+                    />
+                    <select value={schemaData.employment_type || 'FULL_TIME'} onChange={(e) => setSchemaData(prev => ({...prev, employment_type: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
+                      <option value="FULL_TIME">Full Time</option>
+                      <option value="PART_TIME">Part Time</option>
+                      <option value="CONTRACT">Contract</option>
+                      <option value="TEMPORARY">Temporary</option>
+                      <option value="INTERNSHIP">Internship</option>
+                    </select>
+                    <select value={schemaData.workplace_type || 'Onsite'} onChange={(e) => setSchemaData(prev => ({...prev, workplace_type: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
+                      <option value="Onsite">Onsite</option>
+                      <option value="Remote">Remote</option>
+                      <option value="Hybrid">Hybrid</option>
+                    </select>
+                  </div>
+
+                  {/* Row 2: Education + Experience + Industry (FREE TEXT) */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    <select value={schemaData.education_level || 'Any'} onChange={(e) => setSchemaData(prev => ({...prev, education_level: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
+                      <option value="Any">Any Education</option>
+                      <option value="High School">High School</option>
+                      <option value="Diploma">Diploma</option>
+                      <option value="Bachelor">Bachelor</option>
+                      <option value="Master">Master</option>
+                      <option value="PhD">PhD</option>
+                    </select>
+                    <input 
+                      type="number" 
+                      placeholder="Experience (months)" 
+                      value={schemaData.experience_months || ''} 
+                      onChange={(e) => setSchemaData(prev => ({...prev, experience_months: parseInt(e.target.value) || 0}))} 
+                      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="Industry (e.g. Finance)" 
+                      value={schemaData.industry || ''} 
+                      onChange={(e) => setSchemaData(prev => ({...prev, industry: e.target.value}))} 
+                      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+                    />
+                  </div>
+
+                  {/* Row 3: Currency + Salary Min + Salary Max */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <select value={schemaData.salary_currency || 'TZS'} onChange={(e) => setSchemaData(prev => ({...prev, salary_currency: e.target.value}))} className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white">
+                      <option value="AF">🇦🇫 Afghanistan (AFN)</option>
+                      <option value="AL">🇦🇱 Albania (ALL)</option>
+                      <option value="DZ">🇩🇿 Algeria (DZD)</option>
+                      <option value="AD">🇦🇩 Andorra (EUR)</option>
+                      <option value="AO">🇦🇴 Angola (AOA)</option>
+                      <option value="AG">🇦🇬 Antigua and Barbuda (XCD)</option>
+                      <option value="AR">🇦🇷 Argentina (ARS)</option>
+                      <option value="AM">🇦🇲 Armenia (AMD)</option>
+                      <option value="AU">🇦🇺 Australia (AUD)</option>
+                      <option value="AT">🇦🇹 Austria (EUR)</option>
+                      <option value="AZ">🇦🇿 Azerbaijan (AZN)</option>
+                      <option value="BS">🇧🇸 Bahamas (BSD)</option>
+                      <option value="BH">🇧🇭 Bahrain (BHD)</option>
+                      <option value="BD">🇧🇩 Bangladesh (BDT)</option>
+                      <option value="BB">🇧🇧 Barbados (BBD)</option>
+                      <option value="BY">🇧🇾 Belarus (BYN)</option>
+                      <option value="BE">🇧🇪 Belgium (EUR)</option>
+                      <option value="BZ">🇧🇿 Belize (BZD)</option>
+                      <option value="BJ">🇧🇯 Benin (XOF)</option>
+                      <option value="BT">🇧🇹 Bhutan (BTN)</option>
+                      <option value="BO">🇧🇴 Bolivia (BOB)</option>
+                      <option value="BA">🇧🇦 Bosnia and Herzegovina (BAM)</option>
+                      <option value="BW">🇧🇼 Botswana (BWP)</option>
+                      <option value="BR">🇧🇷 Brazil (BRL)</option>
+                      <option value="BN">🇧🇳 Brunei (BND)</option>
+                      <option value="BG">🇧🇬 Bulgaria (BGN)</option>
+                      <option value="BF">🇧🇫 Burkina Faso (XOF)</option>
+                      <option value="BI">🇧🇮 Burundi (BIF)</option>
+                      <option value="KH">🇰🇭 Cambodia (KHR)</option>
+                      <option value="CM">🇨🇲 Cameroon (XAF)</option>
+                      <option value="CA">🇨🇦 Canada (CAD)</option>
+                      <option value="CV">🇨🇻 Cape Verde (CVE)</option>
+                      <option value="CF">🇨🇫 Central African Republic (XAF)</option>
+                      <option value="TD">🇹🇩 Chad (XAF)</option>
+                      <option value="CL">🇨🇱 Chile (CLP)</option>
+                      <option value="CN">🇨🇳 China (CNY)</option>
+                      <option value="CO">🇨🇴 Colombia (COP)</option>
+                      <option value="KM">🇰🇲 Comoros (KMF)</option>
+                      <option value="CG">🇨🇬 Congo (XAF)</option>
+                      <option value="CD">🇨🇩 DR Congo (CDF)</option>
+                      <option value="CR">🇨🇷 Costa Rica (CRC)</option>
+                      <option value="CI">🇨🇮 Côte d'Ivoire (XOF)</option>
+                      <option value="HR">🇭🇷 Croatia (EUR)</option>
+                      <option value="CU">🇨🇺 Cuba (CUP)</option>
+                      <option value="CY">🇨🇾 Cyprus (EUR)</option>
+                      <option value="CZ">🇨🇿 Czech Republic (CZK)</option>
+                      <option value="DK">🇩🇰 Denmark (DKK)</option>
+                      <option value="DJ">🇩🇯 Djibouti (DJF)</option>
+                      <option value="DO">🇩🇴 Dominican Republic (DOP)</option>
+                      <option value="EC">🇪🇨 Ecuador (USD)</option>
+                      <option value="EG">🇪🇬 Egypt (EGP)</option>
+                      <option value="SV">🇸🇻 El Salvador (USD)</option>
+                      <option value="GQ">🇬🇶 Equatorial Guinea (XAF)</option>
+                      <option value="ER">🇪🇷 Eritrea (ERN)</option>
+                      <option value="EE">🇪🇪 Estonia (EUR)</option>
+                      <option value="SZ">🇸🇿 Eswatini (SZL)</option>
+                      <option value="ET">🇪🇹 Ethiopia (ETB)</option>
+                      <option value="TZ">🇹🇿 Tanzania (TZS)</option>
+                      <option value="KE">🇰🇪 Kenya (KES)</option>
+                      <option value="UG">🇺🇬 Uganda (UGX)</option>
+                      <option value="RW">🇷🇼 Rwanda (RWF)</option>
+                      <option value="ZA">🇿🇦 South Africa (ZAR)</option>
+                      <option value="NG">🇳🇬 Nigeria (NGN)</option>
+                      <option value="GH">🇬🇭 Ghana (GHS)</option>
+                      <option value="US">🇺🇸 United States (USD)</option>
+                      <option value="GB">🇬🇧 United Kingdom (GBP)</option>
+                      <option value="AE">🇦🇪 United Arab Emirates (AED)</option>
+                      <option value="IN">🇮🇳 India (INR)</option>
+                      <option value="ZM">🇿🇲 Zambia (ZMW)</option>
+                      <option value="ZW">🇿🇼 Zimbabwe (USD)</option>
+                    </select>
+                    <input 
+                      type="number" 
+                      placeholder="Min Salary" 
+                      value={schemaData.salary_min || ''} 
+                      onChange={(e) => setSchemaData(prev => ({...prev, salary_min: parseFloat(e.target.value) || null}))} 
+                      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+                    />
+                    <input 
+                      type="number" 
+                      placeholder="Max Salary" 
+                      value={schemaData.salary_max || ''} 
+                      onChange={(e) => setSchemaData(prev => ({...prev, salary_max: parseFloat(e.target.value) || null}))} 
+                      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+                    />
+                  </div>
+
+                  {/* Row 4: LOCATION FIELDS - Google Schema */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="Street (e.g. Kashai)" 
+                      value={schemaData.street_address || ''} 
+                      onChange={(e) => setSchemaData(prev => ({...prev, street_address: e.target.value}))} 
+                      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="City *" 
+                      value={schemaData.city || ''} 
+                      onChange={(e) => setSchemaData(prev => ({...prev, city: e.target.value}))} 
+                      className="bg-black/40 border border-emerald-500/20 px-2 py-2 rounded-lg text-[10px] text-white" 
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="Region" 
+                      value={schemaData.region || ''} 
+                      onChange={(e) => setSchemaData(prev => ({...prev, region: e.target.value}))} 
+                      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="Country" 
+                      value={schemaData.country || ''} 
+                      onChange={(e) => setSchemaData(prev => ({...prev, country: e.target.value}))} 
+                      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+                    />
+                  </div>
+
+                  {/* Row 5: Postcode + Skills + Benefits */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="Postcode (e.g. 35101)" 
+                      value={schemaData.postcode || ''} 
+                      onChange={(e) => setSchemaData(prev => ({...prev, postcode: e.target.value}))} 
+                      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="Skills (comma separated)" 
+                      value={Array.isArray(schemaData.skills) ? schemaData.skills.join(', ') : ''} 
+                      onChange={(e) => setSchemaData(prev => ({...prev, skills: e.target.value.split(',').map(s => s.trim()).filter(Boolean)}))} 
+                      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="Benefits (comma separated)" 
+                      value={Array.isArray(schemaData.benefits) ? schemaData.benefits.join(', ') : ''} 
+                      onChange={(e) => setSchemaData(prev => ({...prev, benefits: e.target.value.split(',').map(s => s.trim()).filter(Boolean)}))} 
+                      className="bg-black/40 border border-white/10 px-2 py-2 rounded-lg text-[10px] text-white" 
+                    />
+                  </div>
+
+                  {/* Google Schema indicator */}
+                  <div className="flex items-center gap-2 text-[8px] text-gray-500 font-mono">
+                    <Globe size={10} />
+                    <span>These location fields are used by Google for job search results</span>
+                  </div>
+                </div>
+
+                {/* Action Buttons - Save Draft + Publish */}
+                <div className="flex gap-2 pt-2">
+                  {editingJobId && (
+                    <button
+                      type="button"
+                      onClick={handleCancelEditJob}
+                      className="flex-1 py-3 bg-white/5 border border-white/10 text-stone-300 font-extrabold text-[11px] uppercase rounded-2xl"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                  
+                  {/* Save Draft Button */}
+                  <button
+                    type="button"
+                    onClick={async (e) => {
+                      setIsDraft(true);
+                      await handleIngestJob(e as any);
+                      setIsDraft(false);
+                    }}
+                    disabled={actionLoading || !jobForm.title}
+                    className="flex-1 py-3 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/30 text-amber-400 font-extrabold text-[10px] uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                    {actionLoading && isDraft ? 'Saving...' : 'Save Draft'}
+                  </button>
+                  
+                  {/* Publish Button */}
+                  <button
+                    type="submit"
+                    disabled={actionLoading || !!duplicateWarning}
+                    className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-500 text-stone-100 font-extrabold text-[10px] uppercase tracking-wider rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    {actionLoading && !isDraft ? (
+                      <>
+                        <RefreshCw size={12} className="animate-spin" />
+                        Publishing...
+                      </>
+                    ) : editingJobId ? (
+                      'Update Placement'
+                    ) : (
+                      <>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                        Publish Job
+                      </>
+                    )}
+                  </button>
+                </div>
+
+              </form>
+            </div>
           </div>
 
-          {/* Job List with Pagination */}
+          {/* Recently Added Job postings catalog preview */}
           <div className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center justify-between px-1">
               <span className="text-xs font-bold text-white uppercase tracking-widest font-mono flex items-center gap-2">
-                <Database size={13} className="text-blue-500" /> Placements ({jobsTotal} total)
+                <Database size={13} className="text-blue-500" /> Real-Time placements directory ({jobsTotal || jobs.length} total)
               </span>
-              
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  placeholder="Search jobs..."
-                  value={jobsSearch}
-                  onChange={(e) => setJobsSearch(e.target.value)}
-                  className="bg-black/40 border border-white/10 px-3 py-1.5 rounded-xl text-[10px] text-white w-48 focus:outline-none focus:border-blue-500/50"
-                />
-                <select
-                  value={jobsStatus}
-                  onChange={(e) => { setJobsStatus(e.target.value as any); setJobsPage(1); }}
-                  className="bg-black/40 border border-white/10 px-3 py-1.5 rounded-xl text-[10px] text-white"
+              <span className="text-[10px] text-gray-500 font-mono">
+                <button
+                  onClick={fetchSystemData}
+                  className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all"
                 >
-                  <option value="all">All</option>
-                  <option value="active">Active</option>
-                  <option value="draft">Drafts</option>
-                </select>
-                <button onClick={() => { fetchJobs(); fetchStatsAndMeta(); }} className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white text-[10px] font-bold uppercase flex items-center gap-1.5">
-                  <RefreshCw size={12} /> Refresh
+                  <RefreshCw size={12} />
+                  Refresh
                 </button>
-              </div>
+              </span>
             </div>
 
-            <div className="bg-white/[0.01] border border-white/5 rounded-3xl overflow-hidden divide-y divide-white/5">
+            <div className="bg-white/[0.01] border border-white/5 rounded-3xl overflow-hidden divide-y divide-white/5 max-h-[500px] overflow-y-auto">
+              
               {jobs.map((job) => (
-                <div key={job.id} className="p-4 flex items-center justify-between gap-4 hover:bg-white/[0.02]">
+                <div 
+                  key={job.id}
+                  className="p-4 flex items-center justify-between gap-4 hover:bg-white/[0.02] transition-colors"
+                >
                   <div className="space-y-1 min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-xs font-bold text-stone-100 truncate">{job.title}</span>
-                      <span className="px-1.5 py-0.5 rounded text-[8px] bg-white/5 text-gray-400 font-mono">{job.role}</span>
-                      {job.salary && <span className="text-[9px] text-emerald-400 font-mono">{job.salary}</span>}
+                      <span className="px-1.5 py-0.5 rounded text-[8px] bg-white/5 text-gray-400 font-mono">
+                        {job.role}
+                      </span>
+                      {job.salary && (
+                        <span className="text-[9px] text-emerald-400 font-mono font-bold">
+                          {job.salary}
+                        </span>
+                      )}
                     </div>
+                    
                     <div className="flex items-center gap-3 text-[10px] text-gray-500 flex-wrap">
-                      <span className="flex items-center gap-1"><Building2 size={11} />{job.company}</span>
-                      <span className="flex items-center gap-1"><MapPin size={11} />{job.location}</span>
-                      {job.active === false && <span className="px-1.5 py-0.5 rounded text-[7px] font-bold bg-amber-500/10 text-amber-400 uppercase">📝 Draft</span>}
+                      <span className="flex items-center gap-1">
+                        <Building2 size={11} />
+                        {job.company}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <MapPin size={11} />
+                        {job.location}
+                      </span>
+                      <span className="font-mono text-[9px] bg-blue-500/10 text-blue-400 px-1 rounded">
+                        JR-{job.id.toUpperCase().slice(0, 4)}
+                      </span>
+                      {job.expiresAt && (
+                        <span className={`font-mono text-[9px] px-1 rounded ${
+                          job.expiresAt < new Date().toISOString().split('T')[0]
+                            ? 'bg-red-500/10 text-red-500/90 font-bold' 
+                            : 'bg-violet-500/10 text-violet-400 font-bold'
+                        }`}>
+                          Expires: {job.expiresAt}
+                        </span>
+                      )}
                     </div>
+                    
+                    {/* Draft Badge */}
+                    {job.active === false && (
+                      <div className="flex items-center gap-1 mt-1">
+                        <span className="px-1.5 py-0.5 rounded text-[7px] font-bold bg-amber-500/10 text-amber-400 uppercase">
+                          📝 Draft
+                        </span>
+                      </div>
+                    )}
+
+                    {(job as any).images && (job as any).images.length > 0 && (
+                      <div className="flex items-center gap-1 mt-1">
+                        <File size={10} className="text-blue-400" />
+                        <span className="text-[8px] text-gray-500 font-mono">
+                          {(job as any).images.length} file(s)
+                        </span>
+                      </div>
+                    )}
+
+                    {(job as any).description && (
+                      <div className="flex items-center gap-1 mt-1">
+                        <FileText size={10} className="text-emerald-400" />
+                        <span className="text-[8px] text-gray-500 font-mono">
+                          Description available
+                        </span>
+                      </div>
+                    )}
                   </div>
+
                   <div className="flex items-center gap-2 shrink-0">
-                    <button onClick={() => handleEditJob(job)} className="p-2 bg-blue-500/10 hover:bg-blue-500/25 text-blue-400 rounded-xl">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                    <button
+                      onClick={() => handleEditJob(job)}
+                      className="p-2 bg-blue-500/10 hover:bg-blue-500/25 text-blue-400 rounded-xl transition-colors"
+                      title="Edit Job"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                      </svg>
                     </button>
-                    <button onClick={() => handleToggleJobActive(job.id, job.active)} className={`px-2 py-1 rounded text-[8px] font-mono tracking-widest uppercase font-bold border ${job.active ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-stone-800 text-gray-500 border-transparent'}`}>
+
+                    <button
+                      onClick={() => handleToggleJobActive(job.id, job.active)}
+                      className={`px-2 py-1 rounded text-[8px] font-mono tracking-widest uppercase font-bold border transition-all ${
+                        job.active 
+                          ? 'bg-green-500/10 text-green-400 border-green-500/20' 
+                          : 'bg-stone-800 text-gray-500 border-transparent'
+                      }`}
+                      title={job.active ? "Click to set Offline" : "Click to set Active"}
+                    >
                       {job.active ? "● ACTIVE" : "○ OFFLINE"}
                     </button>
-                    <button onClick={() => handleDeleteJob(job.id)} className="p-2 bg-red-500/10 hover:bg-red-500/25 text-red-400 rounded-xl"><Trash2 size={13} /></button>
+
+                    <button
+                      onClick={() => handleDeleteJob(job.id)}
+                      className="p-2 bg-red-500/10 hover:bg-red-500/25 text-red-400 rounded-xl transition-all"
+                      title="Purge Listing"
+                    >
+                      <Trash2 size={13} />
+                    </button>
                   </div>
                 </div>
               ))}
-              {jobs.length === 0 && <p className="text-xs text-gray-500 font-mono text-center py-12">NO JOBS FOUND</p>}
+
+              {jobs.length === 0 && (
+                <p className="text-xs text-gray-500 font-mono text-center py-12">DATABASE COLD-START IN PROGRESS</p>
+              )}
+
             </div>
 
-            <PaginationControls 
-              currentPage={jobsPage} 
-              totalPages={jobsTotalPages} 
-              onPageChange={setJobsPage}
-              accentColor="blue"
-            />
+            {/* ✅ Load More Jobs Button */}
+            {jobsHasMore && (
+              <div className="text-center pt-4">
+                <button
+                  onClick={loadMoreJobs}
+                  disabled={loadingMoreJobs}
+                  className="px-6 py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-gray-300 hover:text-white uppercase tracking-wider inline-flex items-center gap-2 transition-all disabled:opacity-50"
+                >
+                  {loadingMoreJobs ? (
+                    <>
+                      <RefreshCw size={14} className="animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown size={14} />
+                      Load More Jobs ({jobsTotal - jobs.length} remaining)
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         </motion.div>
       )}
 
-      {/* ========== TAB: COMPANIES (with pagination) ========== */}
+      {/* TAB 3: COMPANY MANAGEMENT - UPDATED WITH ENHANCED FORM */}
       {activeTab === 'companies' && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="grid grid-cols-1 lg:grid-cols-12 gap-8"
+        >
           <div className="lg:col-span-5 space-y-6">
             <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
-              <h3 className="text-base font-extrabold uppercase tracking-widest flex items-center gap-1.5 text-stone-100">
-                <Building2 size={16} className="text-blue-500" /> {editingCompanyId ? 'Edit Company' : 'Add Company'}
-              </h3>
+              <div>
+                <h3 className="text-base font-extrabold uppercase tracking-widest flex items-center gap-1.5 font-sans text-stone-100">
+                  <Building2 size={16} className="text-blue-500" /> {editingCompanyId ? 'Edit Corporate Node' : 'Establish Corporate Spotlight Node'}
+                </h3>
+                <p className="text-xs text-gray-500 mt-1">Manual company profile initialization for Spotlight visualization panels.</p>
+              </div>
 
-              <form onSubmit={handleCreateCompany} className="space-y-4">
-                {/* AI Company Parser */}
+              <form onSubmit={handleCreateCompany} className="space-y-5">
+                
+                {/* AI Company Parser - Smart Paste */}
                 <div className="pb-4 border-b border-white/5">
-                  <button type="button" onClick={() => setShowAICompanyPaste(!showAICompanyPaste)} className="w-full px-4 py-3 rounded-2xl bg-gradient-to-r from-violet-600/10 to-blue-600/10 border border-violet-500/20 text-violet-400 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-2">
-                    <Sparkles size={14} /> {showAICompanyPaste ? '✕ Close AI Parser' : '⚡ AI Auto-Fill Company'}
+                  <button
+                    type="button"
+                    onClick={() => setShowAICompanyPaste(!showAICompanyPaste)}
+                    className="w-full px-4 py-3 rounded-2xl bg-gradient-to-r from-violet-600/10 to-blue-600/10 border border-violet-500/20 hover:border-violet-500/40 text-violet-400 hover:text-violet-300 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all group"
+                  >
+                    <Sparkles size={14} className="group-hover:scale-110 transition-transform" />
+                    {showAICompanyPaste ? '✕ Close AI Parser' : '⚡ AI Auto-Fill Company Profile'}
                   </button>
+
                   {showAICompanyPaste && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-3 space-y-3 p-4 bg-violet-950/10 border border-violet-500/10 rounded-2xl">
-                      <textarea value={rawCompanyText} onChange={(e) => setRawCompanyText(e.target.value)} placeholder="Paste company info..." className="w-full h-32 bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-white resize-none font-mono" disabled={aiCompanyProcessing} />
-                      <div className="flex justify-end gap-2">
-                        <button type="button" onClick={() => { setRawCompanyText(''); setShowAICompanyPaste(false); }} className="px-3 py-2 bg-white/5 text-gray-400 text-[10px] font-bold uppercase rounded-xl">Clear</button>
-                        <button type="button" onClick={handleAIProcessCompany} disabled={aiCompanyProcessing || rawCompanyText.trim().length < 20} className="px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:bg-gray-800 text-white font-bold text-[10px] uppercase rounded-xl">
-                          {aiCompanyProcessing ? 'Processing...' : 'Parse Company'}
-                        </button>
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      className="mt-3 space-y-3 p-4 bg-violet-950/10 border border-violet-500/10 rounded-2xl"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Sparkles size={12} className="text-violet-400" />
+                        <p className="text-[9px] text-gray-400 font-mono leading-relaxed">
+                          Paste any company information below. AI will extract: <span className="text-violet-400">name, industry, location, description, website, and more</span>.
+                        </p>
+                      </div>
+                      
+                      <textarea
+                        value={rawCompanyText}
+                        onChange={(e) => setRawCompanyText(e.target.value)}
+                        placeholder={`Paste company information here...\n\nExample:\n"Selcom Tanzania is a fintech company based in Dar es Salaam, founded in 2005. We provide digital payment solutions and mobile money services across East Africa. Our office is at Street Plot 1520, Mwai Kibaki Road, Mikocheni, Kinondoni district..."`}
+                        className="w-full h-40 bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-white resize-none focus:outline-none focus:border-violet-500/50 font-mono placeholder:text-gray-600"
+                        style={{ fontSize: '13px', lineHeight: '1.6' }}
+                        disabled={aiCompanyProcessing}
+                      />
+                      
+                      <div className="flex items-center justify-between">
+                        <span className="text-[8px] text-gray-500 font-mono">
+                          {rawCompanyText.length} characters • AI extracts facts + writes professional description
+                        </span>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => { setRawCompanyText(''); setShowAICompanyPaste(false); }}
+                            className="px-3 py-2 bg-white/5 hover:bg-white/10 text-gray-400 text-[10px] font-bold uppercase rounded-xl transition-all"
+                          >
+                            Clear
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleAIProcessCompany}
+                            disabled={aiCompanyProcessing || rawCompanyText.trim().length < 20}
+                            className="px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:bg-gray-800 disabled:text-gray-500 text-white font-bold text-[10px] uppercase tracking-wider rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-violet-500/10"
+                          >
+                            {aiCompanyProcessing ? (
+                              <>
+                                <RefreshCw size={12} className="animate-spin" />
+                                Processing...
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles size={12} />
+                                Parse Company
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </motion.div>
                   )}
                 </div>
 
+                {/* === BASIC INFORMATION === */}
+                <div className="border-b border-white/5 pb-4">
+                  <h4 className="text-[11px] font-extrabold text-blue-400 uppercase tracking-widest flex items-center gap-2 mb-4">
+                    <Building2 size={14} /> Basic Information
+                  </h4>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Company Name *</label>
+                      <input 
+                        type="text" 
+                        value={companyForm.name}
+                        onChange={(e) => setCompanyForm(prev => ({ ...prev, name: e.target.value }))}
+                        placeholder="e.g. Selcom Tanzania"
+                        className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Industry</label>
+                      <input 
+                        type="text" 
+                        value={companyForm.industry}
+                        onChange={(e) => setCompanyForm(prev => ({ ...prev, industry: e.target.value }))}
+                        placeholder="e.g. Fintech, Digital Payments, Mobile Money"
+                        className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-1">
+                    <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Website URL</label>
+                    <input 
+                      type="url" 
+                      value={companyForm.url}
+                      onChange={(e) => setCompanyForm(prev => ({ ...prev, url: e.target.value }))}
+                      placeholder="https://www.selcom.net"
+                      className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                    />
+                  </div>
+                </div>
+
+                {/* === LOCATION DETAILS === */}
+                <div className="border-b border-white/5 pb-4">
+                  <h4 className="text-[11px] font-extrabold text-emerald-400 uppercase tracking-widest flex items-center gap-2 mb-4">
+                    <MapPin size={14} /> Location Details
+                  </h4>
+                  
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Street Address</label>
+                      <input 
+                        type="text" 
+                        value={companyForm.streetAddress}
+                        onChange={(e) => setCompanyForm(prev => ({ ...prev, streetAddress: e.target.value }))}
+                        placeholder="e.g. Street Plot 1520, Mwai Kibaki Road, Mikocheni"
+                        className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div className="space-y-1">
+                        <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Area</label>
+                        <input 
+                          type="text" 
+                          value={companyForm.area}
+                          onChange={(e) => setCompanyForm(prev => ({ ...prev, area: e.target.value }))}
+                          placeholder="e.g. Mikocheni"
+                          className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Locality</label>
+                        <input 
+                          type="text" 
+                          value={companyForm.locality}
+                          onChange={(e) => setCompanyForm(prev => ({ ...prev, locality: e.target.value }))}
+                          placeholder="e.g. Dar es Salaam"
+                          className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">District</label>
+                        <input 
+                          type="text" 
+                          value={companyForm.district}
+                          onChange={(e) => setCompanyForm(prev => ({ ...prev, district: e.target.value }))}
+                          placeholder="e.g. Kinondoni"
+                          className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div className="space-y-1">
+                        <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Postal Code</label>
+                        <input 
+                          type="text" 
+                          value={companyForm.postalCode}
+                          onChange={(e) => setCompanyForm(prev => ({ ...prev, postalCode: e.target.value }))}
+                          placeholder="e.g. 14111"
+                          className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Postal Area</label>
+                        <input 
+                          type="text" 
+                          value={companyForm.postalArea}
+                          onChange={(e) => setCompanyForm(prev => ({ ...prev, postalArea: e.target.value }))}
+                          placeholder="e.g. Mikocheni area"
+                          className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Country</label>
+                        <select
+                          value={companyForm.country}
+                          onChange={(e) => setCompanyForm(prev => ({ ...prev, country: e.target.value }))}
+                          className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors cursor-pointer"
+                        >
+                          <option value="AF">🇦🇫 Afghanistan (AFN)</option>
+                          <option value="AL">🇦🇱 Albania (ALL)</option>
+                          <option value="DZ">🇩🇿 Algeria (DZD)</option>
+                          <option value="AD">🇦🇩 Andorra (EUR)</option>
+                          <option value="AO">🇦🇴 Angola (AOA)</option>
+                          <option value="AG">🇦🇬 Antigua and Barbuda (XCD)</option>
+                          <option value="AR">🇦🇷 Argentina (ARS)</option>
+                          <option value="AM">🇦🇲 Armenia (AMD)</option>
+                          <option value="AU">🇦🇺 Australia (AUD)</option>
+                          <option value="AT">🇦🇹 Austria (EUR)</option>
+                          <option value="AZ">🇦🇿 Azerbaijan (AZN)</option>
+                          <option value="BS">🇧🇸 Bahamas (BSD)</option>
+                          <option value="BH">🇧🇭 Bahrain (BHD)</option>
+                          <option value="BD">🇧🇩 Bangladesh (BDT)</option>
+                          <option value="BB">🇧🇧 Barbados (BBD)</option>
+                          <option value="BY">🇧🇾 Belarus (BYN)</option>
+                          <option value="BE">🇧🇪 Belgium (EUR)</option>
+                          <option value="BZ">🇧🇿 Belize (BZD)</option>
+                          <option value="BJ">🇧🇯 Benin (XOF)</option>
+                          <option value="BT">🇧🇹 Bhutan (BTN)</option>
+                          <option value="BO">🇧🇴 Bolivia (BOB)</option>
+                          <option value="BA">🇧🇦 Bosnia and Herzegovina (BAM)</option>
+                          <option value="BW">🇧🇼 Botswana (BWP)</option>
+                          <option value="BR">🇧🇷 Brazil (BRL)</option>
+                          <option value="BN">🇧🇳 Brunei (BND)</option>
+                          <option value="BG">🇧🇬 Bulgaria (BGN)</option>
+                          <option value="BF">🇧🇫 Burkina Faso (XOF)</option>
+                          <option value="BI">🇧🇮 Burundi (BIF)</option>
+                          <option value="KH">🇰🇭 Cambodia (KHR)</option>
+                          <option value="CM">🇨🇲 Cameroon (XAF)</option>
+                          <option value="CA">🇨🇦 Canada (CAD)</option>
+                          <option value="CV">🇨🇻 Cape Verde (CVE)</option>
+                          <option value="CF">🇨🇫 Central African Republic (XAF)</option>
+                          <option value="TD">🇹🇩 Chad (XAF)</option>
+                          <option value="CL">🇨🇱 Chile (CLP)</option>
+                          <option value="CN">🇨🇳 China (CNY)</option>
+                          <option value="CO">🇨🇴 Colombia (COP)</option>
+                          <option value="KM">🇰🇲 Comoros (KMF)</option>
+                          <option value="CG">🇨🇬 Congo (XAF)</option>
+                          <option value="CD">🇨🇩 DR Congo (CDF)</option>
+                          <option value="CR">🇨🇷 Costa Rica (CRC)</option>
+                          <option value="CI">🇨🇮 Côte d'Ivoire (XOF)</option>
+                          <option value="HR">🇭🇷 Croatia (EUR)</option>
+                          <option value="CU">🇨🇺 Cuba (CUP)</option>
+                          <option value="CY">🇨🇾 Cyprus (EUR)</option>
+                          <option value="CZ">🇨🇿 Czech Republic (CZK)</option>
+                          <option value="DK">🇩🇰 Denmark (DKK)</option>
+                          <option value="DJ">🇩🇯 Djibouti (DJF)</option>
+                          <option value="DO">🇩🇴 Dominican Republic (DOP)</option>
+                          <option value="EC">🇪🇨 Ecuador (USD)</option>
+                          <option value="EG">🇪🇬 Egypt (EGP)</option>
+                          <option value="SV">🇸🇻 El Salvador (USD)</option>
+                          <option value="GQ">🇬🇶 Equatorial Guinea (XAF)</option>
+                          <option value="ER">🇪🇷 Eritrea (ERN)</option>
+                          <option value="EE">🇪🇪 Estonia (EUR)</option>
+                          <option value="SZ">🇸🇿 Eswatini (SZL)</option>
+                          <option value="ET">🇪🇹 Ethiopia (ETB)</option>
+                          <option value="TZ">🇹🇿 Tanzania (TZS)</option>
+                          <option value="KE">🇰🇪 Kenya (KES)</option>
+                          <option value="UG">🇺🇬 Uganda (UGX)</option>
+                          <option value="RW">🇷🇼 Rwanda (RWF)</option>
+                          <option value="ZA">🇿🇦 South Africa (ZAR)</option>
+                          <option value="NG">🇳🇬 Nigeria (NGN)</option>
+                          <option value="GH">🇬🇭 Ghana (GHS)</option>
+                          <option value="US">🇺🇸 United States (USD)</option>
+                          <option value="GB">🇬🇧 United Kingdom (GBP)</option>
+                          <option value="AE">🇦🇪 United Arab Emirates (AED)</option>
+                          <option value="IN">🇮🇳 India (INR)</option>
+                          <option value="ZM">🇿🇲 Zambia (ZMW)</option>
+                          <option value="ZW">🇿🇼 Zimbabwe (USD)</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* === COMPANY DETAILS === */}
+                <div className="border-b border-white/5 pb-4">
+                  <h4 className="text-[11px] font-extrabold text-violet-400 uppercase tracking-widest flex items-center gap-2 mb-4">
+                    <Briefcase size={14} /> Company Details
+                  </h4>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Founded Year</label>
+                      <input 
+                        type="text" 
+                        value={companyForm.foundedYear}
+                        onChange={(e) => setCompanyForm(prev => ({ ...prev, foundedYear: e.target.value }))}
+                        placeholder="e.g. 2005"
+                        className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Employee Count</label>
+                      <input 
+                        type="text" 
+                        value={companyForm.employeeCount}
+                        onChange={(e) => setCompanyForm(prev => ({ ...prev, employeeCount: e.target.value }))}
+                        placeholder="e.g. 500 - 1000"
+                        className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* === DESCRIPTION === */}
+                <div className="border-b border-white/5 pb-4">
+                  <h4 className="text-[11px] font-extrabold text-amber-400 uppercase tracking-widest flex items-center gap-2 mb-4">
+                    <FileText size={14} /> Company Description
+                  </h4>
+                  
+                  <textarea
+                    value={companyForm.description}
+                    onChange={(e) => setCompanyForm(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Write a comprehensive company description..."
+                    className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none focus:border-blue-500 transition-colors h-32 resize-none"
+                    rows={4}
+                  />
+                </div>
+
+                {/* === LOGO === */}
                 <div className="space-y-1">
-                  <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Company Name *</label>
-                  <input type="text" value={companyForm.name} onChange={(e) => setCompanyForm(prev => ({ ...prev, name: e.target.value }))} placeholder="e.g. Selcom Tanzania" className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white" required />
+                  <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Company Logo</label>
+                  <div className="border border-dashed border-white/10 hover:border-white/20 p-6 rounded-2xl text-center relative cursor-pointer group">
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      onChange={(e) => handleFileChange(e, 'company')}
+                      className="absolute inset-0 opacity-0 cursor-pointer"
+                    />
+                    <Upload size={16} className="mx-auto text-gray-500 group-hover:text-white transition-colors mb-2" />
+                    <span className="block text-[11px] text-gray-400">
+                      {companyForm.logoUrl ? "✓ LOGO LOADED IN MEMORY" : "Drag & drop company logo"}
+                    </span>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <input type="text" value={companyForm.industry} onChange={(e) => setCompanyForm(prev => ({ ...prev, industry: e.target.value }))} placeholder="Industry" className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white" />
-                  <input type="url" value={companyForm.url} onChange={(e) => setCompanyForm(prev => ({ ...prev, url: e.target.value }))} placeholder="Website URL" className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white" />
-                </div>
-
-                <input type="text" value={companyForm.streetAddress} onChange={(e) => setCompanyForm(prev => ({ ...prev, streetAddress: e.target.value }))} placeholder="Street Address" className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white" />
-
-                <div className="grid grid-cols-3 gap-2">
-                  <input type="text" value={companyForm.area} onChange={(e) => setCompanyForm(prev => ({ ...prev, area: e.target.value }))} placeholder="Area" className="w-full bg-black/40 border border-white/15 px-3 py-2 rounded-xl text-[10px] text-white" />
-                  <input type="text" value={companyForm.locality} onChange={(e) => setCompanyForm(prev => ({ ...prev, locality: e.target.value }))} placeholder="City" className="w-full bg-black/40 border border-white/15 px-3 py-2 rounded-xl text-[10px] text-white" />
-                  <input type="text" value={companyForm.district} onChange={(e) => setCompanyForm(prev => ({ ...prev, district: e.target.value }))} placeholder="District" className="w-full bg-black/40 border border-white/15 px-3 py-2 rounded-xl text-[10px] text-white" />
-                </div>
-
-                <div className="grid grid-cols-3 gap-2">
-                  <input type="text" value={companyForm.postalCode} onChange={(e) => setCompanyForm(prev => ({ ...prev, postalCode: e.target.value }))} placeholder="Postal Code" className="w-full bg-black/40 border border-white/15 px-3 py-2 rounded-xl text-[10px] text-white" />
-                  <input type="text" value={companyForm.foundedYear} onChange={(e) => setCompanyForm(prev => ({ ...prev, foundedYear: e.target.value }))} placeholder="Founded" className="w-full bg-black/40 border border-white/15 px-3 py-2 rounded-xl text-[10px] text-white" />
-                  <input type="text" value={companyForm.employeeCount} onChange={(e) => setCompanyForm(prev => ({ ...prev, employeeCount: e.target.value }))} placeholder="Employees" className="w-full bg-black/40 border border-white/15 px-3 py-2 rounded-xl text-[10px] text-white" />
-                </div>
-
-                <textarea value={companyForm.description} onChange={(e) => setCompanyForm(prev => ({ ...prev, description: e.target.value }))} placeholder="Company description..." className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white h-24 resize-none" />
-
+                {/* === SUBMIT BUTTONS === */}
                 <div className="flex gap-2 pt-2">
                   {editingCompanyId && (
-                    <button type="button" onClick={handleCancelEditCompany} className="flex-1 py-3 bg-white/5 border border-white/10 text-stone-300 font-extrabold text-[11px] uppercase rounded-2xl">Cancel</button>
+                    <button
+                      type="button"
+                      onClick={handleCancelEditCompany}
+                      className="flex-1 py-3 bg-white/5 border border-white/10 text-stone-300 font-extrabold text-[11px] uppercase rounded-2xl transition-all"
+                    >
+                      Cancel
+                    </button>
                   )}
-                  <button type="submit" disabled={actionLoading} className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-violet-600 text-white font-extrabold text-[11px] uppercase rounded-2xl">
-                    {actionLoading ? 'Processing...' : editingCompanyId ? 'Update' : 'Publish'}
+                  <button
+                    type="submit"
+                    disabled={actionLoading}
+                    className="flex-1 py-3.5 bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-500 hover:to-violet-500 disabled:from-gray-800 disabled:to-gray-800 disabled:text-gray-500 text-stone-100 font-extrabold text-[11px] uppercase tracking-widest rounded-2xl transition-all cursor-pointer shadow-lg shadow-blue-500/10"
+                  >
+                    {actionLoading ? "Processing..." : editingCompanyId ? "UPDATE COMPANY" : "PUBLISH COMPANY"}
                   </button>
                 </div>
+
               </form>
             </div>
           </div>
 
           <div className="lg:col-span-7 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <span className="text-xs font-bold text-white uppercase tracking-widest font-mono flex items-center gap-2">
-                <Layers size={13} className="text-blue-500" /> Companies ({companiesTotal} total)
-              </span>
-              <input
-                type="text"
-                placeholder="Search companies..."
-                value={companiesSearch}
-                onChange={(e) => setCompaniesSearch(e.target.value)}
-                className="bg-black/40 border border-white/10 px-3 py-1.5 rounded-xl text-[10px] text-white w-48"
-              />
-            </div>
+            <span className="text-xs font-bold text-white uppercase tracking-widest font-mono flex items-center gap-2">
+              <Layers size={13} className="text-blue-500" /> Active Corporate Catalog ({companiesTotal || companiesState.length} Spotlighted profiles)
+            </span>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {companiesState.map((co) => (
-                <div key={co.id} className="p-4 bg-white/[0.01] border border-white/5 rounded-3xl flex items-center justify-between gap-4">
+                <div 
+                  key={co.id}
+                  className="p-4 bg-white/[0.01] border hover:bg-white/[0.02] border-white/5 rounded-3xl transition-all flex items-center justify-between gap-4"
+                >
                   <div className="flex items-center gap-3">
                     {co.logoUrl ? (
-                      <img src={co.logoUrl} alt={co.name} className="w-10 h-10 object-cover rounded-xl border border-white/10" />
+                      <img src={co.logoUrl} alt={co.name} referrerPolicy="no-referrer" className="w-10 h-10 object-cover rounded-xl border border-white/10" />
                     ) : (
-                      <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-violet-600 rounded-xl flex items-center justify-center font-bold text-white">{co.name.slice(0, 2).toUpperCase()}</div>
+                      <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-violet-600 rounded-xl flex items-center justify-center font-bold font-mono text-white">
+                        {co.name.slice(0, 2).toUpperCase()}
+                      </div>
                     )}
+                    
                     <div className="space-y-0.5">
                       <span className="text-xs font-bold text-stone-100 block">{co.name}</span>
-                      {co.url && <span className="text-[10px] text-blue-400 flex items-center gap-1"><Globe size={10} />{co.url.replace(/^https?:\/\//, '').slice(0, 30)}</span>}
+                      <button 
+                        onClick={() => triggerRedirect(co.url, co.name, 'Admin Verified Directory')}
+                        className="text-[10px] text-blue-400 hover:underline flex items-center gap-1 font-mono cursor-pointer"
+                      >
+                        <Globe size={10} /> Domain portal <ExternalLink size={8} />
+                      </button>
                     </div>
                   </div>
+
                   <div className="flex items-center gap-1">
-                    <button onClick={() => handleEditCompany(co)} className="p-2 bg-blue-500/10 hover:bg-blue-500/25 text-blue-400 rounded-xl">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                    <button
+                      onClick={() => handleEditCompany(co)}
+                      className="p-2 bg-blue-500/10 hover:bg-blue-500/25 text-blue-400 rounded-xl transition-colors"
+                      title="Edit Company"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                      </svg>
                     </button>
-                    <button onClick={() => handleDeleteCompany(co.id)} className="p-2 bg-red-500/10 hover:bg-red-500/25 text-red-400 rounded-xl">
+                    
+                    <button
+                      onClick={() => handleDeleteCompany(co.id)}
+                      className="p-2 bg-red-500/10 hover:bg-red-500/25 text-red-400 rounded-xl transition-colors"
+                      title="Delete Company"
+                    >
                       <Trash2 size={13} />
                     </button>
                   </div>
                 </div>
               ))}
             </div>
-
-            <PaginationControls 
-              currentPage={companiesPage} 
-              totalPages={companiesTotalPages} 
-              onPageChange={setCompaniesPage}
-              accentColor="violet"
-            />
           </div>
         </motion.div>
       )}
 
-      {/* ========== TAB: ROLES ========== */}
+      {/* TAB 4: ROLES MANAGEMENT */}
       {activeTab === 'roles' && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="grid grid-cols-1 lg:grid-cols-12 gap-8"
+        >
           <div className="lg:col-span-5 space-y-6">
             <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
-              <h3 className="text-base font-extrabold uppercase tracking-widest flex items-center gap-1.5 text-stone-100">
-                <Layers size={16} className="text-blue-500" /> Create Role Rule
-              </h3>
+              <div>
+                <h3 className="text-base font-extrabold uppercase tracking-widest flex items-center gap-1.5 font-sans text-stone-100">
+                  <Layers size={16} className="text-blue-500" /> Create / Sync Parser Rule
+                </h3>
+                <p className="text-xs text-gray-500 mt-1">Configure keyword scanning sequences to automatically route job postings into target roles.</p>
+              </div>
 
               <div className="space-y-4">
-                <input type="text" value={roleForm.title} onChange={(e) => setRoleForm(prev => ({ ...prev, title: e.target.value }))} placeholder="e.g. Software Developer" className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white" />
-                <input type="number" value={roleForm.growth} onChange={(e) => setRoleForm(prev => ({ ...prev, growth: Number(e.target.value) }))} placeholder="Growth %" className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white" />
                 
-                <div className="flex gap-2">
-                  <input type="text" value={roleForm.keywordInput} onChange={(e) => setRoleForm(prev => ({ ...prev, keywordInput: e.target.value }))} onKeyDown={(e) => e.key === 'Enter' && handleAddKeywordToRole()} placeholder="Keyword (Enter to add)" className="flex-1 bg-black/40 border border-white/15 px-3 py-2 rounded-xl text-xs text-white" />
-                  <button type="button" onClick={handleAddKeywordToRole} className="px-4 py-2 bg-white/5 hover:bg-white/10 font-bold text-[10px] uppercase rounded-xl border border-white/10">Add</button>
+                <div className="space-y-1">
+                  <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Normalized Role Title</label>
+                  <input 
+                    type="text" 
+                    value={roleForm.title}
+                    onChange={(e) => setRoleForm(prev => ({ ...prev, title: e.target.value }))}
+                    placeholder="e.g. Software Developer"
+                    className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none"
+                    required
+                  />
                 </div>
 
-                <div className="flex flex-wrap gap-1.5">
-                  {roleForm.keywords.map((chip, idx) => (
-                    <span key={idx} className="px-2.5 py-1 bg-blue-500/10 text-blue-400 text-[9px] font-mono uppercase rounded-lg flex items-center gap-1">
-                      {chip}
-                      <button type="button" onClick={() => handleRemoveKeywordFromFile(idx)} className="text-red-400 font-bold ml-1">×</button>
-                    </span>
-                  ))}
+                <div className="space-y-1">
+                  <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Associated Growth Pct %</label>
+                  <input 
+                    type="number" 
+                    value={roleForm.growth}
+                    onChange={(e) => setRoleForm(prev => ({ ...prev, growth: Number(e.target.value) }))}
+                    className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none"
+                  />
                 </div>
 
-                <button type="button" onClick={handleSaveRoleRule} disabled={actionLoading || !roleForm.title} className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 text-white font-extrabold text-[11px] uppercase rounded-2xl">
-                  SAVE ROLE
+                <div className="space-y-2">
+                  <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Normalization matching keywords chips</label>
+                  
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      value={roleForm.keywordInput}
+                      onChange={(e) => setRoleForm(prev => ({ ...prev, keywordInput: e.target.value }))}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddKeywordToRole()}
+                      placeholder="e.g. backend"
+                      className="flex-1 bg-black/40 border border-white/15 px-3 py-2 rounded-xl text-xs text-white focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddKeywordToRole}
+                      className="px-4 py-2 bg-white/5 hover:bg-white/10 font-bold font-mono text-[10px] uppercase rounded-xl border border-white/10"
+                    >
+                      Add Chip
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5 pt-2">
+                    {roleForm.keywords.map((chip, idx) => (
+                      <span 
+                        key={idx}
+                        className="px-2.5 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[9px] font-mono uppercase rounded-lg flex items-center gap-1.5"
+                      >
+                        {chip}
+                        <button type="button" onClick={() => handleRemoveKeywordFromFile(idx)} className="text-red-400 font-bold hover:scale-110 ml-1">×</button>
+                      </span>
+                    ))}
+                    
+                    {roleForm.keywords.length === 0 && (
+                      <span className="text-[10px] font-mono text-gray-500">NO PARSING KEYWORDS CHIPS LOADED</span>
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleSaveRoleRule}
+                  disabled={actionLoading || !roleForm.title}
+                  className="w-full py-3.5 mt-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-500 text-stone-100 font-extrabold text-[11px] uppercase tracking-widest rounded-2xl transition-all cursor-pointer"
+                >
+                  {actionLoading ? "Syncing sequence mappings..." : "COMMIT ALGORITHM Normalizations"}
                 </button>
+
               </div>
             </div>
           </div>
 
           <div className="lg:col-span-7 space-y-4">
             <span className="text-xs font-bold text-white uppercase tracking-widest font-mono flex items-center gap-2">
-              <Layers size={13} className="text-blue-500" /> Roles ({rolesState.length})
+              <Layers size={13} className="text-blue-500" /> Normalization Schema inventory ({rolesState.length} categories active)
             </span>
 
             <div className="space-y-3">
               {rolesState.map((role) => (
-                <div key={role.id} className="p-5 bg-white/[0.01] border border-white/5 rounded-3xl flex items-center justify-between gap-4">
-                  <div>
-                    <span className="text-xs font-black text-stone-100 uppercase block">{role.title}</span>
+                <div 
+                  key={role.id}
+                  className="p-5 bg-white/[0.01] border hover:bg-white/[0.02] border-white/5 rounded-3xl transition-all flex items-center justify-between gap-4"
+                >
+                  <div className="space-y-1">
+                    <span className="text-xs font-black text-stone-100 uppercase tracking-wide block">{role.title}</span>
+                    
                     <div className="flex flex-wrap gap-1 pt-1.5">
                       {role.mappedTitles.map((kw, i) => (
-                        <span key={i} className="text-[8px] bg-white/5 text-gray-400 font-mono px-2 py-0.5 rounded">{kw}</span>
+                        <span key={i} className="text-[8px] bg-white/5 border border-white/5 text-gray-400 font-mono tracking-wider uppercase px-2 py-0.5 rounded">
+                          {kw}
+                        </span>
                       ))}
+                      
+                      {role.mappedTitles.length === 0 && (
+                        <span className="text-[8px] text-gray-500 font-mono">NO KEYWORDS TARGETING THIS NORMALIZATION</span>
+                      )}
                     </div>
                   </div>
+
                   <div className="flex items-center gap-4 shrink-0">
-                    <span className="text-xs font-bold text-emerald-400 font-mono">+{role.growth}%</span>
-                    <button onClick={() => handleDeleteRole(role.id)} className="p-2 bg-red-500/10 hover:bg-red-500/25 text-red-400 rounded-xl"><Trash2 size={13} /></button>
+                    <div className="text-right">
+                      <span className="text-[9px] block text-gray-500 font-mono">GROWTH SCALING</span>
+                      <span className="text-xs font-bold text-emerald-400 font-mono">+{role.growth}%</span>
+                    </div>
+
+                    <button
+                      onClick={() => handleDeleteRole(role.id)}
+                      className="p-2 bg-red-500/10 hover:bg-red-500/25 text-red-400 rounded-xl transition-colors"
+                    >
+                      <Trash2 size={13} />
+                    </button>
                   </div>
                 </div>
               ))}
@@ -2328,111 +3776,291 @@ export default function AdminPage() {
           </div>
         </motion.div>
       )}
-
-      {/* ========== TAB: REPORTS ========== */}
+  
+      {/* TAB 5: REPORT CREATION SYSTEM - FULL WIDTH FLAT */}
       {activeTab === 'reports' && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+          
           <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
             <div className="flex items-center justify-between border-b border-white/5 pb-3">
-              <h3 className="text-sm font-extrabold uppercase text-stone-100">Report Editor</h3>
-              <div className="flex bg-black/60 p-1 rounded-2xl text-[10px] font-bold">
-                {(['visual','code','preview'] as const).map(m => (
-                  <button key={m} onClick={() => setEditorMode(m)} className={`px-3 py-1.5 rounded-xl uppercase ${editorMode===m?'bg-blue-600 text-white':'text-gray-400'}`}>{m}</button>
-                ))}
+              <div className="flex items-center gap-3">
+                <h3 className="text-sm font-extrabold uppercase text-stone-100">
+                  <Sparkles size={14} className="text-blue-500 inline mr-1" />TinyMCE Editor
+                </h3>
+                <span className="text-[9px] text-gray-500 font-mono">
+                  {(reportForm.excerpt || '').length} characters
+                </span>
               </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(reportForm.excerpt || '');
+                    showFeedback('success', 'Content copied to clipboard');
+                  }}
+                  className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-400 text-[10px] font-bold uppercase rounded-xl flex items-center gap-1.5 transition-all"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                  Copy
+                </button>
+                <div className="flex bg-black/60 p-1 rounded-2xl font-mono text-[10px] font-bold">
+                  {(['visual','code','preview'] as const).map(m => (
+                    <button key={m} onClick={() => setEditorMode(m)} className={`px-3 py-1.5 rounded-xl uppercase ${editorMode===m?'bg-blue-600 text-white':'text-gray-400'}`}>{m}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-2 bg-black/50 border border-white/10 rounded-2xl flex flex-wrap items-center gap-1">
+              <button onClick={() => handleToolbarClick('bold','','<strong>','</strong>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold"><Bold size={13}/> Bold</button>
+              <button onClick={() => handleToolbarClick('italic','','<em>','</em>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold"><Italic size={13}/> Italic</button>
+              <label className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold cursor-pointer flex items-center gap-1 text-blue-400">
+                <Upload size={13}/> Image
+                <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, 'article')} className="hidden" />
+              </label>
+              <span className="w-px h-5 bg-white/10 mx-1"/>
+              <button onClick={() => handleToolbarClick('formatBlock','H2','<h2>','</h2>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold">H2</button>
+              <button onClick={() => handleToolbarClick('formatBlock','H3','<h3>','</h3>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold">H3</button>
+              <span className="w-px h-5 bg-white/10 mx-1"/>
+              <button onClick={() => handleToolbarClick('insertUnorderedList','','<ul><li>','</li></ul>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold"><List size={13}/> List</button>
+              <button onClick={() => handleToolbarClick('formatBlock','BLOCKQUOTE','<blockquote>','</blockquote>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold">Quote</button>
+              <button onClick={() => handleToolbarClick('highlight','','<span class="text-blue-400">','</span>')} className="p-2 hover:bg-white/10 rounded-lg text-[10px] font-bold text-blue-400">Highlight</button>
             </div>
 
             <div className="border border-white/10 rounded-2xl overflow-hidden bg-black/45">
               {editorMode==='visual' && (
                 <div className="p-6">
-                  <div ref={visualEditorRef} contentEditable onInput={handleVisualEditorInput} onBlur={handleVisualEditorBlur} className="w-full min-h-[400px] text-stone-200 text-sm outline-none" style={{ fontSize: '15px', lineHeight: '1.8' }} />
+                  <div 
+                    ref={visualEditorRef} 
+                    contentEditable 
+                    onInput={handleVisualEditorInput} 
+                    onBlur={handleVisualEditorBlur} 
+                    className="w-full min-h-[500px] bg-transparent text-stone-200 text-sm outline-none leading-relaxed"
+                    style={{ fontSize: '15px', lineHeight: '1.8' }}
+                  />
                 </div>
               )}
               {editorMode==='code' && (
                 <div className="p-6">
-                  <textarea id="excerpt-editor-textarea" value={reportForm.excerpt} onChange={(e) => setReportForm(prev=>({...prev,excerpt:e.target.value}))} className="w-full min-h-[400px] bg-transparent text-blue-400 text-sm font-mono outline-none resize-none" style={{ fontSize: '14px', lineHeight: '1.8' }} />
+                  <textarea 
+                    id="excerpt-editor-textarea" 
+                    value={reportForm.excerpt} 
+                    onChange={(e) => setReportForm(prev=>({...prev,excerpt:e.target.value}))} 
+                    className="w-full min-h-[500px] bg-transparent text-blue-400 text-sm font-mono outline-none resize-none leading-relaxed"
+                    style={{ fontSize: '14px', lineHeight: '1.8' }}
+                  />
                 </div>
               )}
               {editorMode==='preview' && (
-                <div className="p-6 min-h-[400px] overflow-y-auto">
-                  {reportForm.excerpt ? <div dangerouslySetInnerHTML={{__html:reportForm.excerpt}} className="text-stone-300 text-sm leading-relaxed"/> : <p className="text-gray-500 text-center py-20">No content</p>}
+                <div className="p-6 min-h-[500px] overflow-y-auto">
+                  {reportForm.excerpt ? (
+                    <div dangerouslySetInnerHTML={{__html:reportForm.excerpt}} className="text-stone-300 text-sm leading-relaxed max-w-4xl"/>
+                  ) : (
+                    <p className="text-gray-500 text-center py-20">No content</p>
+                  )}
                 </div>
               )}
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
-              <input type="text" value={reportForm.title} onChange={(e) => setReportForm(prev => ({ ...prev, title: e.target.value }))} placeholder="Report Title" className="bg-black/40 border border-white/15 px-4 py-2.5 rounded-2xl text-xs text-white w-64" required />
-              <select value={reportForm.roleSelected} onChange={(e) => setReportForm(prev => ({ ...prev, roleSelected: e.target.value }))} className="bg-black/40 border border-white/15 px-3 py-2.5 rounded-2xl text-xs text-white">
-                {rolesState.map(r => <option key={r.id} value={r.title}>{r.title}</option>)}
-              </select>
-              <input type="text" value={reportForm.monthYear} onChange={(e) => setReportForm(prev => ({ ...prev, monthYear: e.target.value }))} placeholder="June 2026" className="bg-black/40 border border-white/15 px-3 py-2.5 rounded-2xl text-xs text-white w-28" />
-              {editingReportId && <button type="button" onClick={handleCancelEdit} className="px-4 py-2.5 bg-white/5 border border-white/10 text-stone-300 font-extrabold text-[10px] uppercase rounded-2xl">Cancel</button>}
-              <button onClick={handlePostReport} disabled={actionLoading || !reportForm.title} className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-violet-600 text-white font-extrabold text-[10px] uppercase rounded-2xl disabled:opacity-50">
-                {actionLoading ? "Saving..." : editingReportId ? "UPDATE" : "PUBLISH"}
-              </button>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex gap-2">
+                <button onClick={()=>handleInsertTemplate('insights')} className="px-3 py-2 bg-black/40 border border-white/5 rounded-xl text-[10px] font-bold text-white">Key Insights</button>
+                <button onClick={()=>handleInsertTemplate('segmented')} className="px-3 py-2 bg-black/40 border border-white/5 rounded-xl text-[10px] font-bold text-white">Segment</button>
+                <button onClick={()=>handleInsertTemplate('standard')} className="px-3 py-2 bg-black/40 border border-white/5 rounded-xl text-[10px] font-bold text-white">Summary</button>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <input 
+                  type="text" 
+                  value={reportForm.title} 
+                  onChange={(e) => setReportForm(prev => ({ ...prev, title: e.target.value }))} 
+                  placeholder="Report Title" 
+                  className="bg-black/40 border border-white/15 px-4 py-2.5 rounded-2xl text-xs text-white w-64" 
+                  required 
+                />
+                <select 
+                  value={reportForm.roleSelected} 
+                  onChange={(e) => setReportForm(prev => ({ ...prev, roleSelected: e.target.value }))} 
+                  className="bg-black/40 border border-white/15 px-3 py-2.5 rounded-2xl text-xs text-white"
+                >
+                  {rolesState.map(r => (<option key={r.id} value={r.title}>{r.title}</option>))}
+                </select>
+                <input 
+                  type="text" 
+                  value={reportForm.monthYear} 
+                  onChange={(e) => setReportForm(prev => ({ ...prev, monthYear: e.target.value }))} 
+                  placeholder="June 2026" 
+                  className="bg-black/40 border border-white/15 px-3 py-2.5 rounded-2xl text-xs text-white w-28" 
+                />
+                {editingReportId && (
+                  <button type="button" onClick={handleCancelEdit} className="px-4 py-2.5 bg-white/5 border border-white/10 text-stone-300 font-extrabold text-[10px] uppercase rounded-2xl">Cancel</button>
+                )}
+                <button 
+                  onClick={handlePostReport} 
+                  disabled={actionLoading || !reportForm.title} 
+                  className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-violet-600 text-stone-100 font-extrabold text-[10px] uppercase rounded-2xl disabled:opacity-50"
+                >
+                  {actionLoading ? "Saving..." : editingReportId ? "UPDATE" : "PUBLISH"}
+                </button>
+              </div>
             </div>
           </div>
 
           <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl">
-            <h3 className="text-sm font-extrabold uppercase mb-4">Published ({reportsState.length})</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {reportsState.map(rep => (
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-extrabold uppercase text-stone-100">
+                <Layers size={14} className="text-violet-500 inline mr-1"/>Published Reports ({reportsState.length})
+              </h3>
+              <button onClick={fetchSystemData} className="px-3 py-1.5 bg-white/5 rounded-xl text-[10px] font-bold text-gray-400 hover:text-white flex items-center gap-1">
+                <RefreshCw size={12}/>Refresh
+              </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[300px] overflow-y-auto">
+              {reportsState.map(rep=>(
                 <div key={rep.id} className={`p-3 bg-black/30 border rounded-2xl flex items-center justify-between ${editingReportId===rep.id?'border-blue-500/50':'border-white/5'}`}>
                   <div className="min-w-0 flex-1"><p className="text-xs font-bold text-white truncate">{rep.title}</p><span className="text-[9px] text-gray-500">{rep.monthYear} • {rep.role}</span></div>
                   <div className="flex gap-1">
-                    <button onClick={()=>handleLoadReportToEdit(rep)} className="p-1.5 bg-blue-500/10 text-blue-400 rounded text-[9px]">Edit</button>
-                    <button onClick={()=>handleDeleteReport(rep.id)} className="p-1.5 bg-red-500/10 text-red-400 rounded text-[9px]">Del</button>
+                    <button onClick={()=>handleLoadReportToEdit(rep)} className="p-1.5 bg-blue-500/10 text-blue-400 rounded text-[9px] font-black">Edit</button>
+                    <button onClick={()=>handleDeleteReport(rep.id)} className="p-1.5 bg-red-500/10 text-red-400 rounded text-[9px] font-black">Del</button>
                   </div>
                 </div>
               ))}
+              {reportsState.length===0 && <div className="col-span-full text-center py-8 text-gray-500 text-xs">No published reports.</div>}
             </div>
           </div>
         </motion.div>
       )}
 
-      {/* ========== TAB: MEDIA ========== */}
+      {/* TAB 6: MEDIA MANAGEMENT */}
       {activeTab === 'media' && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          <div className="lg:col-span-5">
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="grid grid-cols-1 lg:grid-cols-12 gap-8"
+        >
+          <div className="lg:col-span-5 space-y-6">
             <div className="p-6 bg-white/[0.01] border border-white/5 rounded-3xl space-y-4">
-              <h3 className="text-base font-extrabold uppercase tracking-widest flex items-center gap-1.5 text-stone-100">
-                <ImageIcon size={16} className="text-blue-500" /> Upload Media
-              </h3>
+              <div>
+                <h3 className="text-base font-extrabold uppercase tracking-widest flex items-center gap-1.5 font-sans text-stone-100">
+                  <ImageIcon size={16} className="text-blue-500" /> Ingest Static Media Asset
+                </h3>
+                <p className="text-xs text-gray-500 mt-1">Upload graphics assets directly into the dynamic media catalog for reports integration.</p>
+              </div>
+
               <form onSubmit={handleUploadMedia} className="space-y-4">
-                <input type="text" value={mediaForm.name} onChange={(e) => setMediaForm(prev => ({ ...prev, name: e.target.value }))} placeholder="Asset Name" className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white" required />
-                <input type="text" value={mediaForm.altText} onChange={(e) => setMediaForm(prev => ({ ...prev, altText: e.target.value }))} placeholder="Alt Text" className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white" />
                 
-                <div className="border border-dashed border-white/10 p-8 rounded-2xl text-center relative cursor-pointer">
-                  <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, 'media')} className="absolute inset-0 opacity-0 cursor-pointer" />
-                  <Upload size={20} className="mx-auto text-gray-400 mb-2" />
-                  <span className="text-[11px] text-gray-400">{selectedFileBase64 ? `✓ Loaded (${selectedFileSize})` : 'Drop or click'}</span>
+                <div className="space-y-1">
+                  <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Asset Name (Label)</label>
+                  <input 
+                    type="text" 
+                    value={mediaForm.name}
+                    onChange={(e) => setMediaForm(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="e.g. software_trend_q2_2026.png"
+                    className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none"
+                    required
+                  />
                 </div>
 
-                <button type="submit" disabled={actionLoading || !selectedFileBase64} className="w-full py-4 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 text-white font-extrabold text-[11px] uppercase rounded-2xl">
-                  {actionLoading ? "Saving..." : "PUBLISH"}
+                <div className="space-y-1">
+                  <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">SEO Alternate Text description</label>
+                  <input 
+                    type="text" 
+                    value={mediaForm.altText}
+                    onChange={(e) => setMediaForm(prev => ({ ...prev, altText: e.target.value }))}
+                    placeholder="Demand and growth index for technical listings"
+                    className="w-full bg-black/40 border border-white/15 px-4 py-3 rounded-2xl text-xs text-white focus:outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[10px] text-gray-400 uppercase font-extrabold tracking-widest">Select Visual Artifact file (Drag & Drop)</label>
+                  <div className="border border-dashed border-white/10 hover:border-white/20 p-8 rounded-2xl text-center relative cursor-pointer group">
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      onChange={(e) => handleFileChange(e, 'media')}
+                      className="absolute inset-0 opacity-0 cursor-pointer"
+                    />
+                    <Upload size={20} className="mx-auto text-gray-400 group-hover:text-white transition-colors mb-2" />
+                    {selectedFileBase64 ? (
+                      <span className="block text-[11px] text-emerald-400 font-bold uppercase font-mono">
+                        ✓ File loaded inside buffer ({selectedFileSize})
+                      </span>
+                    ) : (
+                      <span className="block text-[11px] text-gray-400">
+                        Drag & Drop or click to browse local files
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={actionLoading || !selectedFileBase64}
+                  className="w-full py-4 mt-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-500 text-stone-100 font-extrabold text-[11px] uppercase tracking-widest rounded-2xl transition-all shadow-md active:scale-95 cursor-pointer"
+                >
+                  {actionLoading ? "Saving static parameters..." : "PUBLISH FILE TO MEDIA CATALOG"}
                 </button>
+
               </form>
             </div>
           </div>
 
-          <div className="lg:col-span-7">
-            <span className="text-xs font-bold text-white uppercase tracking-widest font-mono flex items-center gap-2 mb-4">
-              <Layers size={13} className="text-blue-500" /> Vault ({mediaAssets.length})
+          <div className="lg:col-span-7 space-y-4">
+            <span className="text-xs font-bold text-white uppercase tracking-widest font-mono flex items-center gap-2">
+              <Layers size={13} className="text-blue-500" /> Catalog Inventory Vault ({mediaAssets.length} static assets cataloged)
             </span>
+
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {mediaAssets.map((asset) => (
-                <div key={asset.id} className="p-3 bg-white/[0.01] border border-white/5 rounded-3xl relative">
-                  <div className="aspect-video w-full rounded-2xl overflow-hidden bg-black/40 mb-2.5">
-                    <img src={asset.dataUrl} alt={asset.altText} className="w-full h-full object-cover" />
+                <div 
+                  key={asset.id}
+                  className="p-3 bg-white/[0.01] border hover:border-white/15 border-white/5 rounded-3xl transition-all group relative overflow-hidden"
+                >
+                  <div className="aspect-video w-full rounded-2xl overflow-hidden bg-black/40 border border-white/5 relative mb-2.5">
+                    <img 
+                      src={asset.dataUrl} 
+                      alt={asset.altText} 
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-300" 
+                    />
+                    
+                    <div className="absolute top-2 left-2 px-1.5 py-0.5 bg-black/80 backdrop-blur rounded text-[8px] font-mono tracking-wider text-gray-400 uppercase">
+                      {asset.size}
+                    </div>
                   </div>
-                  <span className="text-[10px] font-black text-stone-100 truncate block">{asset.name}</span>
-                  <button onClick={() => handleDeleteMedia(asset.id)} className="absolute bottom-2.5 right-2.5 p-1.5 bg-red-500/10 text-red-400 rounded-xl"><Trash2 size={12} /></button>
+
+                  <div className="space-y-1 pr-8 text-left min-w-0">
+                    <span className="text-[10px] font-black text-stone-100 truncate block uppercase tracking-wide" title={asset.name}>
+                      {asset.name}
+                    </span>
+                    <span className="text-[8px] text-gray-500 font-mono uppercase tracking-wider block">
+                      Uploaded: {asset.uploadedAt}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={() => handleDeleteMedia(asset.id)}
+                    className="absolute bottom-2.5 right-2.5 p-1.5 bg-red-500/10 hover:bg-red-500/25 text-red-400 rounded-xl transition-colors"
+                    title="Purge static file properties"
+                  >
+                    <Trash2 size={12} />
+                  </button>
                 </div>
               ))}
+
+              {mediaAssets.length === 0 && (
+                <div className="col-span-3 text-center py-12 text-gray-500 font-mono text-xs">
+                  NO MEDIA IN INVENTORY VAULT Yet
+                </div>
+              )}
             </div>
           </div>
         </motion.div>
       )}
+
     </div>
   );
 }
