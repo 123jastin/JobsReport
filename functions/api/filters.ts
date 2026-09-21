@@ -3,29 +3,30 @@ import { PagesFunction } from '@cloudflare/workers-types';
 
 type Env = {
   DB: D1Database;
+  CACHE: KVNamespace; // ✅ Add KV binding
 };
 
-// Server-side cache
-let filtersCache: {
-  data: any;
-  timestamp: number;
-} | null = null;
-
-const CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours cache (was 1 hour)
+const CACHE_TTL_SECONDS = 6 * 60 * 60; // ✅ 6 hours in seconds (KV uses seconds)
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
-  const { DB } = context.env;
+  const { DB, CACHE } = context.env;
   
-  // Return cached data if fresh
-  if (filtersCache && (Date.now() - filtersCache.timestamp) < CACHE_TTL) {
-    return new Response(JSON.stringify(filtersCache.data), {
-      headers: { 
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Cache-Control': 'public, max-age=21600',
-        'X-Cache': 'HIT'
-      }
-    });
+  // ✅ STEP 1: Try KV cache first (persists across Worker restarts)
+  try {
+    const cached = await CACHE.get('filters', 'json');
+    if (cached) {
+      return new Response(JSON.stringify(cached), {
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Cache-Control': 'public, max-age=21600',
+          'X-Cache': 'KV-HIT'
+        }
+      });
+    }
+  } catch (e) {
+    console.error('KV read error:', e);
+    // Continue to DB if KV fails
   }
 
   try {
@@ -79,7 +80,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         LIMIT 100
       `).all(),
       
-      // ✅ FIXED: Locations using direct job_id JOIN
+      // Locations using direct job_id JOIN
       DB.prepare(`
         SELECT DISTINCT l.name, l.region, l.country, l.postcode
         FROM locations l
@@ -114,25 +115,28 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       }))
     };
 
-    // Update cache
-    filtersCache = {
-      data: filters,
-      timestamp: Date.now()
-    };
+    // ✅ STEP 2: Store in KV for 6 hours
+    try {
+      await CACHE.put('filters', JSON.stringify(filters), {
+        expirationTtl: CACHE_TTL_SECONDS
+      });
+    } catch (e) {
+      console.error('KV write error:', e);
+      // Continue even if KV write fails
+    }
 
     return new Response(JSON.stringify(filters), {
       headers: { 
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
         'Cache-Control': 'public, max-age=21600',
-        'X-Cache': 'MISS'
+        'X-Cache': 'KV-MISS'
       }
     });
 
   } catch (err) {
     console.error('Filters API Error:', err);
     
-    // Return empty filters on error
     return new Response(JSON.stringify({
       categories: [],
       workplaceTypes: [],
