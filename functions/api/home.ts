@@ -1,30 +1,32 @@
+// functions/api/home.ts
 import { PagesFunction } from '@cloudflare/workers-types';
 
 type Env = {
   DB: D1Database;
+  CACHE: KVNamespace; // ✅ Add KV binding
 };
 
-// ✅ Server-side cache
-let homeCache: {
-  data: any;
-  timestamp: number;
-} | null = null;
-
-const HOME_CACHE_TTL = 24 * 60 * 60 * 1000; // ✅ 24 hours
+const HOME_CACHE_TTL_SECONDS = 24 * 60 * 60; // ✅ 24 hours in seconds
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
-  const { DB } = context.env;
+  const { DB, CACHE } = context.env;
 
-  // ✅ Return cached data if fresh
-  if (homeCache && (Date.now() - homeCache.timestamp) < HOME_CACHE_TTL) {
-    return new Response(JSON.stringify(homeCache.data), {
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Cache-Control': 'public, max-age=86400',
-        'X-Cache': 'HIT'
-      }
-    });
+  // ✅ STEP 1: Try KV cache first
+  try {
+    const cached = await CACHE.get('home', 'json');
+    if (cached) {
+      return new Response(JSON.stringify(cached), {
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Cache-Control': 'public, max-age=86400',
+          'X-Cache': 'KV-HIT'
+        }
+      });
+    }
+  } catch (e) {
+    console.error('KV read error:', e);
+    // Continue to DB if KV fails
   }
 
   try {
@@ -87,18 +89,22 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       spotlightCompanies
     };
 
-    // ✅ Store in cache for 24 hours
-    homeCache = {
-      data: responseData,
-      timestamp: Date.now()
-    };
+    // ✅ STEP 2: Store in KV for 24 hours
+    try {
+      await CACHE.put('home', JSON.stringify(responseData), {
+        expirationTtl: HOME_CACHE_TTL_SECONDS
+      });
+    } catch (e) {
+      console.error('KV write error:', e);
+      // Continue even if KV write fails
+    }
 
     return new Response(JSON.stringify(responseData), {
       headers: {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
         'Cache-Control': 'public, max-age=86400',
-        'X-Cache': 'MISS'
+        'X-Cache': 'KV-MISS'
       }
     });
 
