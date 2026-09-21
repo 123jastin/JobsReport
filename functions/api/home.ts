@@ -4,11 +4,31 @@ type Env = {
   DB: D1Database;
 };
 
+// ✅ Server-side cache
+let homeCache: {
+  data: any;
+  timestamp: number;
+} | null = null;
+
+const HOME_CACHE_TTL = 24 * 60 * 60 * 1000; // ✅ 24 hours
+
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
 
+  // ✅ Return cached data if fresh
+  if (homeCache && (Date.now() - homeCache.timestamp) < HOME_CACHE_TTL) {
+    return new Response(JSON.stringify(homeCache.data), {
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'public, max-age=86400',
+        'X-Cache': 'HIT'
+      }
+    });
+  }
+
   try {
-    // 1. Trending roles (computed from jobs)
+    // 1. Trending roles
     const trendsResult = await DB.prepare(`
       SELECT 
         r.name as role, 
@@ -48,7 +68,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       country: r.country || 'Tanzania'
     }));
 
-    // 3. Spotlight companies (from active jobs)
+    // 3. Spotlight companies
     const companiesResult = await DB.prepare(`
       SELECT c.name, COUNT(j.id) as jobs_count
       FROM jobs j
@@ -61,15 +81,24 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
     const spotlightCompanies = companiesResult.results.map((c: any) => c.name);
 
-    return new Response(JSON.stringify({
+    const responseData = {
       trends,
       reports,
       spotlightCompanies
-    }), {
-      headers: { 
+    };
+
+    // ✅ Store in cache for 24 hours
+    homeCache = {
+      data: responseData,
+      timestamp: Date.now()
+    };
+
+    return new Response(JSON.stringify(responseData), {
+      headers: {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
-        'Cache-Control': 'no-cache'
+        'Cache-Control': 'public, max-age=86400',
+        'X-Cache': 'MISS'
       }
     });
 
@@ -80,9 +109,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       reports: [],
       spotlightCompanies: [],
       error: err instanceof Error ? err.message : 'Failed to load data'
-    }), { 
+    }), {
       status: 200,
-      headers: { 
+      headers: {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*'
       }
