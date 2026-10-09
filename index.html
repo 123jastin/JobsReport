@@ -103,17 +103,8 @@
       gtag('js', new Date());
       gtag('config', 'G-KMM0JJEPZ5');
     </script>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
     
-    <!-- Initialize empty AdSense array for manual ads only -->
-    <script>
-      window.adsbygoogle = window.adsbygoogle || [];
-    </script>
-    
-    <!-- Clever Ads Script -->
+    <!-- Clever Ads Script (loaded in <head> so it initializes before body renders) -->
     <script data-cfasync="false" type="text/javascript" id="clever-core">
     /* <![CDATA[ */
         (function (document, window) {
@@ -139,6 +130,15 @@
             a.parentNode.insertBefore(c, a);
         })(document, window);
     /* ]]> */
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    
+    <!-- Initialize empty AdSense array for manual ads only -->
+    <script>
+      window.adsbygoogle = window.adsbygoogle || [];
     </script>
   </body>
 </html>
