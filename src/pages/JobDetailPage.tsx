@@ -4,9 +4,140 @@ import SEO from '../components/SEO';
 import {
   Building2, MapPin, Clock, ExternalLink, ArrowLeft,
   FileText, Eye, ChevronLeft, ChevronRight, X, Download,
-  Briefcase, Calendar, Globe, Share2, AlertCircle, Flag
+  Briefcase, Calendar, Globe, Share2, AlertCircle, Flag, Smartphone, Star
 } from 'lucide-react';
 import { useCareerRedirect } from '../context/CareerRedirectContext';
+
+// ============================================================
+// ✅ NEW: Android App Recommendation
+// ============================================================
+const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=co.jobsreport.ap';
+const SESSION_KEY = 'jobsreport_app_prompt_shown';
+
+function isAndroidDevice(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  // Android phones + tablets. Exclude iOS explicitly.
+  const isAndroid = /android/i.test(ua);
+  const isIOS = /iPad|iPhone|iPod/.test(ua);
+  return isAndroid && !isIOS;
+}
+
+function hasBeenShownThisSession(): boolean {
+  try {
+    return sessionStorage.getItem(SESSION_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function markAsShownThisSession(): void {
+  try {
+    sessionStorage.setItem(SESSION_KEY, '1');
+  } catch {
+    // storage may be disabled (private mode, quota, etc.) — fail silently
+  }
+}
+
+function AndroidAppRecommendation({ onClose }: { onClose: () => void }) {
+  const handleInstall = () => {
+    // Open Play Store in a new tab/window. User chooses to install.
+    window.open(PLAY_STORE_URL, '_blank', 'noopener,noreferrer');
+    onClose();
+  };
+
+  return (
+    <div
+      className="fixed inset-x-0 bottom-0 z-50 md:inset-0 md:flex md:items-center md:justify-center md:p-4"
+      role="dialog"
+      aria-modal="false"
+      aria-labelledby="app-rec-title"
+    >
+      {/* Backdrop (mobile: subtle, desktop: dim) */}
+      <div
+        className="hidden md:block fixed inset-0 bg-black/70 backdrop-blur-sm"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+
+      {/* Card / bottom sheet */}
+      <div className="relative bg-[#0b1220] border-t md:border border-blue-500/20 md:rounded-2xl shadow-2xl w-full md:max-w-md md:overflow-hidden animate-slide-up md:animate-fade-in">
+        {/* Accent bar */}
+        <div className="h-1 bg-gradient-to-r from-blue-600 via-violet-600 to-blue-500" />
+
+        <div className="p-5 md:p-6">
+          {/* Close button */}
+          <button
+            onClick={onClose}
+            aria-label="Close app recommendation"
+            className="absolute top-3 right-3 p-2 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+          >
+            <X size={16} />
+          </button>
+
+          {/* Header */}
+          <div className="flex items-start gap-4 mb-5 pr-8">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 flex items-center justify-center shrink-0 shadow-lg shadow-blue-600/20">
+              <Smartphone size={26} className="text-white" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-400 text-[9px] font-bold uppercase tracking-wider">
+                  Android App
+                </span>
+                <span className="flex items-center gap-0.5 text-amber-400 text-[10px] font-bold">
+                  <Star size={10} className="fill-amber-400" /> Google Play
+                </span>
+              </div>
+              <h3 id="app-rec-title" className="text-lg font-bold text-white leading-tight">
+                Get More with JobsReport
+              </h3>
+            </div>
+          </div>
+
+          {/* Description */}
+          <p className="text-sm text-gray-400 leading-relaxed mb-5">
+            Find jobs faster and enjoy a better experience with the JobsReport Android app.
+          </p>
+
+          {/* Feature pills */}
+          <div className="flex flex-wrap gap-2 mb-5">
+            {['Faster browsing', 'Push notifications', 'Offline access'].map((feat) => (
+              <span
+                key={feat}
+                className="px-2.5 py-1 rounded-full bg-white/[0.03] border border-white/5 text-[10px] font-semibold text-gray-300"
+              >
+                {feat}
+              </span>
+            ))}
+          </div>
+
+          {/* Buttons */}
+          <div className="flex flex-col-reverse sm:flex-row gap-2">
+            <button
+              onClick={onClose}
+              className="px-4 py-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] text-gray-400 hover:text-white text-xs font-bold uppercase tracking-wider transition-colors sm:flex-1"
+            >
+              Not Now
+            </button>
+            <button
+              onClick={handleInstall}
+              className="px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 active:scale-[0.98] sm:flex-[2]"
+            >
+              Install App
+              <ExternalLink size={14} />
+            </button>
+          </div>
+
+          {/* Small note */}
+          <p className="text-[10px] text-gray-600 text-center mt-3">
+            Opens Google Play Store • Free download
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function JobDetailPage() {
   const { jobId } = useParams<{ jobId: string }>();
@@ -19,6 +150,24 @@ export default function JobDetailPage() {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerIndex, setViewerIndex] = useState(0);
   const [viewerFiles, setViewerFiles] = useState<any[]>([]);
+
+  // ✅ NEW: Android app recommendation state
+  const [showAppRecommendation, setShowAppRecommendation] = useState(false);
+
+  // ✅ NEW: Detect Android + show once per session (after a short delay, and not while viewer is open)
+  useEffect(() => {
+    if (!isAndroidDevice()) return;
+    if (hasBeenShownThisSession()) return;
+    if (viewerOpen) return; // don't interrupt
+
+    // Show after 1.5s so user gets a glimpse of the job page first
+    const timer = setTimeout(() => {
+      setShowAppRecommendation(true);
+      markAsShownThisSession();
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [viewerOpen]);
 
   const isExpired = job ? (
     job.active === false || 
@@ -70,7 +219,6 @@ export default function JobDetailPage() {
     return allJobs
       .filter(j => j.id !== job.id)
       .filter(j => {
-        // Only return active, non-expired jobs
         const isJobExpired = j.active === false || (j.expiresAt && new Date(j.expiresAt) < new Date());
         return !isJobExpired;
       })
@@ -330,8 +478,6 @@ export default function JobDetailPage() {
         <div className="px-4 py-6 border-b border-white/5 text-center"><FileText size={32} className="text-gray-600 mx-auto mb-3" /><p className="text-gray-500 text-sm">No detailed description available for this listing.</p></div>
       )}
 
-      {/* Ad removed */}
-
       <div className="px-4 py-6 border-b border-white/5">
         <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4">Job Details</h3>
         <div className="space-y-3">
@@ -350,9 +496,6 @@ export default function JobDetailPage() {
         </div>
       </div>
 
-      {/* Ad removed */}
-
-      {/* 🔥 Company Info Section with Auto-Links */}
       <div className="px-4 py-6 border-b border-white/5">
         <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
           <Building2 size={16} className="text-blue-400" /> About {job.company}
@@ -393,7 +536,6 @@ export default function JobDetailPage() {
         </div>
       </div>
 
-      {/* Related Jobs - Only Active Jobs */}
       {relatedJobs.length > 0 && (
         <div className="px-4 py-8 border-t border-white/5">
           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
@@ -439,8 +581,6 @@ export default function JobDetailPage() {
         </div>
       )}
 
-      {/* Ad removed */}
-
       <div className="px-4 py-6">
         <button onClick={() => { if (navigator.share) { navigator.share({ title: job.title, url: window.location.href }); } else { navigator.clipboard.writeText(window.location.href); } }} className="w-full py-3 bg-white/[0.02] hover:bg-white/[0.04] text-gray-400 hover:text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-2">
           <Share2 size={14} /> Share This Job
@@ -470,6 +610,11 @@ export default function JobDetailPage() {
             <button onClick={() => setViewerIndex(Math.min(viewerFiles.length - 1, viewerIndex + 1))} disabled={viewerIndex === viewerFiles.length - 1} className="p-2 text-white disabled:opacity-30" aria-label="Next attachment"><ChevronRight size={24} /></button>
           </div>
         </div>
+      )}
+
+      {/* ✅ Android app recommendation — only renders for Android users, once per session */}
+      {showAppRecommendation && (
+        <AndroidAppRecommendation onClose={() => setShowAppRecommendation(false)} />
       )}
     </div>
   );
