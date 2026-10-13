@@ -9,9 +9,10 @@ import {
 import { useCareerRedirect } from '../context/CareerRedirectContext';
 
 // ============================================================
-// ✅ NEW: Android App Recommendation
+// ✅ Android App Recommendation + Native App Detection
 // ============================================================
 const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=co.jobsreport.ap';
+const ANDROID_PACKAGE_ID = 'co.jobsreport.ap';
 const SESSION_KEY = 'jobsreport_app_prompt_shown';
 
 function isAndroidDevice(): boolean {
@@ -36,6 +37,40 @@ function markAsShownThisSession(): void {
     sessionStorage.setItem(SESSION_KEY, '1');
   } catch {
     // storage may be disabled (private mode, quota, etc.) — fail silently
+  }
+}
+
+/**
+ * ✅ Check if the JobsReport Android app is already installed.
+ *
+ * Uses the Web App Manifest spec API `navigator.getInstalledRelatedApps()`
+ * which requires:
+ *   1. This site's manifest.json declares the app under `related_applications`
+ *      (with platform "play" and id "co.jobsreport.ap")
+ *   2. The Android app declares this site's domain via asset_statements
+ *      AND has an intent-filter with android:autoVerify="true"
+ *   3. The browser supports the API (Chrome 80+, Samsung Internet, Edge for Android)
+ *
+ * Returns:
+ *   - `true`  → app is definitely installed (skip the prompt)
+ *   - `false` → app is NOT installed (show the prompt)
+ *   - `null`  → detection unavailable (browser unsupported / error) → still show prompt
+ */
+async function checkIfAppIsInstalled(): Promise<boolean | null> {
+  try {
+    const nav: any = typeof navigator !== 'undefined' ? navigator : null;
+    if (!nav || typeof nav.getInstalledRelatedApps !== 'function') {
+      return null; // API unsupported (Firefox, iOS, older browsers)
+    }
+
+    const apps: any[] = await nav.getInstalledRelatedApps();
+    if (!Array.isArray(apps)) return null;
+
+    return apps.some((app) => app?.id === ANDROID_PACKAGE_ID);
+  } catch (err) {
+    // Some browsers throw if the manifest is missing or malformed — treat as unavailable
+    console.warn('getInstalledRelatedApps failed:', err);
+    return null;
   }
 }
 
@@ -154,20 +189,39 @@ export default function JobDetailPage() {
   // ✅ NEW: Android app recommendation state
   const [showAppRecommendation, setShowAppRecommendation] = useState(false);
 
-  // ✅ NEW: Detect Android + show once per session (after a short delay, and not while viewer is open)
+  // ✅ NEW: Detect Android + check if app is already installed + show once per session
   useEffect(() => {
     if (!isAndroidDevice()) return;
     if (hasBeenShownThisSession()) return;
-    if (viewerOpen) return; // don't interrupt
 
-    // Show after 1.5s so user gets a glimpse of the job page first
-    const timer = setTimeout(() => {
-      setShowAppRecommendation(true);
-      markAsShownThisSession();
-    }, 1500);
+    let cancelled = false;
 
-    return () => clearTimeout(timer);
-  }, [viewerOpen]);
+    async function maybeShowPrompt() {
+      // 1. Ask the browser if the app is already installed
+      const isInstalled = await checkIfAppIsInstalled();
+
+      if (cancelled) return;
+
+      // 2. If definitely installed → skip entirely, mark as shown so we don't re-check
+      if (isInstalled === true) {
+        markAsShownThisSession();
+        return;
+      }
+
+      // 3. If not installed OR detection unavailable → show prompt after a short delay
+      setTimeout(() => {
+        if (cancelled) return;
+        setShowAppRecommendation(true);
+        markAsShownThisSession();
+      }, 1500);
+    }
+
+    maybeShowPrompt();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const isExpired = job ? (
     job.active === false || 
@@ -612,7 +666,7 @@ export default function JobDetailPage() {
         </div>
       )}
 
-      {/* ✅ Android app recommendation — only renders for Android users, once per session */}
+      {/* ✅ Android app recommendation — only renders when prompt is approved */}
       {showAppRecommendation && (
         <AndroidAppRecommendation onClose={() => setShowAppRecommendation(false)} />
       )}
