@@ -24,8 +24,10 @@ import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import TermsOfServicePage from './pages/TermsOfServicePage';
 import DisclaimerPage from './pages/DisclaimerPage';
 import StoryPage, { PublicStoryPage } from './pages/Story';
+import UserAuthPage from './pages/UserAuthPage';
 
 import { AuthProvider } from './context/AuthContext';
+import { UserAuthProvider } from './context/UserAuthContext';
 import { CountryProvider } from './context/CountryContext';
 import { CareerRedirectProvider } from './context/CareerRedirectContext';
 
@@ -34,64 +36,70 @@ export default function App() {
     <CountryProvider>
       <CareerRedirectProvider>
         <AuthProvider>
-          <Router>
-            <RouteTracker />
-            
-            <Layout>
-              <Routes>
-                {/* 🏠 Homepage */}
-                <Route path="/" element={<HomePage />} />
+          <UserAuthProvider>
+            <Router>
+              <RouteTracker />
 
-                {/* 🌍 Country Pages */}
-                <Route path="/country/:slug" element={<CountryPage />} />
-                <Route path="/jobs-in/:slug" element={<CountryPage />} />
+              <Layout>
+                <Routes>
+                  {/* 🏠 Homepage */}
+                  <Route path="/" element={<HomePage />} />
 
-                {/* 📍 Regions Pages */}
-                <Route path="/regions" element={<RegionsPage />} />
-                <Route path="/country/:countrySlug/region/:regionSlug" element={<RegionPage />} />
+                  {/* 🌍 Country Pages */}
+                  <Route path="/country/:slug" element={<CountryPage />} />
+                  <Route path="/jobs-in/:slug" element={<CountryPage />} />
 
-                {/* 🏢 Companies Routes */}
-                <Route path="/companies/:companyName" element={<CompaniesPage />} />
-                <Route path="/companies" element={<CompaniesPage />} />
+                  {/* 📍 Regions Pages */}
+                  <Route path="/regions" element={<RegionsPage />} />
+                  <Route path="/country/:countrySlug/region/:regionSlug" element={<RegionPage />} />
 
-                {/* 🎯 Category Pages - With optional country filter */}
-                <Route path="/category/:categorySlug/:countrySlug" element={<CategoryPage />} />
-                <Route path="/category/:categorySlug" element={<CategoryPage />} />
+                  {/* 🏢 Companies Routes */}
+                  <Route path="/companies/:companyName" element={<CompaniesPage />} />
+                  <Route path="/companies" element={<CompaniesPage />} />
 
-                {/* 🎯 Role Pages - OLD (Keep for Google) */}
-                <Route path="/role/:roleSlug" element={<MarketPage />} />
+                  {/* 🎯 Category Pages - With optional country filter */}
+                  <Route path="/category/:categorySlug/:countrySlug" element={<CategoryPage />} />
+                  <Route path="/category/:categorySlug" element={<CategoryPage />} />
 
-                {/* 📊 Market Routes */}
-                <Route path="/market/search/:query" element={<MarketPage />} />
-                <Route path="/market/page/:page" element={<MarketPage />} />
-                <Route path="/market/:jobId" element={<JobDetailPage />} />
-                <Route path="/market" element={<MarketPage />} />
+                  {/* 🎯 Role Pages - OLD (Keep for Google) */}
+                  <Route path="/role/:roleSlug" element={<MarketPage />} />
 
-                {/* 📰 Reports */}
-                <Route path="/reports/:country" element={<ReportsPage />} />
-                <Route path="/reports" element={<ReportsPage />} />
-                <Route path="/report/:slug" element={<ReportDetailPage />} />
+                  {/* 📊 Market Routes */}
+                  <Route path="/market/search/:query" element={<MarketPage />} />
+                  <Route path="/market/page/:page" element={<MarketPage />} />
+                  <Route path="/market/:jobId" element={<JobDetailPage />} />
+                  <Route path="/market" element={<MarketPage />} />
 
-                {/* 📖 Job Stories */}
-                <Route path="/stories" element={<StoryPage />} />
-                <Route path="/story/:slug" element={<PublicStoryPage />} />
+                  {/* 📰 Reports */}
+                  <Route path="/reports/:country" element={<ReportsPage />} />
+                  <Route path="/reports" element={<ReportsPage />} />
+                  <Route path="/report/:slug" element={<ReportDetailPage />} />
 
-                {/* 📄 Legal & Info Pages */}
-                <Route path="/about-us" element={<AboutUsPage />} />
-                <Route path="/contact-us" element={<ContactUsPage />} />
-                <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
-                <Route path="/terms-of-service" element={<TermsOfServicePage />} />
-                <Route path="/disclaimer" element={<DisclaimerPage />} />
+                  {/* 📖 Job Stories */}
+                  <Route path="/stories" element={<StoryPage />} />
+                  <Route path="/story/:slug" element={<PublicStoryPage />} />
 
-                {/* 🔐 Admin */}
-                <Route path="/admin" element={<AdminPage />} />
+                  {/* 🔐 User Auth (public accounts — separate from admin) */}
+                  <Route path="/login" element={<UserAuthPage />} />
+                  <Route path="/register" element={<UserAuthPage />} />
 
-                {/* Fallbacks */}
-                <Route path="/jobs" element={<Navigate to="/market" replace />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </Layout>
-          </Router>
+                  {/* 📄 Legal & Info Pages */}
+                  <Route path="/about-us" element={<AboutUsPage />} />
+                  <Route path="/contact-us" element={<ContactUsPage />} />
+                  <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+                  <Route path="/terms-of-service" element={<TermsOfServicePage />} />
+                  <Route path="/disclaimer" element={<DisclaimerPage />} />
+
+                  {/* 🔐 Admin */}
+                  <Route path="/admin" element={<AdminPage />} />
+
+                  {/* Fallbacks */}
+                  <Route path="/jobs" element={<Navigate to="/market" replace />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </Layout>
+            </Router>
+          </UserAuthProvider>
         </AuthProvider>
       </CareerRedirectProvider>
     </CountryProvider>
