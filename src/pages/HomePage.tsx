@@ -6,7 +6,7 @@ import SEO from '../components/SEO';
 import TrendingCard from '../components/TrendingCard';
 import ReportCard from '../components/ReportCard';
 import { useCountry } from '../context/CountryContext';
-import { useAuth } from '../context/AuthContext';
+import { useUserAuth, getUserToken } from '../context/UserAuthContext';
 import { getIconForRole } from '../lib/roleIcons';
 import {
   StoryViewer,
@@ -27,9 +27,10 @@ const ICON_COMPONENTS: Record<string, any> = {
 // ============================================================
 // Instagram-style Story Bar (JobsReport blue → purple)
 // ============================================================
-const DEFAULT_AVATAR = (name: string, id: number) => {
+const DEFAULT_AVATAR = (name: string, seed: string | number) => {
   const colors = ['1877F2', '45BD62', 'F3425F', 'F7B928', '9360F7'];
-  const c = colors[Math.abs(id) % colors.length];
+  const hash = String(seed).split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  const c = colors[Math.abs(hash) % colors.length];
   const init = (name || 'U').slice(0, 1).toUpperCase();
   return `https://ui-avatars.com/api/?name=${encodeURIComponent(init)}&background=${c}&color=fff&size=128&bold=true&rounded=true`;
 };
@@ -40,7 +41,7 @@ interface InstagramStoryBarProps {
   onViewStory: (s: StoryType) => void;
   onCreateStory: () => void;
   onRequestLogin: () => void;
-  seenIds: Set<number>;
+  seenIds: Set<string>;
 }
 
 const InstagramStoryBar: React.FC<InstagramStoryBarProps> = ({
@@ -53,43 +54,43 @@ const InstagramStoryBar: React.FC<InstagramStoryBarProps> = ({
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Deduplicate by user — keep latest story per user, current user first
   const perUser = (() => {
     const sorted = [...stories].sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
-    const seen = new Set<number>();
+    const seen = new Set<string>();
     const out: StoryType[] = [];
-    const meId = Number(currentUser?.id || 0);
-    const mine = sorted.filter((s) => Number(s.user_id) === meId);
-    const others = sorted.filter((s) => Number(s.user_id) !== meId);
+    const meId = String(currentUser?.id || '');
+    const mine = sorted.filter((s) => String(s.user_id) === meId);
+    const others = sorted.filter((s) => String(s.user_id) !== meId);
     for (const s of others) {
-      if (seen.has(Number(s.user_id))) continue;
-      seen.add(Number(s.user_id));
+      if (seen.has(String(s.user_id))) continue;
+      seen.add(String(s.user_id));
       out.push(s);
     }
     return { mine: mine[0], others: out };
   })();
 
   const hasStories = perUser.mine || perUser.others.length > 0;
+
+  // If nothing to show, hide the whole bar
   if (!hasStories && !currentUser) return null;
 
   return (
-    <section className="relative">
+    <section className="relative -mt-4 mb-2">
       <div
         ref={scrollRef}
         className="flex gap-4 overflow-x-auto scrollbar-hide py-1 -mx-1 px-1"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       >
         {/* ── Your Story bubble — only for logged-in users ── */}
-        {currentUser && (
+        {currentUser ? (
           <button
             onClick={onCreateStory}
             className="flex flex-col items-center gap-1.5 shrink-0 group"
             aria-label="Create your story"
           >
             <div className="relative">
-              {/* Avatar circle */}
               <div className="w-[68px] h-[68px] rounded-full p-[2px] bg-white/5">
                 <div className="w-full h-full rounded-full overflow-hidden border-2 border-[#0B1120]">
                   <img
@@ -99,10 +100,15 @@ const InstagramStoryBar: React.FC<InstagramStoryBarProps> = ({
                     }
                     alt="You"
                     className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = DEFAULT_AVATAR(
+                        currentUser.name || 'User',
+                        currentUser.id || 0
+                      );
+                    }}
                   />
                 </div>
               </div>
-              {/* + badge — JobsReport blue→purple */}
               <div
                 className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full flex items-center justify-center border-[3px] border-[#0B1120]"
                 style={{
@@ -117,6 +123,23 @@ const InstagramStoryBar: React.FC<InstagramStoryBarProps> = ({
               Your Story
             </span>
           </button>
+        ) : (
+          <button
+            onClick={onRequestLogin}
+            className="flex flex-col items-center gap-1.5 shrink-0 group"
+            aria-label="Log in to create a story"
+          >
+            <div className="relative">
+              <div className="w-[68px] h-[68px] rounded-full p-[2px] bg-white/5">
+                <div className="w-full h-full rounded-full overflow-hidden border-2 border-[#0B1120] bg-gradient-to-br from-[#1877F2] to-[#A033FF] flex items-center justify-center">
+                  <Plus size={24} strokeWidth={3} className="text-white" />
+                </div>
+              </div>
+            </div>
+            <span className="text-[11px] font-semibold text-gray-300 max-w-[72px] truncate">
+              Add Story
+            </span>
+          </button>
         )}
 
         {/* ── Other users' stories ── */}
@@ -126,7 +149,7 @@ const InstagramStoryBar: React.FC<InstagramStoryBarProps> = ({
             name: 'User',
             profile_image_url: DEFAULT_AVATAR('User', s.user_id),
           };
-          const isSeen = seenIds.has(s.id);
+          const isSeen = seenIds.has(String(s.id));
           const thumb = s.media_thumb || s.media_url || '';
 
           return (
@@ -190,50 +213,50 @@ export default function HomePage() {
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [categoryPage, setCategoryPage] = useState(1);
   const { selectedCountry, setSelectedCountry, currentFlag, countriesList } = useCountry();
-  const { user: authUser } = useAuth() as any;
+  const { user: authUser } = useUserAuth();
   const navigate = useNavigate();
 
-  // Stories state
+  // Stories
   const [stories, setStories] = useState<StoryType[]>([]);
-  const [seenStoryIds, setSeenStoryIds] = useState<Set<number>>(() => {
+  const [seenStoryIds, setSeenStoryIds] = useState<Set<string>>(() => {
     try {
       const raw = localStorage.getItem('jobsreport_seen_stories');
-      if (raw) return new Set<number>(JSON.parse(raw));
+      if (raw) return new Set<string>(JSON.parse(raw));
     } catch {}
-    return new Set<number>();
+    return new Set<string>();
   });
   const [createOpen, setCreateOpen] = useState(false);
   const [viewingStory, setViewingStory] = useState<StoryType | null>(null);
 
   const currentUser: StoryUser | null = authUser
     ? {
-        id: authUser.id,
+        id: String(authUser.id),
         name: authUser.name || authUser.username || 'User',
-        username: authUser.username,
+        username: authUser.username || null,
         email: authUser.email,
-        profile_image_url: authUser.profile_image_url || authUser.avatar_url,
+        profile_image_url: authUser.profile_image_url || null,
       }
     : null;
 
   const INITIAL_CATEGORIES_COUNT = 4;
   const CATEGORIES_PER_PAGE = 5;
 
-  const countrySlug = selectedCountry === 'Worldwide' 
-    ? '' 
+  const countrySlug = selectedCountry === 'Worldwide'
+    ? ''
     : selectedCountry.toLowerCase().replace(/\s+/g, '-');
-  
+
   const seoTitle = selectedCountry === 'Worldwide'
     ? 'Jobs Worldwide | Find Latest Job Vacancies & Career Opportunities | JobsReport'
     : `Jobs in ${selectedCountry} | Latest ${selectedCountry} Vacancies & Careers | JobsReport`;
-  
+
   const seoDescription = selectedCountry === 'Worldwide'
     ? 'Discover the latest job vacancies, trending roles, and career opportunities worldwide. Real-time job market intelligence with verified listings from top employers.'
     : `Find the latest jobs, vacancies, and career opportunities in ${selectedCountry}. Browse verified job listings from top employers hiring in ${selectedCountry}. Real-time market intelligence.`;
-  
+
   const seoKeywords = selectedCountry === 'Worldwide'
     ? 'jobs worldwide, global jobs, international careers, find jobs, job vacancies, career opportunities'
     : `jobs in ${selectedCountry}, ${selectedCountry} jobs, ${selectedCountry} vacancies, ${selectedCountry} careers, find jobs in ${selectedCountry}`;
-  
+
   const canonicalUrl = selectedCountry === 'Worldwide'
     ? 'https://jobsreport.online'
     : `https://jobsreport.online/country/${countrySlug}`;
@@ -242,13 +265,13 @@ export default function HomePage() {
     const fetchDashboardData = async () => {
       try {
         const countryParam = selectedCountry === 'Worldwide' ? '' : selectedCountry;
-        
+
         const [homeRes, marketRes, filtersRes] = await Promise.all([
           fetch(`/api/home?country=${encodeURIComponent(countryParam)}`),
           fetch(`/api/market?limit=5&country=${encodeURIComponent(countryParam)}`),
-          fetch('/api/filters')
+          fetch('/api/filters'),
         ]);
-        
+
         if (homeRes.ok) {
           const data = await homeRes.json();
           setTrends(Array.isArray(data.trends) ? data.trends : []);
@@ -274,53 +297,11 @@ export default function HomePage() {
         setLoading(false);
       }
     };
-    
+
     fetchDashboardData();
   }, [selectedCountry]);
 
   // Fetch stories
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const res = await fetch('/api/stories');
-        if (!res.ok) return;
-        const data = await res.json();
-        if (cancelled) return;
-        const list: StoryType[] = Array.isArray(data?.stories)
-          ? data.stories
-          : Array.isArray(data)
-          ? data
-          : [];
-        const now = Date.now();
-        const active = list.filter((s) => {
-          if (s.is_active === false) return false;
-          if (!s.expires_at) return true;
-          return new Date(s.expires_at).getTime() > now;
-        });
-        setStories(active);
-      } catch {}
-    };
-    load();
-    return () => { cancelled = true; };
-  }, []);
-
-  const persistSeen = (set: Set<number>) => {
-    try {
-      localStorage.setItem('jobsreport_seen_stories', JSON.stringify([...set]));
-    } catch {}
-  };
-
-  const markStorySeen = (id: number) => {
-    setSeenStoryIds((prev) => {
-      if (prev.has(id)) return prev;
-      const next = new Set(prev);
-      next.add(id);
-      persistSeen(next);
-      return next;
-    });
-  };
-
   const refreshStories = async () => {
     try {
       const res = await fetch('/api/stories');
@@ -334,7 +315,7 @@ export default function HomePage() {
       const now = Date.now();
       setStories(
         list.filter((s) => {
-          if (s.is_active === false) return false;
+          if (s.is_active === 0 || s.is_active === (false as any)) return false;
           if (!s.expires_at) return true;
           return new Date(s.expires_at).getTime() > now;
         })
@@ -342,17 +323,59 @@ export default function HomePage() {
     } catch {}
   };
 
+  useEffect(() => {
+    refreshStories();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const persistSeen = (set: Set<string>) => {
+    try {
+      localStorage.setItem('jobsreport_seen_stories', JSON.stringify([...set]));
+    } catch {}
+  };
+
+  const markStorySeen = (id: string) => {
+    setSeenStoryIds((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      persistSeen(next);
+      return next;
+    });
+  };
+
   const handleCreateStory = async (payload: CreateStoryPayload) => {
-    await fetch('/api/stories', {
+    const token = getUserToken();
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+    const res = await fetch('/api/stories', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
       body: JSON.stringify(payload),
     });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err as any)?.error || 'Failed to create story');
+    }
     await refreshStories();
   };
 
-  const handleDeleteStory = async (storyId: number) => {
-    await fetch(`/api/stories/${storyId}`, { method: 'DELETE' });
+  const handleDeleteStory = async (storyId: string) => {
+    const token = getUserToken();
+    if (!token) return;
+    const res = await fetch(`/api/stories/${encodeURIComponent(storyId)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err as any)?.error || 'Failed to delete story');
+    }
     setStories((prev) => prev.filter((s) => s.id !== storyId));
   };
 
@@ -360,7 +383,6 @@ export default function HomePage() {
     if (!showAllCategories) {
       return categories.slice(0, INITIAL_CATEGORIES_COUNT);
     }
-    
     const startIndex = (categoryPage - 1) * CATEGORIES_PER_PAGE;
     const endIndex = startIndex + CATEGORIES_PER_PAGE;
     return categories.slice(startIndex, endIndex);
@@ -370,39 +392,45 @@ export default function HomePage() {
   const totalCategoryPages = Math.ceil(categories.length / CATEGORIES_PER_PAGE);
 
   const structuredData = {
-    "@context": "https://schema.org",
-    "@type": "WebPage",
-    "name": seoTitle,
-    "description": seoDescription,
-    "url": canonicalUrl,
-    "isPartOf": {
-      "@type": "WebSite",
-      "name": "JobsReport",
-      "url": "https://jobsreport.online",
-      "potentialAction": {
-        "@type": "SearchAction",
-        "target": "https://jobsreport.online/market/search/{search_term_string}",
-        "query-input": "required name=search_term_string"
-      }
-    }
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    name: seoTitle,
+    description: seoDescription,
+    url: canonicalUrl,
+    isPartOf: {
+      '@type': 'WebSite',
+      name: 'JobsReport',
+      url: 'https://jobsreport.online',
+      potentialAction: {
+        '@type': 'SearchAction',
+        target: 'https://jobsreport.online/market/search/{search_term_string}',
+        'query-input': 'required name=search_term_string',
+      },
+    },
   };
 
   const organizationSchema = {
-    "@context": "https://schema.org",
-    "@type": "Organization",
-    "name": "JobsReport",
-    "alternateName": "JobsReport.online",
-    "url": "https://jobsreport.online",
-    "logo": {
-      "@type": "ImageObject",
-      "url": "https://media.jobsreport.online/file_0000000084b47243aec7e8cf3cbeb6bd.png",
-      "width": 112, "height": 112
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'JobsReport',
+    alternateName: 'JobsReport.online',
+    url: 'https://jobsreport.online',
+    logo: {
+      '@type': 'ImageObject',
+      url: 'https://media.jobsreport.online/file_0000000084b47243aec7e8cf3cbeb6bd.png',
+      width: 112,
+      height: 112,
     },
-    "description": "JobsReport aggregates real-time job market data to help you find the best career opportunities.",
-    "foundingDate": "2025",
-    "areaServed": "Worldwide",
-    "sameAs": ["https://www.facebook.com/J2Accessories"],
-    "contactPoint": { "@type": "ContactPoint", "contactType": "customer support", "email": "jjovinatha@gmail.com", "telephone": "+255616069692" }
+    description: 'JobsReport aggregates real-time job market data to help you find the best career opportunities.',
+    foundingDate: '2025',
+    areaServed: 'Worldwide',
+    sameAs: ['https://www.facebook.com/J2Accessories'],
+    contactPoint: {
+      '@type': 'ContactPoint',
+      contactType: 'customer support',
+      email: 'jjovinatha@gmail.com',
+      telephone: '+255616069692',
+    },
   };
 
   const topReports = reports.slice(0, 3);
@@ -413,7 +441,9 @@ export default function HomePage() {
         <SEO title={seoTitle} description={seoDescription} />
         <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
           <RefreshCw size={24} className="text-blue-500 animate-spin" />
-          <span className="text-[10px] font-mono text-gray-500 tracking-widest uppercase">Compiling Live Market Intelligence...</span>
+          <span className="text-[10px] font-mono text-gray-500 tracking-widest uppercase">
+            Compiling Live Market Intelligence...
+          </span>
         </div>
       </>
     );
@@ -421,11 +451,37 @@ export default function HomePage() {
 
   return (
     <>
-      <SEO title={seoTitle} description={seoDescription} keywords={seoKeywords} canonicalUrl={canonicalUrl}
-        ogTitle={seoTitle} ogDescription={seoDescription} ogUrl={canonicalUrl}
-        structuredData={[structuredData, organizationSchema]} />
+      <SEO
+        title={seoTitle}
+        description={seoDescription}
+        keywords={seoKeywords}
+        canonicalUrl={canonicalUrl}
+        ogTitle={seoTitle}
+        ogDescription={seoDescription}
+        ogUrl={canonicalUrl}
+        structuredData={[structuredData, organizationSchema]}
+      />
 
       <div className="space-y-12">
+        {/* 🔹 Story Bar — FIRST thing after header */}
+        <InstagramStoryBar
+          stories={stories}
+          currentUser={currentUser}
+          onViewStory={(s) => {
+            markStorySeen(String(s.id));
+            setViewingStory(s);
+          }}
+          onCreateStory={() => {
+            if (!currentUser) {
+              navigate('/login');
+              return;
+            }
+            setCreateOpen(true);
+          }}
+          onRequestLogin={() => navigate('/login')}
+          seenIds={seenStoryIds}
+        />
+
         {/* Hero */}
         <section className="py-8 md:py-16">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-3xl">
@@ -453,19 +509,6 @@ export default function HomePage() {
           </motion.div>
         </section>
 
-        {/* 🔹 Instagram-style Story Bar */}
-        <InstagramStoryBar
-          stories={stories}
-          currentUser={currentUser}
-          onViewStory={(s) => {
-            markStorySeen(s.id);
-            setViewingStory(s);
-          }}
-          onCreateStory={() => setCreateOpen(true)}
-          onRequestLogin={() => navigate('/')}
-          seenIds={seenStoryIds}
-        />
-
         {/* Job Categories */}
         <section>
           <div className="flex items-center justify-between mb-6">
@@ -474,8 +517,8 @@ export default function HomePage() {
                 <div className="w-1.5 h-6 bg-gradient-to-b from-blue-500 to-violet-500"></div>Job Categories
               </h2>
               <p className="text-xs text-gray-500 mt-1 font-mono">
-                {showAllCategories 
-                  ? `Showing ${visibleCategories.length} of ${categories.length} categories (Page ${categoryPage} of ${totalCategoryPages})` 
+                {showAllCategories
+                  ? `Showing ${visibleCategories.length} of ${categories.length} categories (Page ${categoryPage} of ${totalCategoryPages})`
                   : `Top ${INITIAL_CATEGORIES_COUNT} categories`}
               </p>
             </div>
@@ -493,7 +536,7 @@ export default function HomePage() {
               </button>
             )}
           </div>
-          
+
           {categories.length === 0 ? (
             <div className="text-center py-12 text-gray-500 text-sm font-mono">No job categories available yet.</div>
           ) : (
@@ -522,22 +565,22 @@ export default function HomePage() {
 
               {showAllCategories && totalCategoryPages > 1 && (
                 <div className="flex items-center justify-center gap-2 mt-6">
-                  <button 
+                  <button
                     onClick={() => setCategoryPage(Math.max(1, categoryPage - 1))}
                     disabled={categoryPage === 1}
                     className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all uppercase tracking-wider flex items-center gap-1"
                   >
                     <ChevronLeft size={14} /> Prev
                   </button>
-                  
+
                   <div className="flex items-center gap-1">
                     {Array.from({ length: totalCategoryPages }, (_, i) => i + 1).map((p) => (
-                      <button 
+                      <button
                         key={p}
                         onClick={() => setCategoryPage(p)}
                         className={`w-10 h-10 rounded-xl text-xs font-bold transition-all ${
-                          categoryPage === p 
-                            ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20' 
+                          categoryPage === p
+                            ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20'
                             : 'bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10'
                         }`}
                       >
@@ -545,8 +588,8 @@ export default function HomePage() {
                       </button>
                     ))}
                   </div>
-                  
-                  <button 
+
+                  <button
                     onClick={() => setCategoryPage(Math.min(totalCategoryPages, categoryPage + 1))}
                     disabled={categoryPage === totalCategoryPages}
                     className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all uppercase tracking-wider flex items-center gap-1"
@@ -583,22 +626,22 @@ export default function HomePage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {displayJobs.map((job: any) => (
-                <Link 
-                  key={job.id} 
+                <Link
+                  key={job.id}
                   to={`/market/${job.slug || `${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${job.id}`}`}
                   className="block p-4 bg-white/[0.01] border border-white/5 rounded-2xl hover:bg-white/[0.03] transition-all group"
                 >
                   <div className="flex items-start gap-3">
                     <div className="w-10 h-10 rounded-xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
                       {job.logoUrl ? <img src={job.logoUrl} alt={job.company} className="w-full h-full object-cover rounded-xl" />
-                        : <div className="w-full h-full bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400">{job.company?.charAt(0)?.toUpperCase()||'?'}</div>}
+                        : <div className="w-full h-full bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400">{job.company?.charAt(0)?.toUpperCase() || '?'}</div>}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <span className="px-1.5 py-0.5 rounded text-[7px] font-bold bg-blue-500/10 text-blue-400 uppercase">{job.role||'General'}</span>
+                      <span className="px-1.5 py-0.5 rounded text-[7px] font-bold bg-blue-500/10 text-blue-400 uppercase">{job.role || 'General'}</span>
                       <h3 className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors truncate mt-1">{job.title}</h3>
                       <div className="flex items-center gap-2 mt-1.5 text-[10px] text-gray-500">
                         <span className="flex items-center gap-1"><Building2 size={10} />{job.company}</span>
-                        <span className="flex items-center gap-1"><MapPin size={10} />{job.location||'Remote'}</span>
+                        <span className="flex items-center gap-1"><MapPin size={10} />{job.location || 'Remote'}</span>
                       </div>
                       {job.salary && <span className="text-[9px] text-emerald-400 font-mono mt-1 block">{job.salary}</span>}
                     </div>
@@ -638,12 +681,12 @@ export default function HomePage() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link to="/" className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${selectedCountry==='Worldwide'?'bg-blue-500/20 text-blue-400 border border-blue-500/30':'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/5'}`}>🌍 Worldwide</Link>
+            <Link to="/" className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${selectedCountry === 'Worldwide' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/5'}`}>🌍 Worldwide</Link>
             {countriesList.map((country) => {
               const cSlug = country.name.toLowerCase().replace(/\s+/g, '-');
               const isActive = selectedCountry.toLowerCase() === country.name.toLowerCase();
               return (
-                <Link key={country.code} to={`/country/${cSlug}`} className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${isActive?'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30':'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/5'}`}>
+                <Link key={country.code} to={`/country/${cSlug}`} className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${isActive ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/5'}`}>
                   {country.flag} {country.name}
                 </Link>
               );
@@ -747,7 +790,7 @@ export default function HomePage() {
           onNext={() => {
             const idx = stories.findIndex((s) => s.id === viewingStory.id);
             if (stories[idx + 1]) {
-              markStorySeen(stories[idx + 1].id);
+              markStorySeen(String(stories[idx + 1].id));
               setViewingStory(stories[idx + 1]);
             } else {
               setViewingStory(null);
@@ -756,13 +799,13 @@ export default function HomePage() {
           onPrev={() => {
             const idx = stories.findIndex((s) => s.id === viewingStory.id);
             if (stories[idx - 1]) {
-              markStorySeen(stories[idx - 1].id);
+              markStorySeen(String(stories[idx - 1].id));
               setViewingStory(stories[idx - 1]);
             } else {
               setViewingStory(null);
             }
           }}
-          onProfileClick={(id) => navigate(`/companies/${id}`)}
+          onProfileClick={(id) => navigate(`/story/${id}`)}
           onDeleteStory={handleDeleteStory}
           onViewRecorded={(id) => {
             setStories((prev) =>
