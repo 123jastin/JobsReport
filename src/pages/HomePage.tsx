@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { Sparkles, TrendingUp, RefreshCw, ArrowRight, Zap, BarChart3, Building2, Globe, Clock, MapPin, Briefcase, ChevronRight, Search, Code, Calculator, Palette, Headphones, Users, Shield, Truck, Stethoscope, BookOpen, Scale, Leaf, Settings, Utensils, ChevronDown, ChevronLeft, FileText, MessageCircle, Flag, Plus } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -25,7 +25,7 @@ const ICON_COMPONENTS: Record<string, any> = {
 };
 
 // ============================================================
-// Instagram-style Story Bar (JobsReport blue → purple)
+// HELPERS
 // ============================================================
 const DEFAULT_AVATAR = (name: string, seed: string | number) => {
   const colors = ['1877F2', '45BD62', 'F3425F', 'F7B928', '9360F7'];
@@ -35,6 +35,91 @@ const DEFAULT_AVATAR = (name: string, seed: string | number) => {
   return `https://ui-avatars.com/api/?name=${encodeURIComponent(init)}&background=${c}&color=fff&size=128&bold=true&rounded=true`;
 };
 
+const parseServerTime = (value?: string): number => {
+  const s = String(value ?? '').trim();
+  if (!s) return Date.now();
+  if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(s)) {
+    const t = Date.parse(s);
+    return Number.isFinite(t) ? t : Date.now();
+  }
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(s)) {
+    const iso = s.replace(' ', 'T') + 'Z';
+    const t = Date.parse(iso);
+    return Number.isFinite(t) ? t : Date.now();
+  }
+  const t = Date.parse(s);
+  return Number.isFinite(t) ? t : Date.now();
+};
+
+const isExpired = (story: StoryType): boolean => {
+  if (story.is_active === 0 || story.is_active === (false as any)) return true;
+  if (!story.expires_at) return false;
+  return parseServerTime(story.expires_at) < Date.now();
+};
+
+// ============================================================
+// SEO PRIORITY SCORER
+//   Combines: views, recency, urgency (soon-expiring), with a
+//   deterministic per-session shuffle for variety.
+// ============================================================
+const RECENT_SHOWN_KEY = 'jobsreport_recent_shown';
+
+const getSessionSeed = (): number => {
+  try {
+    const stored = sessionStorage.getItem('jobsreport_seed');
+    if (stored) return Number(stored);
+    const seed = Math.floor(Math.random() * 1_000_000);
+    sessionStorage.setItem('jobsreport_seed', String(seed));
+    return seed;
+  } catch {
+    return Math.floor(Math.random() * 1_000_000);
+  }
+};
+
+const getRecentlyShown = (): string[] => {
+  try {
+    const raw = sessionStorage.getItem(RECENT_SHOWN_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.slice(-12) : [];
+  } catch {
+    return [];
+  }
+};
+
+const setRecentlyShown = (ids: string[]) => {
+  try {
+    sessionStorage.setItem(RECENT_SHOWN_KEY, JSON.stringify(ids.slice(-12)));
+  } catch {}
+};
+
+const scoreStory = (story: StoryType, seed: number, now: number): number => {
+  const createdMs = parseServerTime(story.created_at);
+  const expiresMs = parseServerTime(story.expires_at);
+  const ageHours = Math.max(0, (now - createdMs) / 3_600_000);
+  const expiryHours = Math.max(0, (expiresMs - now) / 3_600_000);
+
+  // Views: log scale so 1000 views ≠ 1000x of 1 view
+  const viewsScore = Math.log1p(story.views_count || 0) * 3;
+
+  // Recency: fresh stories within first 24h get a boost
+  const recencyScore = Math.max(0, 5 - Math.log1p(ageHours)) * 2;
+
+  // Urgency: stories expiring soon get a "last chance" boost
+  const urgencyScore = Math.max(0, 3 - Math.log1p(expiryHours)) * 1.5;
+
+  // Deterministic per-session shuffle (stable within session, changes after refresh w/ new seed)
+  const hash = String(story.id)
+    .split('')
+    .reduce((a, c) => a + c.charCodeAt(0) * 31, seed);
+  const noise = ((hash % 1000) / 1000) * 2;
+
+  return viewsScore + recencyScore + urgencyScore + noise;
+};
+
+// ============================================================
+// Instagram-style Story Bar (JobsReport blue → purple)
+// ============================================================
 interface InstagramStoryBarProps {
   stories: StoryType[];
   currentUser: StoryUser | null;
@@ -54,10 +139,9 @@ const InstagramStoryBar: React.FC<InstagramStoryBarProps> = ({
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Deduplicate by user — keep latest story per user
   const perUser = (() => {
     const sorted = [...stories].sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      (a, b) => parseServerTime(b.created_at) - parseServerTime(a.created_at)
     );
     const seen = new Set<string>();
     const out: StoryType[] = [];
@@ -71,8 +155,6 @@ const InstagramStoryBar: React.FC<InstagramStoryBarProps> = ({
     }
     return { mine: mine[0], others: out };
   })();
-
-  // ✅ Always render — at minimum shows "Your Story" or "Add Story"
 
   return (
     <section className="relative -mt-4 mb-2">
@@ -154,7 +236,7 @@ const InstagramStoryBar: React.FC<InstagramStoryBarProps> = ({
             profile_image_url: DEFAULT_AVATAR('User', s.user_id),
           };
           const isSeen = seenIds.has(String(s.id));
-          const thumb = s.media_thumb || s.media_url || '';
+          const thumb = s.media_thumb || '';
 
           return (
             <button
@@ -232,6 +314,9 @@ export default function HomePage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [viewingStory, setViewingStory] = useState<StoryType | null>(null);
 
+  // Session-scoped seed (stable within session, changes on refresh)
+  const sessionSeedRef = useRef<number>(getSessionSeed());
+
   const currentUser: StoryUser | null = authUser
     ? {
         id: String(authUser.id),
@@ -305,32 +390,67 @@ export default function HomePage() {
     fetchDashboardData();
   }, [selectedCountry]);
 
-  // Fetch stories
+  // ────────────────────────────────────────────────────────
+  // Fetch + smart-order stories
+  //   1. Owner's own story first (if logged in)
+  //   2. Then SEO-priority ordered: views, recency, urgency
+  //   3. Anti-repeat: exclude last shown 3 if pool is big enough
+  //   4. Session-stable shuffle
+  // ────────────────────────────────────────────────────────
   const refreshStories = async () => {
     try {
       const res = await fetch('/api/stories');
       if (!res.ok) return;
       const data = await res.json();
-      const list: StoryType[] = Array.isArray(data?.stories)
+      const rawList: StoryType[] = Array.isArray(data?.stories)
         ? data.stories
         : Array.isArray(data)
         ? data
         : [];
+
       const now = Date.now();
-      setStories(
-        list.filter((s) => {
-          if (s.is_active === 0 || s.is_active === (false as any)) return false;
-          if (!s.expires_at) return true;
-          return new Date(s.expires_at).getTime() > now;
-        })
+      const active = rawList.filter(
+        (s) => !isExpired(s) && parseServerTime(s.expires_at) > now
       );
-    } catch {}
+
+      const seed = sessionSeedRef.current;
+      const recentlyShown = new Set(getRecentlyShown());
+
+      // Owner's story first
+      const meId = String(currentUser?.id || '');
+      const mine = active.filter((s) => String(s.user_id) === meId);
+      const others = active.filter((s) => String(s.user_id) !== meId);
+
+      // Score & sort "others"
+      const scored = others
+        .map((s) => ({ story: s, score: scoreStory(s, seed, now) }))
+        .sort((a, b) => b.score - a.score);
+
+      // Anti-repeat: if pool is big enough, push recently-shown to the end
+      let ordered: StoryType[];
+      if (scored.length > 6) {
+        const fresh = scored.filter((x) => !recentlyShown.has(String(x.story.id)));
+        const repeated = scored.filter((x) => recentlyShown.has(String(x.story.id)));
+        ordered = [...fresh, ...repeated].map((x) => x.story);
+      } else {
+        ordered = scored.map((x) => x.story);
+      }
+
+      const finalList = [...mine, ...ordered];
+
+      // Track what we're showing now
+      setRecentlyShown(finalList.slice(0, 12).map((s) => String(s.id)));
+
+      setStories(finalList);
+    } catch (err) {
+      console.error('refreshStories failed:', err);
+    }
   };
 
   useEffect(() => {
     refreshStories();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [currentUser?.id]);
 
   const persistSeen = (set: Set<string>) => {
     try {
