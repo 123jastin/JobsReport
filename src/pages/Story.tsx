@@ -126,11 +126,9 @@ const isExpired = (story: StoryType): boolean => {
 
 // ============================================================
 // CLIENT-SIDE THUMBNAIL GENERATION
-//   → Outputs a small WebP, typically 8–20 KB
 // ============================================================
 const generateThumbnail = async (file: File): Promise<File | null> => {
   try {
-    // 1. Load the image
     const objectUrl = URL.createObjectURL(file);
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
       const i = new Image();
@@ -140,12 +138,10 @@ const generateThumbnail = async (file: File): Promise<File | null> => {
     });
     URL.revokeObjectURL(objectUrl);
 
-    // 2. Compute scaled size (max 400px on longest edge)
     const scale = Math.min(1, THUMB_MAX_DIMENSION / Math.max(img.width, img.height));
     const w = Math.max(1, Math.round(img.width * scale));
     const h = Math.max(1, Math.round(img.height * scale));
 
-    // 3. Draw to canvas
     const canvas = document.createElement('canvas');
     canvas.width = w;
     canvas.height = h;
@@ -153,14 +149,12 @@ const generateThumbnail = async (file: File): Promise<File | null> => {
     if (!ctx) return null;
     ctx.drawImage(img, 0, 0, w, h);
 
-    // 4. Export as WebP blob
     const blob: Blob | null = await new Promise((resolve) => {
       canvas.toBlob((b) => resolve(b), 'image/webp', THUMB_QUALITY);
     });
 
     if (!blob) return null;
 
-    // 5. Return as File
     const baseName = file.name.replace(/\.[^.]+$/, '');
     return new File([blob], `${baseName}-thumb.webp`, { type: 'image/webp' });
   } catch (err) {
@@ -170,7 +164,7 @@ const generateThumbnail = async (file: File): Promise<File | null> => {
 };
 
 // ============================================================
-// LINKIFY — turn URLs in plain text into clickable <a>
+// LINKIFY
 // ============================================================
 const URL_REGEX = /((?:https?:\/\/|www\.)[^\s<>"']+|[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})/gi;
 
@@ -222,7 +216,7 @@ export const Linkify: React.FC<{ text: string; className?: string }> = ({ text, 
 };
 
 // ============================================================
-// API HELPERS — auto-attach Bearer token
+// API HELPERS
 // ============================================================
 const apiFetch = async (url: string, options: RequestInit = {}) => {
   const token = getToken();
@@ -301,10 +295,8 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
   const storyIsText = story.type === 'text';
   const originalUrl = story.media_url || '';
   const thumbUrl = story.media_thumb || originalUrl;
-  // Show thumbnail first; original swaps in when ready
   const displayUrl = originalLoaded && originalUrl ? originalUrl : thumbUrl;
 
-  // Record view once per story id
   useEffect(() => {
     if (viewRecordedRef.current === story.id) return;
     viewRecordedRef.current = story.id;
@@ -324,9 +316,6 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
     }
   }, [story.id, storyIsText]);
 
-  // ────────────────────────────────────────────────────────
-  // Load thumbnail first (fast), THEN original in background
-  // ────────────────────────────────────────────────────────
   useEffect(() => {
     if (storyIsText || !thumbUrl) {
       setMediaReady(true);
@@ -350,7 +339,6 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
     if (img.complete) done();
     else {
       img.onload = done;
-      // on error → keep thumbnail, never swap
     }
   }, [story.id, storyIsText, originalUrl, thumbUrl]);
 
@@ -448,7 +436,7 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
       url,
     };
     if (navigator.share) {
-      try { await navigator.share(shareData); return; } catch { /* user cancelled */ }
+      try { await navigator.share(shareData); return; } catch {}
     }
     try {
       await navigator.clipboard.writeText(url);
@@ -667,8 +655,62 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
 };
 
 // ============================================================
-// STORY REEL — horizontal scroller (used by HomePage + StoryPage)
-//   → Uses ONLY thumbnails (media_thumb) to save bandwidth
+// Story Bubble Content
+//   - If story exists → thumbnail (image) OR text+bg
+//   - Else → user avatar / initial
+// ============================================================
+const StoryBubbleContent: React.FC<{
+  story?: StoryType | null;
+  fallbackName?: string;
+  fallbackAvatar?: string | null;
+  fallbackSeed?: string | number;
+}> = ({ story, fallbackName = 'User', fallbackAvatar, fallbackSeed = 'anon' }) => {
+  if (story) {
+    const thumb = story.media_thumb || '';
+    if (story.type === 'text' && !thumb) {
+      return (
+        <div
+          className="w-full h-full flex items-center justify-center text-[8px] font-black text-white px-1 text-center leading-tight"
+          style={{ background: story.background_style || '#0B1120' }}
+        >
+          {(story.text_content || '').slice(0, 14)}
+        </div>
+      );
+    }
+    if (thumb) {
+      return (
+        <img
+          src={thumb}
+          alt=""
+          className="w-full h-full object-cover"
+          loading="lazy"
+        />
+      );
+    }
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-600 to-violet-600 text-white">
+        <ImageIcon size={18} />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={fallbackAvatar || getDefaultAvatar(fallbackName, fallbackSeed)}
+      alt={fallbackName}
+      className="w-full h-full object-cover"
+      onError={(e) => {
+        (e.currentTarget as HTMLImageElement).src = getDefaultAvatar(fallbackName, fallbackSeed);
+      }}
+    />
+  );
+};
+
+// ============================================================
+// STORY REEL — horizontal scroller (Instagram-style, full-size cards)
+//   - Owner's own story FIRST
+//   - Other users next (deduped, latest per user)
+//   - Uses ONLY thumbnails (media_thumb) to save bandwidth
 // ============================================================
 interface StoryReelProps {
   stories: StoryType[];
@@ -711,6 +753,7 @@ export const StoryReel: React.FC<StoryReelProps> = ({
 
   return (
     <div className="w-full bg-[#0F172A] border-b-[8px] border-[#050B18] py-3.5 px-3 overflow-x-auto flex gap-2.5 scrollbar-hide">
+      {/* Create card — always first */}
       <div
         className="min-w-[110px] sm:min-w-[135px] h-[200px] sm:h-[240px] bg-[#0F172A] rounded-2xl shadow-sm overflow-hidden cursor-pointer relative group flex-shrink-0 border border-[#1E293B]"
         onClick={() => (currentUser ? onCreateStory?.() : onRequestLogin())}
@@ -740,6 +783,7 @@ export const StoryReel: React.FC<StoryReelProps> = ({
         </div>
       </div>
 
+      {/* Story cards */}
       {uniqueUsers.map((story) => {
         const author = story.user || {
           id: story.user_id,
@@ -747,8 +791,8 @@ export const StoryReel: React.FC<StoryReelProps> = ({
           profile_image_url: getDefaultAvatar('User', story.user_id),
         };
         const isText = story.type === 'text';
-        // ⚠️ Use thumbnail ONLY — original never downloaded here
         const thumb = story.media_thumb || '';
+        const isMine = currentUser && String(currentUser.id) === String(story.user_id);
 
         return (
           <div
@@ -782,6 +826,7 @@ export const StoryReel: React.FC<StoryReelProps> = ({
 
             <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
 
+            {/* Author avatar chip */}
             <button
               className="absolute top-3 left-3 w-9 h-9 rounded-full border-4 border-[#1877F2] overflow-hidden z-10 shadow-md"
               onClick={(e) => { e.stopPropagation(); onProfileClick(story.user_id); }}
@@ -794,8 +839,26 @@ export const StoryReel: React.FC<StoryReelProps> = ({
               />
             </button>
 
+            {/* Small + on owner's card so they can add more */}
+            {isMine && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCreateStory?.();
+                }}
+                className="absolute top-3 right-3 w-7 h-7 rounded-full flex items-center justify-center z-20 border-[2.5px] border-[#0B1120]"
+                style={{
+                  background:
+                    'linear-gradient(135deg, #1877F2 0%, #7B4DFF 60%, #A033FF 100%)',
+                }}
+                aria-label="Add another story"
+              >
+                <Plus size={12} strokeWidth={3.5} className="text-white" />
+              </button>
+            )}
+
             <p className="absolute bottom-3 left-3 text-white font-bold text-xs drop-shadow-md truncate w-[85%]">
-              {author.name}
+              {isMine ? 'Your Story' : author.name}
             </p>
           </div>
         );
@@ -806,8 +869,6 @@ export const StoryReel: React.FC<StoryReelProps> = ({
 
 // ============================================================
 // CREATE STORY MODAL
-//   → Client-side thumbnail generation
-//   → Uploads BOTH files in one request
 // ============================================================
 interface CreateStoryModalProps {
   currentUser: StoryUser;
@@ -859,10 +920,8 @@ export const CreateStoryModal: React.FC<CreateStoryModalProps> = ({
     setError(null);
     setUploading(true);
     try {
-      // 1. Generate thumbnail client-side
       const thumbFile = await generateThumbnail(file);
 
-      // 2. Upload BOTH files
       const fd = new FormData();
       fd.append('file', file);
       if (thumbFile) fd.append('thumbnail', thumbFile);
@@ -877,7 +936,6 @@ export const CreateStoryModal: React.FC<CreateStoryModalProps> = ({
       }
 
       const url = data?.url || data?.dataUrl;
-      // ✅ Use server thumbnail; if server didn't generate one, fall back to original
       const thumb = data?.thumbnail_url || url;
 
       if (!url) throw new Error('No URL returned from upload');
