@@ -1,648 +1,675 @@
-import { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { motion } from 'motion/react';
-import { 
-  Building2, 
-  TrendingUp, 
-  ArrowLeft, 
-  ExternalLink, 
-  Share2, 
-  Clock,
-  Sparkles,
-  MapPin,
-  Briefcase,
-  Calendar,
-  RefreshCw,
-  ChevronRight
-} from 'lucide-react';
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer, 
-  Cell,
-  PieChart,
-  Pie
-} from 'recharts';
+import { useState, useEffect } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import SEO from '../components/SEO';
-import { Report, RawJob } from '../types';
+import {
+  Building2, MapPin, Clock, ExternalLink, ArrowLeft,
+  FileText, Eye, ChevronLeft, ChevronRight, X, Download,
+  Briefcase, Calendar, Globe, Share2, AlertCircle, Flag, Smartphone, Star
+} from 'lucide-react';
 import { useCareerRedirect } from '../context/CareerRedirectContext';
 
-const COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b'];
+// ============================================================
+// ✅ Android App Recommendation + Native App Detection
+// ============================================================
+const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=co.jobsreport.ap';
+const ANDROID_PACKAGE_ID = 'co.jobsreport.ap';
+const SESSION_KEY = 'jobsreport_app_prompt_shown';
 
-declare global {
-  interface Window {
-    adsbygoogle: any[];
+function isAndroidDevice(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  // Android phones + tablets. Exclude iOS explicitly.
+  const isAndroid = /android/i.test(ua);
+  const isIOS = /iPad|iPhone|iPod/.test(ua);
+  return isAndroid && !isIOS;
+}
+
+function hasBeenShownThisSession(): boolean {
+  try {
+    return sessionStorage.getItem(SESSION_KEY) === '1';
+  } catch {
+    return false;
   }
 }
 
-export default function ReportDetailPage() {
-  const { slug } = useParams<{ slug: string }>();
-  const [report, setReport] = useState<Report | null>(null);
-  const [jobs, setJobs] = useState<RawJob[]>([]);
+function markAsShownThisSession(): void {
+  try {
+    sessionStorage.setItem(SESSION_KEY, '1');
+  } catch {
+    // storage may be disabled (private mode, quota, etc.) — fail silently
+  }
+}
+
+/**
+ * ✅ Check if the JobsReport Android app is already installed.
+ *
+ * Uses the Web App Manifest spec API `navigator.getInstalledRelatedApps()`
+ * which requires:
+ *   1. This site's manifest.json declares the app under `related_applications`
+ *      (with platform "play" and id "co.jobsreport.ap")
+ *   2. The Android app declares this site's domain via asset_statements
+ *      AND has an intent-filter with android:autoVerify="true"
+ *   3. The browser supports the API (Chrome 80+, Samsung Internet, Edge for Android)
+ *
+ * Returns:
+ *   - `true`  → app is definitely installed (skip the prompt)
+ *   - `false` → app is NOT installed (show the prompt)
+ *   - `null`  → detection unavailable (browser unsupported / error) → still show prompt
+ */
+async function checkIfAppIsInstalled(): Promise<boolean | null> {
+  try {
+    const nav: any = typeof navigator !== 'undefined' ? navigator : null;
+    if (!nav || typeof nav.getInstalledRelatedApps !== 'function') {
+      return null; // API unsupported (Firefox, iOS, older browsers)
+    }
+
+    const apps: any[] = await nav.getInstalledRelatedApps();
+    if (!Array.isArray(apps)) return null;
+
+    return apps.some((app) => app?.id === ANDROID_PACKAGE_ID);
+  } catch (err) {
+    // Some browsers throw if the manifest is missing or malformed — treat as unavailable
+    console.warn('getInstalledRelatedApps failed:', err);
+    return null;
+  }
+}
+
+function AndroidAppRecommendation({ onClose }: { onClose: () => void }) {
+  const handleInstall = () => {
+    // Open Play Store in a new tab/window. User chooses to install.
+    window.open(PLAY_STORE_URL, '_blank', 'noopener,noreferrer');
+    onClose();
+  };
+
+  return (
+    <div
+      className="fixed inset-x-0 bottom-0 z-50 md:inset-0 md:flex md:items-center md:justify-center md:p-4"
+      role="dialog"
+      aria-modal="false"
+      aria-labelledby="app-rec-title"
+    >
+      {/* Backdrop (mobile: subtle, desktop: dim) */}
+      <div
+        className="hidden md:block fixed inset-0 bg-black/70 backdrop-blur-sm"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+
+      {/* Card / bottom sheet */}
+      <div className="relative bg-[#0b1220] border-t md:border border-blue-500/20 md:rounded-2xl shadow-2xl w-full md:max-w-md md:overflow-hidden animate-slide-up md:animate-fade-in">
+        {/* Accent bar */}
+        <div className="h-1 bg-gradient-to-r from-blue-600 via-violet-600 to-blue-500" />
+
+        <div className="p-5 md:p-6">
+          {/* Close button */}
+          <button
+            onClick={onClose}
+            aria-label="Close app recommendation"
+            className="absolute top-3 right-3 p-2 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+          >
+            <X size={16} />
+          </button>
+
+          {/* Header */}
+          <div className="flex items-start gap-4 mb-5 pr-8">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 flex items-center justify-center shrink-0 shadow-lg shadow-blue-600/20">
+              <Smartphone size={26} className="text-white" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-400 text-[9px] font-bold uppercase tracking-wider">
+                  Android App
+                </span>
+                <span className="flex items-center gap-0.5 text-amber-400 text-[10px] font-bold">
+                  <Star size={10} className="fill-amber-400" /> Google Play
+                </span>
+              </div>
+              <h3 id="app-rec-title" className="text-lg font-bold text-white leading-tight">
+                Get More with JobsReport
+              </h3>
+            </div>
+          </div>
+
+          {/* Description */}
+          <p className="text-sm text-gray-400 leading-relaxed mb-5">
+            Find jobs faster and enjoy a better experience with the JobsReport Android app.
+          </p>
+
+          {/* Feature pills */}
+          <div className="flex flex-wrap gap-2 mb-5">
+            {['Faster browsing', 'Push notifications', 'Offline access'].map((feat) => (
+              <span
+                key={feat}
+                className="px-2.5 py-1 rounded-full bg-white/[0.03] border border-white/5 text-[10px] font-semibold text-gray-300"
+              >
+                {feat}
+              </span>
+            ))}
+          </div>
+
+          {/* Buttons */}
+          <div className="flex flex-col-reverse sm:flex-row gap-2">
+            <button
+              onClick={onClose}
+              className="px-4 py-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] text-gray-400 hover:text-white text-xs font-bold uppercase tracking-wider transition-colors sm:flex-1"
+            >
+              Not Now
+            </button>
+            <button
+              onClick={handleInstall}
+              className="px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 active:scale-[0.98] sm:flex-[2]"
+            >
+              Install App
+              <ExternalLink size={14} />
+            </button>
+          </div>
+
+          {/* Small note */}
+          <p className="text-[10px] text-gray-600 text-center mt-3">
+            Opens Google Play Store • Free download
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function JobDetailPage() {
+  const { jobId } = useParams<{ jobId: string }>();
+  const [job, setJob] = useState<any>(null);
+  const [allJobs, setAllJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { triggerRedirect } = useCareerRedirect();
+  const navigate = useNavigate();
+  
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
+  const [viewerFiles, setViewerFiles] = useState<any[]>([]);
 
-  // Refs for the two AdSense <ins> elements
-  const adTopRef = useRef<HTMLModElement | null>(null);
-  const adSidebarRef = useRef<HTMLModElement | null>(null);
+  // ✅ NEW: Android app recommendation state
+  const [showAppRecommendation, setShowAppRecommendation] = useState(false);
+
+  // ✅ NEW: Detect Android + check if app is already installed + show once per session
+  useEffect(() => {
+    if (!isAndroidDevice()) return;
+    if (hasBeenShownThisSession()) return;
+
+    let cancelled = false;
+
+    async function maybeShowPrompt() {
+      // 1. Ask the browser if the app is already installed
+      const isInstalled = await checkIfAppIsInstalled();
+
+      if (cancelled) return;
+
+      // 2. If definitely installed → skip entirely, mark as shown so we don't re-check
+      if (isInstalled === true) {
+        markAsShownThisSession();
+        return;
+      }
+
+      // 3. If not installed OR detection unavailable → show prompt after a short delay
+      setTimeout(() => {
+        if (cancelled) return;
+        setShowAppRecommendation(true);
+        markAsShownThisSession();
+      }, 1500);
+    }
+
+    maybeShowPrompt();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const isExpired = job ? (
+    job.active === false || 
+    (job.expiresAt && new Date(job.expiresAt) < new Date())
+  ) : false;
+
+  const getCountryCode = (country: string): string => {
+    if (!country) return 'TZ';
+    const lower = country.toLowerCase().trim();
+    if (lower === 'tanzania' || lower === 'tz') return 'TZ';
+    return country;
+  };
 
   useEffect(() => {
-    const fetchReportData = async () => {
+    async function loadJob() {
       try {
-        const response = await fetch(`/api/reports/${slug}`);
+        const segments = jobId?.split('-') || [];
+        const jobIndex = segments.findIndex(s => s === 'job');
+        const extractedId = jobIndex >= 0 ? segments.slice(jobIndex).join('-') : '';
         
-        if (response.ok) {
-          const data = await response.json();
-          console.log('Report data:', data);
-          setReport(data);
-          
-          // Filter out expired jobs immediately
-          const activeJobs = (data.jobs || []).filter((job: RawJob) => {
-            if (job.active === false) return false;
-            if (job.expiresAt) {
-              const today = new Date().toISOString().split('T')[0];
-              return job.expiresAt >= today;
+        if (extractedId) {
+          const res = await fetch(`/api/job-detail/${extractedId}`);
+          if (res.ok) {
+            const jobData = await res.json();
+            if (jobData && !jobData.error) {
+              setJob(jobData);
+              setAllJobs(jobData.relatedJobs || []);
+              document.title = `${jobData.title} - ${jobData.company} | JobsReport`;
+              setLoading(false);
+              return;
             }
-            return true;
-          });
-          
-          setJobs(activeJobs);
-        } else if (response.status === 404) {
-          setReport(null);
+          }
         }
+        
+        setJob(null);
       } catch (err) {
-        console.error("Failed to fetch report:", err);
-        setReport(null);
+        console.error('Error loading job:', err);
       } finally {
         setLoading(false);
       }
-    };
-
-    if (slug) {
-      fetchReportData();
-      window.scrollTo(0, 0);
     }
-  }, [slug]);
+    if (jobId) loadJob();
+    window.scrollTo(0, 0);
+  }, [jobId]);
+  
+  const getRelatedJobs = () => {
+    if (!job || allJobs.length === 0) return [];
+    
+    return allJobs
+      .filter(j => j.id !== job.id)
+      .filter(j => {
+        const isJobExpired = j.active === false || (j.expiresAt && new Date(j.expiresAt) < new Date());
+        return !isJobExpired;
+      })
+      .slice(0, 6);
+  };
 
-  // Push AdSense for both units after report loads (and re-run on slug change)
-  useEffect(() => {
-    if (loading || !report) return;
-
-    // Reset ins elements so AdSense can re-render on route change
-    [adTopRef.current, adSidebarRef.current].forEach((el) => {
-      if (el) {
-        el.setAttribute('data-adsbygoogle-status', '');
-        el.innerHTML = '';
-      }
-    });
-
-    try {
-      window.adsbygoogle = window.adsbygoogle || [];
-      window.adsbygoogle.push({});
-      window.adsbygoogle.push({});
-    } catch (err) {
-      console.warn('[AdSense] push failed:', err);
-    }
-  }, [loading, report, slug]);
+  const relatedJobs = getRelatedJobs();
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
-        <RefreshCw size={24} className="text-blue-500 animate-spin" />
-        <span className="text-[10px] font-mono text-gray-500 tracking-widest uppercase">
-          Loading Intelligence Report...
-        </span>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="w-8 h-8 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
       </div>
     );
   }
 
-  if (!report) {
+  if (!job) {
     return (
-      <>
+      <div className="flex flex-col items-center justify-center min-h-screen px-4 text-center">
         <SEO 
-          title="Report Not Found | JobsReport" 
-          description="The requested market intelligence report could not be found." 
+          title="Job Not Found | JobsReport"
+          description="This job listing may have been removed or expired. Browse other job opportunities on JobsReport."
         />
-        <div className="text-center py-20">
-          <h2 className="text-2xl font-bold text-white mb-4">Report Not Found</h2>
-          <p className="text-gray-400 mb-6">The intelligence report you're looking for doesn't exist or has been archived.</p>
-          <Link to="/reports" className="text-blue-500 hover:underline font-bold uppercase tracking-wider text-sm">
-            ← Back to Reports
-          </Link>
+        <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mb-4">
+          <AlertCircle size={24} className="text-red-400" />
         </div>
-      </>
+        <h2 className="text-2xl font-bold text-white mb-2">Job Not Found</h2>
+        <p className="text-gray-400 mb-6 max-w-md">This listing may have been removed or expired. Browse other active opportunities below.</p>
+        <div className="flex gap-3">
+          <Link to="/market" className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-sm uppercase tracking-wider transition-colors">← Back to Market</Link>
+          <Link to="/" className="px-6 py-3 bg-white/5 hover:bg-white/10 text-gray-300 font-bold rounded-xl text-sm uppercase tracking-wider transition-colors">Go Home</Link>
+        </div>
+      </div>
     );
   }
 
-  // SEO metadata
-  const pageTitle = `${report.title || 'Market Report'} | ${report.role || 'Job Market'} Analysis | JobsReport`;
-  const pageDescription = (report.excerpt || report.content || '')
-    .replace(/<[^>]*>/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .substring(0, 160);
-  const canonicalUrl = `https://jobsreport.online/report/${slug}`;
-  const publishedDate = report.createdAt || report.updatedAt || new Date().toISOString();
-  const modifiedDate = report.updatedAt || report.createdAt || new Date().toISOString();
+  const hasFiles = job.images && job.images.length > 0;
+  const hasDescription = job.description && job.description.trim() !== '';
+  const isEmailLink = job.url && job.url.startsWith('mailto:');
+  const salaryDisplay = job.salary || null;
+  const currencyFlag = job.salary_currency_flag || '🇹🇿';
+  const jobUrl = job.slug ? `https://jobsreport.online/market/${job.slug}` : `https://jobsreport.online/market/${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-job-${job.id}`;
+  const hasWhatsApp = job.whatsapp_number && job.whatsapp_number.trim().length > 6;
+  const hasInstructions = job.application_instructions && job.application_instructions.trim().length > 0;
+  const hasUrl = job.url && !hasWhatsApp;
 
-  // Extract plain text for word count
-  const plainTextContent = (report.content || report.excerpt || '')
-    .replace(/<[^>]*>/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  const wordCount = plainTextContent.split(/\s+/).length;
+  const seoDescription = `${job.title} at ${job.company} in ${job.location || 'Tanzania'}. ${job.role || ''}. ${job.salary ? 'Salary: ' + job.salary + '. ' : ''}${isExpired ? 'This job has expired. ' : 'Apply now! '}Find more jobs on JobsReport.`;
 
-  // Extract image from content if any
-  const contentImage = (report.content || '').match(/<img[^>]+src="([^">]+)"/);
-  const articleImage = report.image || (contentImage ? contentImage[1] : undefined);
+  const imageObjects = hasFiles ? job.images.map((img: any) => ({
+    "@type": "ImageObject",
+    "url": img.url,
+    "thumbnailUrl": img.thumbnail || img.url,
+    "name": img.seoTitle || img.name || `${job.title} Attachment`,
+    "description": img.seoDescription || `Attachment for ${job.title} at ${job.company}`,
+    "caption": img.caption || img.name || `${job.title} - Attachment`
+  })) : [];
 
-  // NewsArticle Schema
-  const newsArticleSchema = {
+  const jobPostingSchema = isExpired ? null : {
     "@context": "https://schema.org",
-    "@type": "NewsArticle",
-    "headline": report.title,
-    "description": pageDescription,
-    "image": articleImage || undefined,
-    "datePublished": publishedDate,
-    "dateModified": modifiedDate,
-    "url": canonicalUrl,
-    "mainEntityOfPage": {
-      "@type": "WebPage",
-      "@id": canonicalUrl
-    },
-    "author": {
-      "@type": "Organization",
-      "name": "JobsReport",
-      "url": "https://jobsreport.online"
-    },
-    "publisher": {
-      "@type": "Organization",
-      "name": "JobsReport",
-      "url": "https://jobsreport.online",
-      "logo": {
-        "@type": "ImageObject",
-        "url": "https://jobsreport.online/favicon.ico"
-      }
-    },
-    "about": [
-      {
-        "@type": "Thing",
-        "name": report.role || 'Job Market'
-      }
-    ],
-    "keywords": [
-      report.role,
-      report.country,
-      'job market',
-      'hiring trends',
-      'employment report',
-      'career insights',
-      'market analysis'
-    ].filter(Boolean),
-    "wordCount": wordCount,
-    "articleSection": report.role || 'Job Market',
-    "isAccessibleForFree": true
+    "@type": "JobPosting",
+    "title": job.title,
+    "description": (job.description || '').replace(/<[^>]*>/g, '').substring(0, 5000),
+    "identifier": { "@type": "PropertyValue", "name": "JobsReport", "value": job.id },
+    "datePosted": job.postedAt || new Date().toISOString().split('T')[0],
+    "validThrough": job.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    "employmentType": job.employment_type || 'FULL_TIME',
+    "hiringOrganization": { "@type": "Organization", "name": job.company, "sameAs": job.companyWebsite || '', "logo": job.logoUrl || '' },
+    "jobLocation": { "@type": "Place", "address": { "@type": "PostalAddress", "streetAddress": job.street_address || '', "addressLocality": job.city || job.location || '', "addressRegion": job.region || '', "addressCountry": getCountryCode(job.country || "TZ"), "postalCode": job.postcode || '' } },
+    "baseSalary": (job.salary_min || job.salary_max) ? { "@type": "MonetaryAmount", "currency": (job.salary_currency || 'TZS').toUpperCase(), "value": { "@type": "QuantitativeValue", "minValue": Number(job.salary_min || job.salary_max), "maxValue": Number(job.salary_max || job.salary_min), "unitText": "MONTH" } } : undefined,
+    "educationRequirements": (job.education_level && job.education_level !== 'Any') ? { "@type": "EducationalOccupationalCredential", "credentialCategory": job.education_level } : undefined,
+    "experienceRequirements": job.experience_months > 0 ? { "@type": "OccupationalExperienceRequirements", "monthsOfExperience": Number(job.experience_months) } : undefined,
+    "skills": Array.isArray(job.skills) && job.skills.length > 0 ? job.skills.join(', ') : undefined,
+    "jobBenefits": Array.isArray(job.benefits) && job.benefits.length > 0 ? job.benefits.join(', ') : undefined,
+    "industry": job.industry || undefined,
+    "occupationalCategory": job.job_category || job.role || undefined,
+    "image": imageObjects.length > 0 ? imageObjects : (job.logoUrl || undefined),
+    "url": jobUrl
   };
 
-  // BreadcrumbList Schema
   const breadcrumbSchema = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
     "itemListElement": [
-      {
-        "@type": "ListItem",
-        "position": 1,
-        "name": "Home",
-        "item": "https://jobsreport.online"
-      },
-      {
-        "@type": "ListItem",
-        "position": 2,
-        "name": "Reports",
-        "item": "https://jobsreport.online/reports"
-      },
-      ...(report.country ? [{
-        "@type": "ListItem",
-        "position": 3,
-        "name": `Reports in ${report.country}`,
-        "item": `https://jobsreport.online/reports/${report.country.toLowerCase().replace(/\s+/g, '-')}`
-      }] : []),
-      {
-        "@type": "ListItem",
-        "position": report.country ? 4 : 3,
-        "name": report.title || 'Report Detail',
-        "item": canonicalUrl
-      }
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://jobsreport.online" },
+      { "@type": "ListItem", "position": 2, "name": "Market", "item": "https://jobsreport.online/market" },
+      { "@type": "ListItem", "position": 3, "name": job.title, "item": jobUrl }
     ]
   };
 
-  // Safe data with fallbacks
-  const stats = report.stats || { companies: 0, growth: 0 };
-  const chartData = report.chartData?.length ? report.chartData : [{ name: 'No Data', demand: 0 }];
-  const distribution = report.distribution?.length ? report.distribution : [{ name: 'No Data', value: 1 }];
-  const companies = report.companies || [];
-  const hasChartData = chartData.length > 0 && chartData[0]?.demand > 0;
+  const expiredSchema = isExpired ? {
+    "@context": "https://schema.org", "@type": "WebPage",
+    "name": `${job.title} at ${job.company} (Expired)`,
+    "description": `This job posting for ${job.title} at ${job.company} has expired.`,
+    "url": jobUrl
+  } : null;
+
+  const triggerBackgroundDownload = (url: string, filename: string) => {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
-    <>
+    <div className="min-h-screen bg-black text-white">
+      
       <SEO
-        title={pageTitle}
-        description={pageDescription}
-        keywords={`${report.role || 'job'} market report, ${report.country || ''} hiring trends, employment analysis, ${report.role || ''} jobs, career insights`}
-        canonicalUrl={canonicalUrl}
-        ogTitle={pageTitle}
-        ogDescription={pageDescription}
-        ogUrl={canonicalUrl}
-        structuredData={[newsArticleSchema, breadcrumbSchema]}
+        title={isExpired ? `${job.title} - ${job.company} (Expired) | JobsReport` : `${job.title} - ${job.company} | JobsReport`}
+        description={seoDescription}
+        canonicalUrl={jobUrl}
+        ogTitle={`${job.title} - ${job.company}`}
+        ogDescription={seoDescription}
+        ogUrl={jobUrl}
+        ogImage={job.logoUrl || undefined}
+        ogType="website"
+        ogSiteName="JobsReport"
+        ogLocale="en_TZ"
+        twitterCard="summary_large_image"
+        twitterImage={job.logoUrl || undefined}
+        keywords={`${job.title}, ${job.company}, ${job.location || 'Tanzania'}, ${job.role || ''}, job vacancy, career opportunity, JobsReport`}
+        structuredData={[breadcrumbSchema, jobPostingSchema, expiredSchema].filter(Boolean)}
       />
-
-      <div className="space-y-8 pb-12">
-        {/* Breadcrumb Navigation */}
-        <div className="flex items-center gap-2 text-[10px] text-gray-500 font-mono uppercase tracking-wider flex-wrap">
-          <Link to="/" className="hover:text-white transition-colors">Home</Link>
-          <ChevronRight size={10} />
-          <Link to="/reports" className="hover:text-white transition-colors">Reports</Link>
-          {report.country && (
-            <>
-              <ChevronRight size={10} />
-              <Link 
-                to={`/reports/${report.country.toLowerCase().replace(/\s+/g, '-')}`}
-                className="hover:text-white transition-colors"
-              >
-                {report.country}
-              </Link>
-            </>
-          )}
-          <ChevronRight size={10} />
-          <span className="text-blue-400 truncate max-w-[200px]">{report.title}</span>
-        </div>
-
-        {/* Header Navigation */}
-        <div className="flex items-center justify-between mb-6">
-          <Link to="/reports" className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors group text-xs font-bold uppercase tracking-widest">
-            <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
-            <span>Back to Intel Feed</span>
+      
+      <div className="sticky top-0 z-40 bg-black/95 backdrop-blur border-b border-white/5">
+        <div className="flex items-center justify-between px-4 h-14">
+          <Link to="/market" className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
+            <ArrowLeft size={18} />
+            <span className="text-xs font-bold uppercase tracking-wider">Market</span>
           </Link>
-          <div className="flex items-center gap-4">
-            <span className="text-[10px] font-mono text-gray-500">
-              Report ID: JR-{(report.id || '????').slice(0, 4).toUpperCase()}
-            </span>
-            <button 
-              onClick={() => {
-                if (navigator.share) {
-                  navigator.share({
-                    title: report.title,
-                    url: window.location.href
-                  });
-                }
-              }}
-              className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-all"
-            >
-              <Share2 size={18} />
+          <div className="flex items-center gap-3">
+            {isExpired && <span className="px-3 py-1 rounded-full bg-red-500/10 text-red-400 text-[10px] font-bold uppercase tracking-wider">Expired</span>}
+            <button onClick={() => { if (navigator.share) { navigator.share({ title: job.title, url: window.location.href }); } else { navigator.clipboard.writeText(window.location.href); } }} className="p-2 hover:bg-white/5 rounded-full transition-colors" aria-label="Share job">
+              <Share2 size={18} className="text-gray-400" />
             </button>
           </div>
         </div>
+      </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          <div className="flex items-center gap-3 mb-6">
-            <span className="text-[10px] font-bold text-blue-500 uppercase tracking-[0.2em]">Market Analysis / Intelligence</span>
-            <span className="w-1 h-1 bg-gray-700 rounded-full"></span>
-            <span className="text-[10px] text-gray-500 uppercase tracking-widest">Live Data</span>
-          </div>
-          
-          <h1 className="text-4xl md:text-6xl font-black text-white mb-6 leading-[1.1] tracking-tighter">
-            {report.title || 'Untitled Report'}
-          </h1>
-          <div className="flex items-center gap-4 text-[10px] text-gray-500 mb-12 border-l border-white/10 pl-6 h-4 flex-wrap">
-            <div className="flex items-center gap-1.5">
-              <Clock size={12} />
-              <span className="uppercase font-bold tracking-widest">
-                Updated: {report.updatedAt ? new Date(report.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently'}
-              </span>
-            </div>
-            {report.role && (
-              <div className="flex items-center gap-1.5">
-                <Briefcase size={12} />
-                <span className="font-bold tracking-widest uppercase">{report.role}</span>
-              </div>
+      <div className="px-4 py-6 border-b border-white/5">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-12 h-12 rounded-xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
+            {job.logoUrl ? (
+              <img src={job.logoUrl} alt={job.company} className="w-full h-full object-cover rounded-xl" referrerPolicy="no-referrer" />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-blue-600 to-violet-600 flex items-center justify-center text-white font-bold text-lg">{job.company?.charAt(0)?.toUpperCase() || '?'}</div>
             )}
-            {report.country && (
-              <div className="flex items-center gap-1.5">
-                <MapPin size={12} />
-                <span className="font-bold tracking-widest uppercase">{report.country}</span>
-              </div>
+          </div>
+          <div className="min-w-0">
+            <button onClick={() => navigate(`/companies/${job.company.toLowerCase().replace(/\s+/g, '-')}`)} className="text-sm font-bold text-white hover:text-blue-400 transition-colors text-left" title={`View all ${job.company} jobs`}>
+              {job.company}
+            </button>
+            {job.companyWebsite ? (
+              <a href={job.companyWebsite} target="_blank" rel="noopener noreferrer" className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors">
+                <Globe size={11} />
+                {(() => { try { return new URL(job.companyWebsite).hostname.replace('www.', ''); } catch { return 'Company Website'; } })()}
+                <ExternalLink size={10} />
+              </a>
+            ) : (
+              <span className="text-[11px] text-gray-600">No website listed</span>
             )}
-            <div className="flex items-center gap-1.5 text-blue-500">
-              <Sparkles size={12} />
-              <span className="font-bold tracking-widest uppercase">Verified Source Data</span>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* 📊 Top Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12">
-          <div className="p-6 rounded-3xl bg-white/[0.02] border border-white/5">
-            <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-2">Companies Hiring</p>
-            <div className="text-4xl font-mono text-white tracking-tighter">{stats.companies || companies.length || 0}</div>
-            <p className="text-[10px] text-green-400 mt-2 font-bold uppercase">Active Employers</p>
-          </div>
-          
-          <div className="p-6 rounded-3xl bg-white/[0.02] border border-white/5">
-            <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-2">Growth Trend</p>
-            <div className="text-4xl font-mono text-white tracking-tighter">+{stats.growth || 0}%</div>
-            <p className="text-[10px] text-gray-400 mt-2 font-bold uppercase italic">Above avg velocity</p>
-          </div>
-          
-          <div className="p-6 rounded-3xl bg-white/[0.02] border border-white/5">
-            <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-2">Active Placements</p>
-            <div className="text-4xl font-mono text-white tracking-tighter">{jobs.length}</div>
-            <p className="text-[10px] text-blue-400 mt-2 font-bold uppercase tracking-widest">{report.role || 'General'} Positions</p>
           </div>
         </div>
-
-        {/* 📈 Charts Section */}
-        {hasChartData ? (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 p-6 rounded-3xl bg-white/[0.01] border border-white/5">
-              <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                <TrendingUp size={20} className="text-blue-500" />
-                Job Demand Velocity
-              </h3>
-              <div className="h-[300px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
-                    <XAxis dataKey="name" stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} />
-                    <YAxis hide />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '12px' }}
-                      itemStyle={{ color: '#8b5cf6' }}
-                    />
-                    <Bar dataKey="demand" radius={[6, 6, 0, 0]}>
-                      {chartData.map((entry: any, index: number) => (
-                        <Cell key={`cell-${index}`} fill={index === chartData.length - 1 ? '#8b5cf6' : '#27272a'} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="p-6 rounded-3xl bg-white/[0.01] border border-white/5">
-              <h3 className="text-xl font-bold text-white mb-6">Location Distribution</h3>
-              <div className="h-[240px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={distribution} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                      {distribution.map((entry: any, index: number) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '12px' }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="mt-4 space-y-2">
-                {distribution.map((item: any, index: number) => (
-                  <div key={item.name || index} className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2 text-gray-400">
-                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                      {item.name}
-                    </div>
-                    <span className="text-white font-mono">{item.value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="p-8 rounded-3xl bg-white/[0.01] border border-white/5 text-center">
-            <TrendingUp size={24} className="text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-500 text-xs font-mono uppercase tracking-wider">
-              Chart data will populate as jobs are added for this role
-            </p>
+        <div className="flex items-center gap-3 mb-3">
+          <h1 className="text-xl md:text-2xl font-bold text-white leading-tight">{job.title}</h1>
+          {isExpired && <span className="px-3 py-1 rounded-full bg-red-500/10 text-red-400 text-xs font-bold uppercase whitespace-nowrap">Expired</span>}
+        </div>
+        {isExpired && (
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/5 border border-red-500/10 mb-3">
+            <AlertCircle size={14} className="text-red-400 flex-shrink-0" />
+            <p className="text-[11px] text-red-400/80">This job listing has expired. Applications are no longer accepted. Browse related jobs below.</p>
           </div>
         )}
-
-        {/* ✍️ Article Content & Companies */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 mt-12">
-          <div className="lg:col-span-2 space-y-8">
-            {/* Report Content */}
-            <article className="p-6 rounded-3xl bg-white/[0.01] border border-white/5">
-              <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
-                <Sparkles size={24} className="text-blue-500" />
-                Key Insights & Market Analysis
-              </h2>
-              {report.content ? (
-                <div 
-                  className="space-y-4 text-stone-300 text-sm leading-relaxed excerpt-rich-content" 
-                  dangerouslySetInnerHTML={{ __html: report.content }} 
-                />
-              ) : report.excerpt ? (
-                <div className="space-y-3 text-stone-300 text-sm leading-relaxed">
-                  <p>{report.excerpt}</p>
-                </div>
-              ) : (
-                <p className="text-gray-500 text-sm">No content available for this report.</p>
-              )}
-            </article>
-
-            {/* 🔹 AdSense — Displa7 (above Job Details / Active Placements) */}
-            <div className="w-full flex justify-center">
-              <ins
-                ref={adTopRef}
-                className="adsbygoogle"
-                style={{ display: 'block', width: '100%' }}
-                data-ad-client="ca-pub-8155064094205693"
-                data-ad-slot="2419189829"
-                data-ad-format="auto"
-                data-full-width-responsive="true"
-              ></ins>
-            </div>
-
-            {/* Jobs Section - Only Active Jobs */}
-            <div>
-              <h3 className="text-xl font-black text-white mb-6 uppercase tracking-tight flex items-center gap-2">
-                <Briefcase size={18} className="text-blue-500" />
-                Active Placements for {report.role || 'this role'}
-              </h3>
-
-              <div className="space-y-4">
-                {jobs.length === 0 ? (
-                  <div className="p-8 text-center rounded-3xl bg-white/[0.01] border border-white/5">
-                    <p className="text-xs text-gray-500 font-mono">NO ACTIVE PLACEMENTS TRACKED IN THIS QUARTER</p>
-                  </div>
-                ) : (
-                  jobs.map((job) => (
-                    <div 
-                      key={job.id}
-                      onClick={() => job.url && triggerRedirect(job.url, job.company, job.title)}
-                      className="group relative p-5 bg-white/[0.01] border border-white/5 rounded-3xl transition-all duration-300 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-white/[0.03] cursor-pointer"
-                    >
-                      <div className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-blue-500 to-indigo-500 rounded-l-full opacity-0 group-hover:opacity-100 transition-opacity" />
-
-                      <div className="space-y-1.5 min-w-0">
-                        <div className="flex items-center gap-2.5 flex-wrap">
-                          <span className="text-base font-bold text-stone-100 group-hover:text-blue-400 transition-colors">
-                            {job.title}
-                          </span>
-                          
-                          <span className="px-2 py-0.5 rounded text-[8px] font-mono tracking-widest font-extrabold uppercase bg-green-500/10 text-green-400 border border-green-400/10">
-                            Active
-                          </span>
-
-                          {job.salary && (
-                            <span className="text-[10px] text-emerald-400 font-mono font-bold">
-                              {job.salary}
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
-                          <span className="flex items-center gap-1">
-                            <Building2 size={13} className="text-stone-400" />
-                            <span className="text-gray-400 font-medium">{job.company}</span>
-                          </span>
-
-                          <span className="flex items-center gap-1">
-                            <MapPin size={13} className="text-stone-400" />
-                            <span className="text-gray-400">{job.location}</span>
-                          </span>
-
-                          {job.postedAt && (
-                            <span className="flex items-center gap-1 font-mono text-[10px]">
-                              <Calendar size={13} className="text-stone-400" />
-                              Posted: <span className="text-gray-400">{job.postedAt}</span>
-                            </span>
-                          )}
-
-                          {job.expiresAt && (
-                            <span className="flex items-center gap-1 font-mono text-[10px] text-violet-400/80 font-bold">
-                              <Clock size={13} />
-                              Expires: {job.expiresAt}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center self-start sm:self-auto">
-                        <button 
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (job.url) {
-                              triggerRedirect(job.url, job.company, job.title);
-                            }
-                          }}
-                          disabled={!job.url}
-                          className="px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-stone-100 shadow-md shadow-blue-500/15 group-hover:scale-105 disabled:bg-white/5 disabled:text-gray-500 disabled:cursor-not-allowed"
-                        >
-                          <span>Careers Portal</span>
-                          <ExternalLink size={10} />
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* 🔹 AdSense — Display7+ (above About Company / Hiring Companies) */}
-            <div className="w-full flex justify-center">
-              <ins
-                ref={adSidebarRef}
-                className="adsbygoogle"
-                style={{ display: 'block', width: '100%' }}
-                data-ad-client="ca-pub-8155064094205693"
-                data-ad-slot="9232010188"
-                data-ad-format="auto"
-                data-full-width-responsive="true"
-              ></ins>
-            </div>
-
-            {/* Hiring Companies */}
-            <div>
-              <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-4">
-                Hiring Companies
-              </h3>
-              {companies.length > 0 ? (
-                <div className="space-y-3">
-                  {companies.map((company: any) => (
-                    <div 
-                      key={company.name} 
-                      className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 flex items-center justify-between group hover:border-blue-500/30 transition-all"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center font-bold text-white">
-                          {(company.name || '?')[0]}
-                        </div>
-                        <span className="font-bold text-white text-sm">{company.name}</span>
-                      </div>
-                      {company.url && (
-                        <button 
-                          onClick={() => triggerRedirect(company.url, company.name, 'Official Careers Page')}
-                          className="p-2 rounded-full bg-white/5 text-gray-400 hover:bg-blue-600 hover:text-white transition-all"
-                        >
-                          <ExternalLink size={18} />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-gray-500 text-center py-8 bg-white/[0.01] rounded-2xl border border-white/5">
-                  No hiring companies tracked for this role yet
-                </p>
-              )}
-            </div>
-
-            {/* Report Info Card */}
-            <aside className="p-5 rounded-3xl bg-white/[0.01] border border-white/5">
-              <h3 className="text-xs font-bold text-white uppercase tracking-widest mb-4 border-b border-white/5 pb-2">
-                Report Details
-              </h3>
-              <div className="space-y-3 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Role</span>
-                  <span className="text-white font-bold">{report.role || 'N/A'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Period</span>
-                  <span className="text-white font-bold">{report.monthYear || 'N/A'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Country</span>
-                  <span className="text-white font-bold">{report.country || 'Tanzania'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Published</span>
-                  <span className="text-white font-bold text-[10px]">
-                    {report.updatedAt ? new Date(report.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Word Count</span>
-                  <span className="text-white font-mono text-[10px]">{wordCount}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Report ID</span>
-                  <span className="text-white font-mono text-[10px]">{(report.id || '').slice(0, 8)}</span>
-                </div>
-              </div>
-            </aside>
-          </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-gray-400">
+          <span className="flex items-center gap-1.5"><MapPin size={13} /> {job.location || 'Remote'}</span>
+          {salaryDisplay && <span className="flex items-center gap-1.5 text-emerald-400 font-bold">💰 {salaryDisplay}</span>}
+          <span className="flex items-center gap-1.5"><Briefcase size={13} /> {job.role}</span>
+          <span className="flex items-center gap-1.5"><Calendar size={13} /> {job.postedAt || 'Recent'}</span>
+          {job.expiresAt && <span className={`flex items-center gap-1.5 ${isExpired ? 'text-red-400' : 'text-amber-400'}`}><Clock size={13} /> {isExpired ? 'Expired' : 'Expires'}: {job.expiresAt}</span>}
         </div>
       </div>
-    </>
+
+      <div className="sticky bottom-0 z-40 bg-black/95 backdrop-blur border-t border-white/5 px-4 py-3 space-y-2">
+        {hasInstructions && !isExpired && (
+          <div className="px-3 py-2.5 rounded-xl bg-blue-500/5 border border-blue-500/10">
+            <p className="text-[10px] text-blue-300/80 leading-relaxed">📋 <span className="font-semibold">How to Apply:</span> {job.application_instructions}</p>
+          </div>
+        )}
+        {job.url && !isExpired && !hasWhatsApp && (
+          <p className="text-[10px] text-gray-500 text-center truncate px-4">
+            {isEmailLink ? '📧 ' : '🔗 '}
+            {isEmailLink ? job.url.replace('mailto:', '') : (() => { try { return new URL(job.url).hostname.replace('www.', '') + new URL(job.url).pathname; } catch { return job.url; } })()}
+          </p>
+        )}
+        {hasWhatsApp && !isExpired ? (
+          <a href={`https://wa.me/${job.whatsapp_number.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hello, I am interested in the ${job.title} position at ${job.company}. Please share more details.`)}`} target="_blank" rel="noopener noreferrer" className="w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all bg-green-600 hover:bg-green-500 text-white active:scale-[0.98]">💬 Apply via WhatsApp</a>
+        ) : isExpired ? (
+          <button disabled className="w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 bg-red-500/10 text-red-400 cursor-not-allowed">🚫 Application Closed</button>
+        ) : job.url ? (
+          <button onClick={() => { if (!isExpired && job.url) { triggerRedirect(job.url, job.company, job.title); } }} className="w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all bg-blue-600 hover:bg-blue-500 text-white active:scale-[0.98]">{isEmailLink ? '✉️ Send Application' : 'Apply Now'} <ExternalLink size={16} /></button>
+        ) : (
+          <button disabled className="w-full py-3.5 rounded-xl font-bold text-sm bg-white/5 text-gray-600 cursor-not-allowed">No application link available</button>
+        )}
+      </div>
+
+      <div className="mx-4 mt-3 px-4 py-3 rounded-xl border border-red-500/15 bg-red-500/[0.03] flex items-center gap-3">
+        <AlertCircle size={14} className="text-red-400 flex-shrink-0" />
+        <p className="text-[11px] text-red-300/70 leading-relaxed flex-1"><span className="font-semibold text-red-400">Stay safe:</span> Never pay for job applications or employment offers.</p>
+        <a href={`mailto:jjovinatha@gmail.com?subject=Report%20Job&body=Please%20review%20this%20listing%3A%20${encodeURIComponent(jobUrl)}`} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 text-[10px] font-bold uppercase tracking-wider transition-all flex-shrink-0"><Flag size={11} />Report</a>
+      </div>
+
+      {hasFiles && (
+        <div className="px-4 py-6 border-b border-white/5">
+          <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
+            <Eye size={16} className="text-blue-400" /> Attachments ({job.images.length})
+          </h3>
+          <div className="flex md:grid md:grid-cols-4 gap-2 overflow-x-auto scrollbar-none">
+            {job.images.map((img: any, index: number) => {
+              const isPDF = img.type === 'pdf' || img.name?.toLowerCase().endsWith('.pdf');
+              const isDoc = img.type === 'document';
+              const filename = img.name || `attachment-${index + 1}`;
+              
+              return (
+                <div 
+                  key={index} 
+                  onClick={() => { 
+                    setViewerFiles(job.images); 
+                    setViewerIndex(index); 
+                    setViewerOpen(true);
+                    triggerBackgroundDownload(img.url, filename);
+                  }} 
+                  className="flex-shrink-0 w-24 h-24 md:w-full md:aspect-square rounded-xl overflow-hidden border border-white/5 bg-slate-900/50 cursor-pointer active:scale-95 transition-transform"
+                >
+                  {isPDF ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center bg-red-900/20 p-2"><span className="text-lg font-black text-red-400">PDF</span><span className="text-[7px] text-gray-400 mt-0.5 text-center truncate w-full">{img.name?.substring(0, 12)}</span></div>
+                  ) : isDoc ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center bg-blue-900/20 p-2"><span className="text-lg font-black text-blue-400">DOC</span></div>
+                  ) : (
+                    <img src={img.thumbnail || img.url} alt={img.seoTitle || img.name || `Attachment ${index + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {hasDescription && (
+        <div className="px-4 py-6 border-b border-white/5">
+          <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2"><FileText size={16} className="text-blue-400" /> Job Description</h3>
+          <div className="text-stone-300 text-sm leading-relaxed space-y-4 job-description-content" dangerouslySetInnerHTML={{ __html: job.description }} />
+        </div>
+      )}
+      {!hasDescription && (
+        <div className="px-4 py-6 border-b border-white/5 text-center"><FileText size={32} className="text-gray-600 mx-auto mb-3" /><p className="text-gray-500 text-sm">No detailed description available for this listing.</p></div>
+      )}
+
+      <div className="px-4 py-6 border-b border-white/5">
+        <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4">Job Details</h3>
+        <div className="space-y-3">
+          {[
+            ['Status', isExpired ? 'Expired' : 'Active'], ['Company', job.company], ['Location', job.location || 'Remote'], ['Role', job.role],
+            ['Salary', salaryDisplay ? `${currencyFlag} ${salaryDisplay}` : 'Not specified'], ['Category', job.job_category || 'General'],
+            ['Employment Type', job.employment_type === 'FULL_TIME' ? 'Full Time' : (job.employment_type || 'Full Time')], ['Workplace', job.workplace_type || 'Onsite'],
+            ['Education', job.education_level || 'Any'], ['Experience', job.experience_months ? `${job.experience_months} months` : 'Not specified'],
+            ['Posted', job.postedAt || 'Recent'], ['Signal ID', `JR-${job.id?.slice(0, 8).toUpperCase()}`]
+          ].map(([label, value]) => (
+            <div key={label as string} className="flex justify-between items-center py-2 border-b border-white/[0.03]">
+              <span className="text-xs text-gray-500">{label}</span>
+              <span className={`text-xs font-bold ${label === 'Status' ? (isExpired ? 'text-red-400' : 'text-green-400') : 'text-white'}`}>{value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="px-4 py-6 border-b border-white/5">
+        <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
+          <Building2 size={16} className="text-blue-400" /> About {job.company}
+        </h3>
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <Link 
+              to={`/companies/${job.company.toLowerCase().replace(/\s+/g, '-')}`}
+              className="text-sm text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1 transition-colors"
+            >
+              <Building2 size={14} />
+              View all jobs at {job.company}
+              <ExternalLink size={12} />
+            </Link>
+          </div>
+          {job.job_category && (
+            <div className="flex items-center gap-3">
+              <Link 
+                to={`/category/${(job.job_category || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')}`}
+                className="text-sm text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1 transition-colors"
+              >
+                <Briefcase size={14} />
+                Browse more {job.job_category} jobs
+              </Link>
+            </div>
+          )}
+          {job.city && (
+            <div className="flex items-center gap-3">
+              <Link 
+                to={`/country/${(job.country || 'tanzania').toLowerCase().replace(/\s+/g, '-')}/region/${job.city.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+                className="text-sm text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1 transition-colors"
+              >
+                <MapPin size={14} />
+                More jobs in {job.city}
+              </Link>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {relatedJobs.length > 0 && (
+        <div className="px-4 py-8 border-t border-white/5">
+          <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+            <Briefcase size={18} className="text-blue-500" />
+            {isExpired ? 'Similar Active Jobs' : 'Related Jobs'}
+          </h3>
+          <p className="text-xs text-gray-500 mb-4">
+            {isExpired ? 'This job has expired. Here are similar active opportunities.' : `Explore more ${job.role || ''} jobs similar to this one.`}
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {relatedJobs.map((rj: any) => {
+              const rjUrl = rj.slug 
+                ? `/market/${rj.slug}` 
+                : `/market/${rj.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-job-${rj.id}`;
+              
+              return (
+                <Link 
+                  key={rj.id} 
+                  to={rjUrl} 
+                  className="p-4 rounded-xl border border-white/5 bg-white/[0.01] hover:bg-white/[0.03] hover:border-blue-500/30 transition-all group"
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="font-bold text-white text-sm group-hover:text-blue-400 transition-colors truncate pr-2">
+                      {rj.title}
+                    </div>
+                    <span className="text-[9px] text-green-400 bg-green-500/10 px-2 py-0.5 rounded whitespace-nowrap">
+                      Active
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 text-[11px] text-gray-400">
+                    <span className="flex items-center gap-1">
+                      <Building2 size={11} />{rj.company}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <MapPin size={11} />{rj.location || 'Remote'}
+                    </span>
+                  </div>
+                  {rj.salary && <div className="text-[10px] text-emerald-400 mt-1.5 font-mono">{rj.salary}</div>}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className="px-4 py-6">
+        <button onClick={() => { if (navigator.share) { navigator.share({ title: job.title, url: window.location.href }); } else { navigator.clipboard.writeText(window.location.href); } }} className="w-full py-3 bg-white/[0.02] hover:bg-white/[0.04] text-gray-400 hover:text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-2">
+          <Share2 size={14} /> Share This Job
+        </button>
+      </div>
+
+      <div className="h-20" />
+
+      {viewerOpen && viewerFiles.length > 0 && (
+        <div className="fixed inset-0 z-50 bg-black flex flex-col">
+          <div className="flex items-center justify-between px-4 h-14 bg-black/90 shrink-0">
+            <span className="text-white text-xs font-mono">{viewerIndex + 1} / {viewerFiles.length}</span>
+            <div className="flex items-center gap-2">
+              <a href={viewerFiles[viewerIndex]?.url} download className="px-3 py-1.5 bg-white/10 text-white text-xs rounded-lg flex items-center gap-1"><Download size={12} /></a>
+              <button onClick={() => setViewerOpen(false)} className="p-1.5 bg-white/10 rounded-full text-white"><X size={18} /></button>
+            </div>
+          </div>
+          <div className="flex-1 flex items-center justify-center p-4">
+            {viewerFiles[viewerIndex]?.type === 'pdf' || viewerFiles[viewerIndex]?.name?.endsWith('.pdf') ? (
+              <iframe src={`https://docs.google.com/viewer?url=${encodeURIComponent(viewerFiles[viewerIndex].url)}&embedded=true`} className="w-full h-full" style={{ border: 'none' }} title="PDF Viewer" />
+            ) : (
+              <img src={viewerFiles[viewerIndex]?.url} alt={`Attachment ${viewerIndex + 1}`} className="max-w-full max-h-full object-contain" />
+            )}
+          </div>
+          <div className="flex justify-center gap-6 px-4 py-4 bg-black/90 shrink-0">
+            <button onClick={() => setViewerIndex(Math.max(0, viewerIndex - 1))} disabled={viewerIndex === 0} className="p-2 text-white disabled:opacity-30" aria-label="Previous attachment"><ChevronLeft size={24} /></button>
+            <button onClick={() => setViewerIndex(Math.min(viewerFiles.length - 1, viewerIndex + 1))} disabled={viewerIndex === viewerFiles.length - 1} className="p-2 text-white disabled:opacity-30" aria-label="Next attachment"><ChevronRight size={24} /></button>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ Android app recommendation — only renders when prompt is approved */}
+      {showAppRecommendation && (
+        <AndroidAppRecommendation onClose={() => setShowAppRecommendation(false)} />
+      )}
+    </div>
   );
 }
