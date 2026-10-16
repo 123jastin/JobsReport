@@ -1,12 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { Sparkles, TrendingUp, RefreshCw, ArrowRight, Zap, BarChart3, Building2, Globe, Clock, MapPin, Briefcase, ChevronRight, Search, Code, Calculator, Palette, Headphones, Users, Shield, Truck, Stethoscope, BookOpen, Scale, Leaf, Settings, Utensils, ChevronDown, ChevronLeft, FileText, MessageCircle, Flag } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Sparkles, TrendingUp, RefreshCw, ArrowRight, Zap, BarChart3, Building2, Globe, Clock, MapPin, Briefcase, ChevronRight, Search, Code, Calculator, Palette, Headphones, Users, Shield, Truck, Stethoscope, BookOpen, Scale, Leaf, Settings, Utensils, ChevronDown, ChevronLeft, FileText, MessageCircle, Flag, Plus } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import SEO from '../components/SEO';
 import TrendingCard from '../components/TrendingCard';
 import ReportCard from '../components/ReportCard';
 import { useCountry } from '../context/CountryContext';
+import { useAuth } from '../context/AuthContext';
 import { getIconForRole } from '../lib/roleIcons';
+import {
+  StoryViewer,
+  CreateStoryModal,
+  type StoryType,
+  type StoryUser,
+  type CreateStoryPayload,
+} from './Story';
 
 const ICON_COMPONENTS: Record<string, any> = {
   'code': Code, 'bar-chart': BarChart3, 'calculator': Calculator, 'palette': Palette,
@@ -14,6 +22,160 @@ const ICON_COMPONENTS: Record<string, any> = {
   'stethoscope': Stethoscope, 'trending-up': TrendingUp, 'briefcase': Briefcase,
   'book-open': BookOpen, 'building': Building2, 'zap': Zap, 'settings': Settings,
   'scale': Scale, 'leaf': Leaf, 'utensils': Utensils,
+};
+
+// ============================================================
+// Instagram-style Story Bar (JobsReport blue → purple)
+// ============================================================
+const DEFAULT_AVATAR = (name: string, id: number) => {
+  const colors = ['1877F2', '45BD62', 'F3425F', 'F7B928', '9360F7'];
+  const c = colors[Math.abs(id) % colors.length];
+  const init = (name || 'U').slice(0, 1).toUpperCase();
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(init)}&background=${c}&color=fff&size=128&bold=true&rounded=true`;
+};
+
+interface InstagramStoryBarProps {
+  stories: StoryType[];
+  currentUser: StoryUser | null;
+  onViewStory: (s: StoryType) => void;
+  onCreateStory: () => void;
+  onRequestLogin: () => void;
+  seenIds: Set<number>;
+}
+
+const InstagramStoryBar: React.FC<InstagramStoryBarProps> = ({
+  stories,
+  currentUser,
+  onViewStory,
+  onCreateStory,
+  onRequestLogin,
+  seenIds,
+}) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Deduplicate by user — keep latest story per user, current user first
+  const perUser = (() => {
+    const sorted = [...stories].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+    const seen = new Set<number>();
+    const out: StoryType[] = [];
+    const meId = Number(currentUser?.id || 0);
+    const mine = sorted.filter((s) => Number(s.user_id) === meId);
+    const others = sorted.filter((s) => Number(s.user_id) !== meId);
+    for (const s of others) {
+      if (seen.has(Number(s.user_id))) continue;
+      seen.add(Number(s.user_id));
+      out.push(s);
+    }
+    return { mine: mine[0], others: out };
+  })();
+
+  const hasStories = perUser.mine || perUser.others.length > 0;
+  if (!hasStories && !currentUser) return null;
+
+  return (
+    <section className="relative">
+      <div
+        ref={scrollRef}
+        className="flex gap-4 overflow-x-auto scrollbar-hide py-1 -mx-1 px-1"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+      >
+        {/* ── Your Story bubble — only for logged-in users ── */}
+        {currentUser && (
+          <button
+            onClick={onCreateStory}
+            className="flex flex-col items-center gap-1.5 shrink-0 group"
+            aria-label="Create your story"
+          >
+            <div className="relative">
+              {/* Avatar circle */}
+              <div className="w-[68px] h-[68px] rounded-full p-[2px] bg-white/5">
+                <div className="w-full h-full rounded-full overflow-hidden border-2 border-[#0B1120]">
+                  <img
+                    src={
+                      currentUser.profile_image_url ||
+                      DEFAULT_AVATAR(currentUser.name || 'User', currentUser.id || 0)
+                    }
+                    alt="You"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              </div>
+              {/* + badge — JobsReport blue→purple */}
+              <div
+                className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full flex items-center justify-center border-[3px] border-[#0B1120]"
+                style={{
+                  background:
+                    'linear-gradient(135deg, #1877F2 0%, #7B4DFF 60%, #A033FF 100%)',
+                }}
+              >
+                <Plus size={12} strokeWidth={3.5} className="text-white" />
+              </div>
+            </div>
+            <span className="text-[11px] font-semibold text-gray-300 max-w-[72px] truncate">
+              Your Story
+            </span>
+          </button>
+        )}
+
+        {/* ── Other users' stories ── */}
+        {perUser.others.map((s) => {
+          const u = s.user || {
+            id: s.user_id,
+            name: 'User',
+            profile_image_url: DEFAULT_AVATAR('User', s.user_id),
+          };
+          const isSeen = seenIds.has(s.id);
+          const thumb = s.media_thumb || s.media_url || '';
+
+          return (
+            <button
+              key={s.id}
+              onClick={() => onViewStory(s)}
+              className="flex flex-col items-center gap-1.5 shrink-0 group"
+              aria-label={`View ${u.name}'s story`}
+            >
+              <div
+                className="w-[68px] h-[68px] rounded-full p-[2.5px] transition-transform group-active:scale-95"
+                style={
+                  isSeen
+                    ? { background: 'rgba(255,255,255,0.18)' }
+                    : {
+                        background:
+                          'linear-gradient(135deg, #1877F2 0%, #7B4DFF 50%, #A033FF 100%)',
+                      }
+                }
+              >
+                <div className="w-full h-full rounded-full overflow-hidden border-[3px] border-[#0B1120] bg-[#0B1120]">
+                  {s.type === 'text' && !thumb ? (
+                    <div
+                      className="w-full h-full flex items-center justify-center text-[8px] font-black text-white px-1 text-center leading-tight"
+                      style={{ background: s.background_style || '#0B1120' }}
+                    >
+                      {(s.text_content || '').slice(0, 12)}
+                    </div>
+                  ) : (
+                    <img
+                      src={u.profile_image_url || DEFAULT_AVATAR(u.name, u.id)}
+                      alt={u.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = DEFAULT_AVATAR(u.name, u.id);
+                      }}
+                    />
+                  )}
+                </div>
+              </div>
+              <span className="text-[11px] font-semibold text-gray-300 max-w-[72px] truncate">
+                {u.name}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
 };
 
 export default function HomePage() {
@@ -28,6 +190,30 @@ export default function HomePage() {
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [categoryPage, setCategoryPage] = useState(1);
   const { selectedCountry, setSelectedCountry, currentFlag, countriesList } = useCountry();
+  const { user: authUser } = useAuth() as any;
+  const navigate = useNavigate();
+
+  // Stories state
+  const [stories, setStories] = useState<StoryType[]>([]);
+  const [seenStoryIds, setSeenStoryIds] = useState<Set<number>>(() => {
+    try {
+      const raw = localStorage.getItem('jobsreport_seen_stories');
+      if (raw) return new Set<number>(JSON.parse(raw));
+    } catch {}
+    return new Set<number>();
+  });
+  const [createOpen, setCreateOpen] = useState(false);
+  const [viewingStory, setViewingStory] = useState<StoryType | null>(null);
+
+  const currentUser: StoryUser | null = authUser
+    ? {
+        id: authUser.id,
+        name: authUser.name || authUser.username || 'User',
+        username: authUser.username,
+        email: authUser.email,
+        profile_image_url: authUser.profile_image_url || authUser.avatar_url,
+      }
+    : null;
 
   const INITIAL_CATEGORIES_COUNT = 4;
   const CATEGORIES_PER_PAGE = 5;
@@ -91,6 +277,84 @@ export default function HomePage() {
     
     fetchDashboardData();
   }, [selectedCountry]);
+
+  // Fetch stories
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetch('/api/stories');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        const list: StoryType[] = Array.isArray(data?.stories)
+          ? data.stories
+          : Array.isArray(data)
+          ? data
+          : [];
+        const now = Date.now();
+        const active = list.filter((s) => {
+          if (s.is_active === false) return false;
+          if (!s.expires_at) return true;
+          return new Date(s.expires_at).getTime() > now;
+        });
+        setStories(active);
+      } catch {}
+    };
+    load();
+    return () => { cancelled = true; };
+  }, []);
+
+  const persistSeen = (set: Set<number>) => {
+    try {
+      localStorage.setItem('jobsreport_seen_stories', JSON.stringify([...set]));
+    } catch {}
+  };
+
+  const markStorySeen = (id: number) => {
+    setSeenStoryIds((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      persistSeen(next);
+      return next;
+    });
+  };
+
+  const refreshStories = async () => {
+    try {
+      const res = await fetch('/api/stories');
+      if (!res.ok) return;
+      const data = await res.json();
+      const list: StoryType[] = Array.isArray(data?.stories)
+        ? data.stories
+        : Array.isArray(data)
+        ? data
+        : [];
+      const now = Date.now();
+      setStories(
+        list.filter((s) => {
+          if (s.is_active === false) return false;
+          if (!s.expires_at) return true;
+          return new Date(s.expires_at).getTime() > now;
+        })
+      );
+    } catch {}
+  };
+
+  const handleCreateStory = async (payload: CreateStoryPayload) => {
+    await fetch('/api/stories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    await refreshStories();
+  };
+
+  const handleDeleteStory = async (storyId: number) => {
+    await fetch(`/api/stories/${storyId}`, { method: 'DELETE' });
+    setStories((prev) => prev.filter((s) => s.id !== storyId));
+  };
 
   const getVisibleCategories = () => {
     if (!showAllCategories) {
@@ -162,6 +426,7 @@ export default function HomePage() {
         structuredData={[structuredData, organizationSchema]} />
 
       <div className="space-y-12">
+        {/* Hero */}
         <section className="py-8 md:py-16">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-3xl">
             <div className="flex items-center gap-2 text-blue-500 font-bold text-xs uppercase tracking-widest mb-6">
@@ -188,6 +453,20 @@ export default function HomePage() {
           </motion.div>
         </section>
 
+        {/* 🔹 Instagram-style Story Bar */}
+        <InstagramStoryBar
+          stories={stories}
+          currentUser={currentUser}
+          onViewStory={(s) => {
+            markStorySeen(s.id);
+            setViewingStory(s);
+          }}
+          onCreateStory={() => setCreateOpen(true)}
+          onRequestLogin={() => navigate('/')}
+          seenIds={seenStoryIds}
+        />
+
+        {/* Job Categories */}
         <section>
           <div className="flex items-center justify-between mb-6">
             <div>
@@ -442,6 +721,58 @@ export default function HomePage() {
           </div>
         </section>
       </div>
+
+      {/* Story modals */}
+      {createOpen && currentUser && (
+        <CreateStoryModal
+          currentUser={currentUser}
+          onClose={() => setCreateOpen(false)}
+          onCreate={handleCreateStory}
+        />
+      )}
+
+      {viewingStory && (
+        <StoryViewer
+          story={viewingStory}
+          user={
+            viewingStory.user || {
+              id: viewingStory.user_id,
+              name: 'User',
+              profile_image_url: DEFAULT_AVATAR('User', viewingStory.user_id),
+            }
+          }
+          currentUser={currentUser}
+          allStories={stories}
+          onClose={() => setViewingStory(null)}
+          onNext={() => {
+            const idx = stories.findIndex((s) => s.id === viewingStory.id);
+            if (stories[idx + 1]) {
+              markStorySeen(stories[idx + 1].id);
+              setViewingStory(stories[idx + 1]);
+            } else {
+              setViewingStory(null);
+            }
+          }}
+          onPrev={() => {
+            const idx = stories.findIndex((s) => s.id === viewingStory.id);
+            if (stories[idx - 1]) {
+              markStorySeen(stories[idx - 1].id);
+              setViewingStory(stories[idx - 1]);
+            } else {
+              setViewingStory(null);
+            }
+          }}
+          onProfileClick={(id) => navigate(`/companies/${id}`)}
+          onDeleteStory={handleDeleteStory}
+          onViewRecorded={(id) => {
+            setStories((prev) =>
+              prev.map((s) =>
+                s.id === id ? { ...s, views_count: (s.views_count || 0) + 1 } : s
+              )
+            );
+          }}
+        />
+      )}
     </>
   );
 }
