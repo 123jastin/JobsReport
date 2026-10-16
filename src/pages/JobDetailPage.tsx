@@ -532,6 +532,18 @@ export default function JobDetailPage() {
         <div className="px-4 py-6 border-b border-white/5 text-center"><FileText size={32} className="text-gray-600 mx-auto mb-3" /><p className="text-gray-500 text-sm">No detailed description available for this listing.</p></div>
       )}
 
+      {/* 🔹 AdSense — Displa7 (between Job Description and Job Details) */}
+      <div className="px-4 py-4 border-b border-white/5 w-full flex justify-center">
+        <ins
+          className="adsbygoogle"
+          style={{ display: 'block', width: '100%' }}
+          data-ad-client="ca-pub-8155064094205693"
+          data-ad-slot="2419189829"
+          data-ad-format="auto"
+          data-full-width-responsive="true"
+        ></ins>
+      </div>
+
       <div className="px-4 py-6 border-b border-white/5">
         <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4">Job Details</h3>
         <div className="space-y-3">
@@ -548,6 +560,18 @@ export default function JobDetailPage() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* 🔹 AdSense — Display7+ (above About Company / Related Jobs) */}
+      <div className="px-4 py-4 border-b border-white/5 w-full flex justify-center">
+        <ins
+          className="adsbygoogle"
+          style={{ display: 'block', width: '100%' }}
+          data-ad-client="ca-pub-8155064094205693"
+          data-ad-slot="9232010188"
+          data-ad-format="auto"
+          data-full-width-responsive="true"
+        ></ins>
       </div>
 
       <div className="px-4 py-6 border-b border-white/5">
