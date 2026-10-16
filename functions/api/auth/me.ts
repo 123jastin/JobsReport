@@ -1,22 +1,18 @@
 import { PagesFunction } from '@cloudflare/workers-types';
-import { getAuthUser, jsonResponse } from '../../_lib/auth';
+import { getUserFromRequest, jsonResponse } from '../../_lib/userAuth';
 
-type Env = {
-  DB: D1Database;
-  JWT_SECRET: string;
-};
+type Env = { DB: D1Database; USER_JWT_SECRET: string };
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
-  const { DB, JWT_SECRET } = context.env;
+  const { DB, USER_JWT_SECRET } = context.env;
 
   try {
-    const payload = await getAuthUser(context.request, JWT_SECRET);
+    const payload = await getUserFromRequest(context.request, USER_JWT_SECRET);
     if (!payload) return jsonResponse({ error: 'Unauthorized' }, 401);
 
     const user: any = await DB.prepare(`
-      SELECT id, name, username, email,
-             profile_image_url, bio, country, role,
-             is_verified, created_at
+      SELECT id, name, username, email, profile_image_url, bio,
+             country, role, is_verified, created_at
       FROM users WHERE id = ?
     `).bind(payload.sub).first();
 
@@ -41,3 +37,13 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     return jsonResponse({ error: 'Failed to fetch user' }, 500);
   }
 };
+
+export const onRequestOptions: PagesFunction = async () =>
+  new Response(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
+  });
