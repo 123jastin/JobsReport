@@ -54,6 +54,7 @@ const InstagramStoryBar: React.FC<InstagramStoryBarProps> = ({
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Deduplicate by user — keep latest story per user
   const perUser = (() => {
     const sorted = [...stories].sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -71,10 +72,7 @@ const InstagramStoryBar: React.FC<InstagramStoryBarProps> = ({
     return { mine: mine[0], others: out };
   })();
 
-  const hasStories = perUser.mine || perUser.others.length > 0;
-
-  // If nothing to show, hide the whole bar
-  if (!hasStories && !currentUser) return null;
+  // ✅ Always render — at minimum shows "Your Story" or "Add Story"
 
   return (
     <section className="relative -mt-4 mb-2">
@@ -83,7 +81,7 @@ const InstagramStoryBar: React.FC<InstagramStoryBarProps> = ({
         className="flex gap-4 overflow-x-auto scrollbar-hide py-1 -mx-1 px-1"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       >
-        {/* ── Your Story bubble — only for logged-in users ── */}
+        {/* ── Your Story / Add Story ── */}
         {currentUser ? (
           <button
             onClick={onCreateStory}
@@ -131,8 +129,14 @@ const InstagramStoryBar: React.FC<InstagramStoryBarProps> = ({
           >
             <div className="relative">
               <div className="w-[68px] h-[68px] rounded-full p-[2px] bg-white/5">
-                <div className="w-full h-full rounded-full overflow-hidden border-2 border-[#0B1120] bg-gradient-to-br from-[#1877F2] to-[#A033FF] flex items-center justify-center">
-                  <Plus size={24} strokeWidth={3} className="text-white" />
+                <div
+                  className="w-full h-full rounded-full border-2 border-[#0B1120] flex items-center justify-center"
+                  style={{
+                    background:
+                      'linear-gradient(135deg, #1877F2 0%, #7B4DFF 60%, #A033FF 100%)',
+                  }}
+                >
+                  <Plus size={26} strokeWidth={3} className="text-white" />
                 </div>
               </div>
             </div>
