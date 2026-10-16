@@ -38,6 +38,25 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, 'user', 0)
     `).bind(id, name, username, email, passwordHash, profileImage, country).run();
 
+    // ─────────────────────────────────────────────
+    // DEBUG: check secret before signing
+    // ─────────────────────────────────────────────
+    if (!USER_JWT_SECRET || typeof USER_JWT_SECRET !== 'string' || USER_JWT_SECRET.length < 8) {
+      console.error('[register] USER_JWT_SECRET missing or too short');
+      // Delete the just-inserted row so the user can retry
+      try {
+        await DB.prepare('DELETE FROM users WHERE id = ?').bind(id).run();
+      } catch {}
+      return jsonResponse({
+        error: 'Server misconfigured: USER_JWT_SECRET is missing or too short',
+        debug: {
+          hasSecret: !!USER_JWT_SECRET,
+          typeofSecret: typeof USER_JWT_SECRET,
+          secretLength: USER_JWT_SECRET ? USER_JWT_SECRET.length : 0,
+        },
+      }, 500);
+    }
+
     const token = await signUserJwt({ sub: id, email, role: 'user' }, USER_JWT_SECRET);
 
     return jsonResponse({
@@ -48,9 +67,26 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         bio: '', country, role: 'user', is_verified: 0,
       },
     }, 201);
-  } catch (err) {
+  } catch (err: any) {
     console.error('User register error:', err);
-    return jsonResponse({ error: 'Registration failed' }, 500);
+    // Roll back the insert if signing failed
+    try {
+      const body: any = await context.request.clone().json().catch(() => null);
+      if (body?.email) {
+        await DB.prepare('DELETE FROM users WHERE email = ?')
+          .bind(String(body.email).trim().toLowerCase())
+          .run();
+      }
+    } catch {}
+    return jsonResponse({
+      error: 'Registration failed',
+      debug: {
+        message: err?.message || String(err),
+        name: err?.name || 'Error',
+        hasSecret: !!USER_JWT_SECRET,
+        secretLength: USER_JWT_SECRET ? USER_JWT_SECRET.length : 0,
+      },
+    }, 500);
   }
 };
 
