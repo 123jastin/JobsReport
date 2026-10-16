@@ -1,90 +1,61 @@
 import { PagesFunction } from '@cloudflare/workers-types';
+import { verifyUserPassword, signUserJwt, jsonResponse } from '../../_lib/userAuth';
 
-type Env = {
-  DB: D1Database;
-  JWT_SECRET: string;
-};
+type Env = { DB: D1Database; USER_JWT_SECRET: string };
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
-  const { DB, JWT_SECRET } = context.env;
+  const { DB, USER_JWT_SECRET } = context.env;
 
   try {
-    const { email, password, rememberMe } = await context.request.json() as { 
-      email: string; 
-      password: string; 
-      rememberMe?: boolean 
-    };
+    const body: any = await context.request.json();
+    const email = String(body.email || '').trim().toLowerCase();
+    const password = String(body.password || '');
 
-    if (!email || !password) {
-      return new Response(JSON.stringify({ 
-        success: false, 
-        message: 'Email and password are required' 
-      }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
+    if (!email || !password) return jsonResponse({ error: 'Email and password are required' }, 400);
 
-    // Find user by email
-    const user = await DB.prepare(
-      'SELECT * FROM admins WHERE email = ? AND is_active = 1'
-    ).bind(email.toLowerCase().trim()).first();
+    const user: any = await DB.prepare(`
+      SELECT id, name, username, email, password_hash,
+             profile_image_url, bio, country, role, is_verified, created_at
+      FROM users WHERE email = ?
+    `).bind(email).first();
 
-    if (!user) {
-      return new Response(JSON.stringify({ 
-        success: false, 
-        message: 'Invalid email or password' 
-      }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
+    if (!user) return jsonResponse({ error: 'Invalid email or password' }, 401);
 
-    // Verify password
-    if (user.password !== password) {
-      return new Response(JSON.stringify({ 
-        success: false, 
-        message: 'Invalid email or password' 
-      }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
+    const ok = await verifyUserPassword(password, user.password_hash);
+    if (!ok) return jsonResponse({ error: 'Invalid email or password' }, 401);
 
-    // Generate token with expiry
-    const expiryDays = rememberMe ? 30 : 1; // 30 days if remember me, 1 day default
-    const expiryTime = Date.now() + (expiryDays * 24 * 60 * 60 * 1000);
-    const tokenPayload = `${user.email}:${expiryTime}:${JWT_SECRET || 'default-secret'}`;
-    const token = btoa(tokenPayload);
+    const token = await signUserJwt(
+      { sub: user.id, email: user.email, role: user.role || 'user' },
+      USER_JWT_SECRET
+    );
 
-    // Update last login
-    await DB.prepare(
-      'UPDATE admins SET last_login = ?, token = ? WHERE id = ?'
-    ).bind(new Date().toISOString(), token, user.id).run();
-
-    return new Response(JSON.stringify({
-      success: true,
+    return jsonResponse({
       token,
-      expiresIn: expiryDays * 24 * 60 * 60, // seconds
       user: {
         id: user.id,
+        name: user.name,
+        username: user.username || null,
         email: user.email,
-        role: user.role || 'admin',
-        name: user.name
-      }
-    }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
+        profile_image_url: user.profile_image_url || '',
+        bio: user.bio || '',
+        country: user.country || 'TZ',
+        role: user.role || 'user',
+        is_verified: user.is_verified || 0,
+        created_at: user.created_at,
+      },
     });
-
   } catch (err) {
-    console.error('Login error:', err);
-    return new Response(JSON.stringify({ 
-      success: false, 
-      message: 'Server error during login' 
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    console.error('User login error:', err);
+    return jsonResponse({ error: 'Login failed' }, 500);
   }
 };
+
+export const onRequestOptions: PagesFunction = async () =>
+  new Response(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
+  });
