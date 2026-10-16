@@ -1,51 +1,34 @@
 import { PagesFunction } from '@cloudflare/workers-types';
-import { getAuthUser, jsonResponse } from '../../_lib/auth';
+import { getUserFromRequest, jsonResponse } from '../../_lib/userAuth';
 
-type Env = {
-  DB: D1Database;
-  JWT_SECRET: string;
-};
+type Env = { DB: D1Database; USER_JWT_SECRET: string };
 
-const extractId = (context: any): string | null => {
+const extractKey = (context: any): string | null => {
   const url = new URL(context.request.url);
   const parts = url.pathname.split('/').filter(Boolean);
-  // e.g. /api/stories/story-xyz  → ['api','stories','story-xyz']
   const last = parts[parts.length - 1];
-  if (!last || last === 'stories') return null;
+  if (!last || last === 'stories' || last === 'view') return null;
   return last;
 };
 
-// ============================================================
-// GET /api/stories/:id — public read; increments view count
-//   Accepts id OR slug
-// ============================================================
+// GET /api/stories/:id-or-slug (public + increments view)
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
-  const key = extractId(context);
+  const key = extractKey(context);
   if (!key) return jsonResponse({ error: 'Missing story id' }, 400);
 
   try {
     const story: any = await DB.prepare(`
-      SELECT
-        s.id, s.user_id, s.slug, s.type, s.text_content, s.background_style,
-        s.media_url, s.media_thumb, s.views_count, s.is_active,
-        s.expires_at, s.created_at,
-        u.name AS author_name,
-        u.username AS author_username,
-        u.profile_image_url AS author_avatar
-      FROM stories s
-      LEFT JOIN users u ON u.id = s.user_id
+      SELECT s.*, u.name AS author_name, u.username AS author_username, u.profile_image_url AS author_avatar
+      FROM stories s LEFT JOIN users u ON u.id = s.user_id
       WHERE s.id = ? OR s.slug = ?
     `).bind(key, key).first();
 
     if (!story) return jsonResponse({ error: 'Story not found' }, 404);
 
-    // Increment views (fire-and-forget)
     context.waitUntil(
       DB.prepare('UPDATE stories SET views_count = views_count + 1 WHERE id = ?')
-        .bind(story.id)
-        .run()
-        .catch(() => {})
+        .bind(story.id).run().catch(() => {})
     );
 
     return new Response(JSON.stringify({
@@ -80,16 +63,14 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   }
 };
 
-// ============================================================
-// DELETE /api/stories/:id — author only
-// ============================================================
+// DELETE /api/stories/:id (author only)
 export const onRequestDelete: PagesFunction<Env> = async (context) => {
-  const { DB, JWT_SECRET } = context.env;
-  const key = extractId(context);
+  const { DB, USER_JWT_SECRET } = context.env;
+  const key = extractKey(context);
   if (!key) return jsonResponse({ error: 'Missing story id' }, 400);
 
   try {
-    const payload = await getAuthUser(context.request, JWT_SECRET);
+    const payload = await getUserFromRequest(context.request, USER_JWT_SECRET);
     if (!payload) return jsonResponse({ error: 'Please log in' }, 401);
 
     const story: any = await DB.prepare(
@@ -98,15 +79,11 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
 
     if (!story) return jsonResponse({ error: 'Story not found' }, 404);
 
-    // Author or admin can delete
     const isOwner = story.user_id === payload.sub;
     const isAdmin = payload.role === 'admin';
-    if (!isOwner && !isAdmin) {
-      return jsonResponse({ error: 'Not allowed to delete this story' }, 403);
-    }
+    if (!isOwner && !isAdmin) return jsonResponse({ error: 'Not allowed' }, 403);
 
     await DB.prepare('DELETE FROM stories WHERE id = ?').bind(story.id).run();
-
     return jsonResponse({ success: true, deleted: story.id });
   } catch (err) {
     console.error('Story delete error:', err);
@@ -114,13 +91,10 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
   }
 };
 
-// ============================================================
-// POST /api/stories/:id — increment view (idempotent-ish helper)
-//   Front-end may use this instead of the GET side-effect.
-// ============================================================
+// POST /api/stories/:id (view increment fallback)
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
-  const key = extractId(context);
+  const key = extractKey(context);
   if (!key) return jsonResponse({ error: 'Missing story id' }, 400);
 
   try {
@@ -129,13 +103,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     ).bind(key, key).first();
     if (!story) return jsonResponse({ error: 'Story not found' }, 404);
 
-    await DB.prepare(
-      'UPDATE stories SET views_count = views_count + 1 WHERE id = ?'
-    ).bind(story.id).run();
+    await DB.prepare('UPDATE stories SET views_count = views_count + 1 WHERE id = ?')
+      .bind(story.id).run();
 
-    const updated: any = await DB.prepare(
-      'SELECT views_count FROM stories WHERE id = ?'
-    ).bind(story.id).first();
+    const updated: any = await DB.prepare('SELECT views_count FROM stories WHERE id = ?')
+      .bind(story.id).first();
 
     return jsonResponse({ success: true, views_count: updated?.views_count || 0 });
   } catch (err) {
@@ -144,7 +116,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
 };
 
-// Preflight
 export const onRequestOptions: PagesFunction = async () =>
   new Response(null, {
     status: 204,
