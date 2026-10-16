@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion } from 'motion/react';
-import { Sparkles, TrendingUp, RefreshCw, ArrowRight, Zap, BarChart3, Building2, Globe, Clock, MapPin, Briefcase, ChevronRight, Search, Code, Calculator, Palette, Headphones, Users, Shield, Truck, Stethoscope, BookOpen, Scale, Leaf, Settings, Utensils, ChevronDown, ChevronLeft, FileText, MessageCircle, Flag, Plus } from 'lucide-react';
+import { Sparkles, TrendingUp, RefreshCw, ArrowRight, Zap, BarChart3, Building2, Globe, Clock, MapPin, Briefcase, ChevronRight, Search, Code, Calculator, Palette, Headphones, Users, Shield, Truck, Stethoscope, BookOpen, Scale, Leaf, Settings, Utensils, ChevronDown, ChevronLeft, FileText, MessageCircle, Flag, Plus, Image as ImageIcon } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import SEO from '../components/SEO';
 import TrendingCard from '../components/TrendingCard';
@@ -59,8 +59,6 @@ const isExpired = (story: StoryType): boolean => {
 
 // ============================================================
 // SEO PRIORITY SCORER
-//   Combines: views, recency, urgency (soon-expiring), with a
-//   deterministic per-session shuffle for variety.
 // ============================================================
 const RECENT_SHOWN_KEY = 'jobsreport_recent_shown';
 
@@ -99,16 +97,10 @@ const scoreStory = (story: StoryType, seed: number, now: number): number => {
   const ageHours = Math.max(0, (now - createdMs) / 3_600_000);
   const expiryHours = Math.max(0, (expiresMs - now) / 3_600_000);
 
-  // Views: log scale so 1000 views ≠ 1000x of 1 view
   const viewsScore = Math.log1p(story.views_count || 0) * 3;
-
-  // Recency: fresh stories within first 24h get a boost
   const recencyScore = Math.max(0, 5 - Math.log1p(ageHours)) * 2;
-
-  // Urgency: stories expiring soon get a "last chance" boost
   const urgencyScore = Math.max(0, 3 - Math.log1p(expiryHours)) * 1.5;
 
-  // Deterministic per-session shuffle (stable within session, changes after refresh w/ new seed)
   const hash = String(story.id)
     .split('')
     .reduce((a, c) => a + c.charCodeAt(0) * 31, seed);
@@ -118,7 +110,64 @@ const scoreStory = (story: StoryType, seed: number, now: number): number => {
 };
 
 // ============================================================
-// Instagram-style Story Bar (JobsReport blue → purple)
+// Bubble Content Renderer
+//   - If a story exists → show its thumbnail (image) or text+bg
+//   - Else → show user's avatar (or initial)
+// ============================================================
+const StoryBubbleContent: React.FC<{
+  story?: StoryType | null;
+  fallbackName?: string;
+  fallbackAvatar?: string | null;
+  fallbackSeed?: string | number;
+}> = ({ story, fallbackName = 'User', fallbackAvatar, fallbackSeed = 'anon' }) => {
+  if (story) {
+    const thumb = story.media_thumb || '';
+    if (story.type === 'text' && !thumb) {
+      return (
+        <div
+          className="w-full h-full flex items-center justify-center text-[8px] font-black text-white px-1 text-center leading-tight"
+          style={{ background: story.background_style || '#0B1120' }}
+        >
+          {(story.text_content || '').slice(0, 14)}
+        </div>
+      );
+    }
+    if (thumb) {
+      return (
+        <img
+          src={thumb}
+          alt=""
+          className="w-full h-full object-cover"
+          loading="lazy"
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).style.display = 'none';
+          }}
+        />
+      );
+    }
+    // Image story but no thumb → fallback
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-600 to-violet-600 text-white">
+        <ImageIcon size={20} />
+      </div>
+    );
+  }
+
+  // No story → show profile avatar or initial
+  return (
+    <img
+      src={fallbackAvatar || DEFAULT_AVATAR(fallbackName, fallbackSeed)}
+      alt={fallbackName}
+      className="w-full h-full object-cover"
+      onError={(e) => {
+        (e.currentTarget as HTMLImageElement).src = DEFAULT_AVATAR(fallbackName, fallbackSeed);
+      }}
+    />
+  );
+};
+
+// ============================================================
+// Instagram-style Story Bar
 // ============================================================
 interface InstagramStoryBarProps {
   stories: StoryType[];
@@ -156,6 +205,9 @@ const InstagramStoryBar: React.FC<InstagramStoryBarProps> = ({
     return { mine: mine[0], others: out };
   })();
 
+  const ringGradient = 'linear-gradient(135deg, #1877F2 0%, #7B4DFF 50%, #A033FF 100%)';
+  const ringSeen = 'rgba(255,255,255,0.18)';
+
   return (
     <section className="relative -mt-4 mb-2">
       <div
@@ -163,47 +215,82 @@ const InstagramStoryBar: React.FC<InstagramStoryBarProps> = ({
         className="flex gap-4 overflow-x-auto scrollbar-hide py-1 -mx-1 px-1"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       >
-        {/* ── Your Story / Add Story ── */}
+        {/* ────────────── OWNER BUBBLE (always first) ────────────── */}
         {currentUser ? (
-          <button
-            onClick={onCreateStory}
-            className="flex flex-col items-center gap-1.5 shrink-0 group"
-            aria-label="Create your story"
-          >
-            <div className="relative">
-              <div className="w-[68px] h-[68px] rounded-full p-[2px] bg-white/5">
-                <div className="w-full h-full rounded-full overflow-hidden border-2 border-[#0B1120]">
-                  <img
-                    src={
-                      currentUser.profile_image_url ||
-                      DEFAULT_AVATAR(currentUser.name || 'User', currentUser.id || 0)
-                    }
-                    alt="You"
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      (e.currentTarget as HTMLImageElement).src = DEFAULT_AVATAR(
-                        currentUser.name || 'User',
-                        currentUser.id || 0
-                      );
-                    }}
-                  />
+          perUser.mine ? (
+            // Owner HAS an active story → tap to view, "+" to add more
+            <button
+              onClick={() => onViewStory(perUser.mine!)}
+              className="flex flex-col items-center gap-1.5 shrink-0 group"
+              aria-label="View your story"
+            >
+              <div className="relative">
+                <div
+                  className="w-[68px] h-[68px] rounded-full p-[2.5px] transition-transform group-active:scale-95"
+                  style={
+                    seenIds.has(String(perUser.mine.id))
+                      ? { background: ringSeen }
+                      : { background: ringGradient }
+                  }
+                >
+                  <div className="w-full h-full rounded-full overflow-hidden border-[3px] border-[#0B1120] bg-[#0B1120]">
+                    <StoryBubbleContent
+                      story={perUser.mine}
+                      fallbackName={currentUser.name}
+                      fallbackAvatar={currentUser.profile_image_url}
+                      fallbackSeed={currentUser.id}
+                    />
+                  </div>
+                </div>
+
+                {/* Small + badge to add another story */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCreateStory();
+                  }}
+                  className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full flex items-center justify-center border-[3px] border-[#0B1120] z-20"
+                  style={{ background: ringGradient }}
+                  aria-label="Add another story"
+                >
+                  <Plus size={12} strokeWidth={3.5} className="text-white" />
+                </button>
+              </div>
+              <span className="text-[11px] font-semibold text-gray-300 max-w-[72px] truncate">
+                Your Story
+              </span>
+            </button>
+          ) : (
+            // Owner has NO story → avatar + "+" → create
+            <button
+              onClick={onCreateStory}
+              className="flex flex-col items-center gap-1.5 shrink-0 group"
+              aria-label="Create your story"
+            >
+              <div className="relative">
+                <div className="w-[68px] h-[68px] rounded-full p-[2px] bg-white/5">
+                  <div className="w-full h-full rounded-full overflow-hidden border-2 border-[#0B1120]">
+                    <StoryBubbleContent
+                      fallbackName={currentUser.name}
+                      fallbackAvatar={currentUser.profile_image_url}
+                      fallbackSeed={currentUser.id}
+                    />
+                  </div>
+                </div>
+                <div
+                  className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full flex items-center justify-center border-[3px] border-[#0B1120]"
+                  style={{ background: ringGradient }}
+                >
+                  <Plus size={12} strokeWidth={3.5} className="text-white" />
                 </div>
               </div>
-              <div
-                className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full flex items-center justify-center border-[3px] border-[#0B1120]"
-                style={{
-                  background:
-                    'linear-gradient(135deg, #1877F2 0%, #7B4DFF 60%, #A033FF 100%)',
-                }}
-              >
-                <Plus size={12} strokeWidth={3.5} className="text-white" />
-              </div>
-            </div>
-            <span className="text-[11px] font-semibold text-gray-300 max-w-[72px] truncate">
-              Your Story
-            </span>
-          </button>
+              <span className="text-[11px] font-semibold text-gray-300 max-w-[72px] truncate">
+                Your Story
+              </span>
+            </button>
+          )
         ) : (
+          // Not logged in → gradient "+" bubble
           <button
             onClick={onRequestLogin}
             className="flex flex-col items-center gap-1.5 shrink-0 group"
@@ -213,10 +300,7 @@ const InstagramStoryBar: React.FC<InstagramStoryBarProps> = ({
               <div className="w-[68px] h-[68px] rounded-full p-[2px] bg-white/5">
                 <div
                   className="w-full h-full rounded-full border-2 border-[#0B1120] flex items-center justify-center"
-                  style={{
-                    background:
-                      'linear-gradient(135deg, #1877F2 0%, #7B4DFF 60%, #A033FF 100%)',
-                  }}
+                  style={{ background: ringGradient }}
                 >
                   <Plus size={26} strokeWidth={3} className="text-white" />
                 </div>
@@ -228,7 +312,7 @@ const InstagramStoryBar: React.FC<InstagramStoryBarProps> = ({
           </button>
         )}
 
-        {/* ── Other users' stories ── */}
+        {/* ────────────── OTHER USERS' STORIES ────────────── */}
         {perUser.others.map((s) => {
           const u = s.user || {
             id: s.user_id,
@@ -236,7 +320,6 @@ const InstagramStoryBar: React.FC<InstagramStoryBarProps> = ({
             profile_image_url: DEFAULT_AVATAR('User', s.user_id),
           };
           const isSeen = seenIds.has(String(s.id));
-          const thumb = s.media_thumb || '';
 
           return (
             <button
@@ -247,33 +330,15 @@ const InstagramStoryBar: React.FC<InstagramStoryBarProps> = ({
             >
               <div
                 className="w-[68px] h-[68px] rounded-full p-[2.5px] transition-transform group-active:scale-95"
-                style={
-                  isSeen
-                    ? { background: 'rgba(255,255,255,0.18)' }
-                    : {
-                        background:
-                          'linear-gradient(135deg, #1877F2 0%, #7B4DFF 50%, #A033FF 100%)',
-                      }
-                }
+                style={isSeen ? { background: ringSeen } : { background: ringGradient }}
               >
                 <div className="w-full h-full rounded-full overflow-hidden border-[3px] border-[#0B1120] bg-[#0B1120]">
-                  {s.type === 'text' && !thumb ? (
-                    <div
-                      className="w-full h-full flex items-center justify-center text-[8px] font-black text-white px-1 text-center leading-tight"
-                      style={{ background: s.background_style || '#0B1120' }}
-                    >
-                      {(s.text_content || '').slice(0, 12)}
-                    </div>
-                  ) : (
-                    <img
-                      src={u.profile_image_url || DEFAULT_AVATAR(u.name, u.id)}
-                      alt={u.name}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).src = DEFAULT_AVATAR(u.name, u.id);
-                      }}
-                    />
-                  )}
+                  <StoryBubbleContent
+                    story={s}
+                    fallbackName={u.name}
+                    fallbackAvatar={u.profile_image_url}
+                    fallbackSeed={u.id}
+                  />
                 </div>
               </div>
               <span className="text-[11px] font-semibold text-gray-300 max-w-[72px] truncate">
@@ -302,7 +367,6 @@ export default function HomePage() {
   const { user: authUser } = useUserAuth();
   const navigate = useNavigate();
 
-  // Stories
   const [stories, setStories] = useState<StoryType[]>([]);
   const [seenStoryIds, setSeenStoryIds] = useState<Set<string>>(() => {
     try {
@@ -314,7 +378,6 @@ export default function HomePage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [viewingStory, setViewingStory] = useState<StoryType | null>(null);
 
-  // Session-scoped seed (stable within session, changes on refresh)
   const sessionSeedRef = useRef<number>(getSessionSeed());
 
   const currentUser: StoryUser | null = authUser
@@ -390,13 +453,6 @@ export default function HomePage() {
     fetchDashboardData();
   }, [selectedCountry]);
 
-  // ────────────────────────────────────────────────────────
-  // Fetch + smart-order stories
-  //   1. Owner's own story first (if logged in)
-  //   2. Then SEO-priority ordered: views, recency, urgency
-  //   3. Anti-repeat: exclude last shown 3 if pool is big enough
-  //   4. Session-stable shuffle
-  // ────────────────────────────────────────────────────────
   const refreshStories = async () => {
     try {
       const res = await fetch('/api/stories');
@@ -409,24 +465,19 @@ export default function HomePage() {
         : [];
 
       const now = Date.now();
-      const active = rawList.filter(
-        (s) => !isExpired(s) && parseServerTime(s.expires_at) > now
-      );
+      const active = rawList.filter((s) => !isExpired(s) && parseServerTime(s.expires_at) > now);
 
       const seed = sessionSeedRef.current;
       const recentlyShown = new Set(getRecentlyShown());
 
-      // Owner's story first
       const meId = String(currentUser?.id || '');
       const mine = active.filter((s) => String(s.user_id) === meId);
       const others = active.filter((s) => String(s.user_id) !== meId);
 
-      // Score & sort "others"
       const scored = others
         .map((s) => ({ story: s, score: scoreStory(s, seed, now) }))
         .sort((a, b) => b.score - a.score);
 
-      // Anti-repeat: if pool is big enough, push recently-shown to the end
       let ordered: StoryType[];
       if (scored.length > 6) {
         const fresh = scored.filter((x) => !recentlyShown.has(String(x.story.id)));
@@ -437,10 +488,7 @@ export default function HomePage() {
       }
 
       const finalList = [...mine, ...ordered];
-
-      // Track what we're showing now
       setRecentlyShown(finalList.slice(0, 12).map((s) => String(s.id)));
-
       setStories(finalList);
     } catch (err) {
       console.error('refreshStories failed:', err);
@@ -587,7 +635,6 @@ export default function HomePage() {
       />
 
       <div className="space-y-12">
-        {/* 🔹 Story Bar — FIRST thing after header */}
         <InstagramStoryBar
           stories={stories}
           currentUser={currentUser}
@@ -606,7 +653,6 @@ export default function HomePage() {
           seenIds={seenStoryIds}
         />
 
-        {/* Hero */}
         <section className="py-8 md:py-16">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-3xl">
             <div className="flex items-center gap-2 text-blue-500 font-bold text-xs uppercase tracking-widest mb-6">
@@ -633,7 +679,6 @@ export default function HomePage() {
           </motion.div>
         </section>
 
-        {/* Job Categories */}
         <section>
           <div className="flex items-center justify-between mb-6">
             <div>
@@ -725,8 +770,6 @@ export default function HomePage() {
             </>
           )}
         </section>
-
-        {/* Ad removed */}
 
         <section>
           <div className="flex items-center justify-between mb-6">
@@ -851,8 +894,6 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Ad removed */}
-
         <section>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 p-6 rounded-3xl bg-white/[0.01] border border-white/5">
             <div>
@@ -889,7 +930,6 @@ export default function HomePage() {
         </section>
       </div>
 
-      {/* Story modals */}
       {createOpen && currentUser && (
         <CreateStoryModal
           currentUser={currentUser}
