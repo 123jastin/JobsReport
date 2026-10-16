@@ -1,30 +1,19 @@
 import { PagesFunction } from '@cloudflare/workers-types';
-import { getAuthUser, jsonResponse, generateId } from '../_lib/auth';
+import { getUserFromRequest, jsonResponse, generateId } from '../_lib/userAuth';
 
-type Env = {
-  DB: D1Database;
-  JWT_SECRET: string;
-};
+type Env = { DB: D1Database; USER_JWT_SECRET: string };
 
-// ============================================================
-// Slug: first N words of text_content → kebab → + short id tail
-// ============================================================
 const slugify = (text: string, maxWords = 6): string => {
   const clean = String(text || '')
     .toLowerCase()
-    .replace(/https?:\/\/\S+/g, '')        // drop URLs
+    .replace(/https?:\/\/\S+/g, '')
     .replace(/[^a-z0-9\s]+/g, ' ')
     .trim();
   const words = clean.split(/\s+/).filter(Boolean).slice(0, maxWords);
-  const base = words.join('-').slice(0, 60) || 'job-story';
-  return base;
+  return (words.join('-').slice(0, 60) || 'job-story');
 };
 
-// ============================================================
 // GET /api/stories
-//   ?all=1        → include expired (author only)
-//   default: only active + not-expired
-// ============================================================
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { DB } = context.env;
   const url = new URL(context.request.url);
@@ -43,7 +32,6 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       FROM stories s
       LEFT JOIN users u ON u.id = s.user_id
     `;
-
     if (!showAll) {
       query += ` WHERE s.is_active = 1 AND s.expires_at > datetime('now')`;
     }
@@ -85,14 +73,12 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   }
 };
 
-// ============================================================
-// POST /api/stories — create (auth required)
-// ============================================================
+// POST /api/stories (auth required)
 export const onRequestPost: PagesFunction<Env> = async (context) => {
-  const { DB, JWT_SECRET } = context.env;
+  const { DB, USER_JWT_SECRET } = context.env;
 
   try {
-    const payload = await getAuthUser(context.request, JWT_SECRET);
+    const payload = await getUserFromRequest(context.request, USER_JWT_SECRET);
     if (!payload) return jsonResponse({ error: 'Please log in to post a story' }, 401);
 
     const body: any = await context.request.json();
@@ -103,32 +89,16 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const mediaThumb = body.media_thumb ? String(body.media_thumb) : null;
     const expiresAt = String(body.expires_at || '').trim();
 
-    // --- Validation ---
-    if (type !== 'text' && type !== 'image') {
-      return jsonResponse({ error: 'Type must be "text" or "image"' }, 400);
-    }
-    if (type === 'text' && (!textContent || textContent.length < 2)) {
-      return jsonResponse({ error: 'Text content is required' }, 400);
-    }
-    if (type === 'text' && textContent && textContent.length > 2000) {
-      return jsonResponse({ error: 'Text content too long (max 2000 chars)' }, 400);
-    }
-    if (type === 'image' && !mediaUrl) {
-      return jsonResponse({ error: 'Media URL is required for image stories' }, 400);
-    }
-    if (!expiresAt) {
-      return jsonResponse({ error: 'Deadline (expires_at) is required' }, 400);
-    }
+    if (type !== 'text' && type !== 'image') return jsonResponse({ error: 'Type must be "text" or "image"' }, 400);
+    if (type === 'text' && (!textContent || textContent.length < 2)) return jsonResponse({ error: 'Text content is required' }, 400);
+    if (type === 'text' && textContent && textContent.length > 2000) return jsonResponse({ error: 'Text content too long (max 2000 chars)' }, 400);
+    if (type === 'image' && !mediaUrl) return jsonResponse({ error: 'Media URL is required for image stories' }, 400);
+    if (!expiresAt) return jsonResponse({ error: 'Deadline is required' }, 400);
 
     const expiresTs = Date.parse(expiresAt);
-    if (!Number.isFinite(expiresTs)) {
-      return jsonResponse({ error: 'Invalid deadline format' }, 400);
-    }
-    if (expiresTs <= Date.now()) {
-      return jsonResponse({ error: 'Deadline must be in the future' }, 400);
-    }
+    if (!Number.isFinite(expiresTs)) return jsonResponse({ error: 'Invalid deadline format' }, 400);
+    if (expiresTs <= Date.now()) return jsonResponse({ error: 'Deadline must be in the future' }, 400);
 
-    // --- Create ---
     const id = generateId('story');
     const shortTail = id.split('-').pop()?.slice(0, 6) || Math.random().toString(36).slice(2, 8);
     const baseSlug = type === 'text' ? slugify(textContent || '') : 'story-image';
@@ -140,23 +110,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         media_url, media_thumb, views_count, is_active, expires_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?)
     `).bind(
-      id, payload.sub, slug, type,
-      textContent, backgroundStyle,
-      mediaUrl, mediaThumb,
-      new Date(expiresTs).toISOString()
+      id, payload.sub, slug, type, textContent, backgroundStyle,
+      mediaUrl, mediaThumb, new Date(expiresTs).toISOString()
     ).run();
 
     const created: any = await DB.prepare(`
-      SELECT
-        s.id, s.user_id, s.slug, s.type, s.text_content, s.background_style,
-        s.media_url, s.media_thumb, s.views_count, s.is_active,
-        s.expires_at, s.created_at,
-        u.name AS author_name,
-        u.username AS author_username,
-        u.profile_image_url AS author_avatar
-      FROM stories s
-      LEFT JOIN users u ON u.id = s.user_id
-      WHERE s.id = ?
+      SELECT s.*, u.name AS author_name, u.username AS author_username, u.profile_image_url AS author_avatar
+      FROM stories s LEFT JOIN users u ON u.id = s.user_id WHERE s.id = ?
     `).bind(id).first();
 
     return jsonResponse({
@@ -187,7 +147,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
 };
 
-// Preflight
 export const onRequestOptions: PagesFunction = async () =>
   new Response(null, {
     status: 204,
