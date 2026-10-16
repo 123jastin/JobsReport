@@ -2,50 +2,56 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import SEO from '../components/SEO';
 import { useAuth } from '../context/AuthContext';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import {
   X, Plus, Share2, Eye, Trash2, Calendar, Clock,
-  ChevronLeft, ChevronRight, ExternalLink, RefreshCw,
+  ChevronLeft, ChevronRight, RefreshCw,
   AlertCircle, Image as ImageIcon, Type, Loader2
 } from 'lucide-react';
+
+// ============================================================
+// AUTH TOKEN STORAGE (kept in sync with AuthContext)
+// ============================================================
+const TOKEN_KEY = 'jobsreport_token';
+
+const getToken = (): string | null => {
+  try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
+};
 
 // ============================================================
 // TYPES
 // ============================================================
 export interface StoryUser {
-  id: number;
+  id: string;
   name: string;
-  username?: string;
+  username?: string | null;
   email?: string;
-  profile_image_url?: string;
+  profile_image_url?: string | null;
 }
 
 export interface StoryType {
-  id: number;
-  user_id: number;
-  slug?: string;
+  id: string;
+  user_id: string;
+  slug: string;
   type: 'image' | 'text';
   media_url: string | null;
   media_thumb?: string | null;
   text_content: string | null;
   background_style: string | null;
-  link_url?: string | null;
   created_at: string;
-  expires_at: string;         // the Deadline
-  is_active?: boolean;
+  expires_at: string;
+  is_active?: number;
   views_count?: number;
   user?: StoryUser;
 }
 
 export interface CreateStoryPayload {
-  user_id: number;
   type: 'image' | 'text';
   media_url?: string | null;
   media_thumb?: string | null;
-  text_content?: string;
-  background_style?: string;
-  expires_at: string;          // ISO date string
-  link_url?: string | null;
+  text_content?: string | null;
+  background_style?: string | null;
+  expires_at: string;
 }
 
 // ============================================================
@@ -101,26 +107,18 @@ const fmtCount = (n: number) => {
   return String(num);
 };
 
-const getDefaultAvatar = (name: string, id: number) => {
+const getDefaultAvatar = (name: string, seed: string | number) => {
   const colors = ['1877F2', '45BD62', 'F3425F', 'F7B928', '9360F7'];
-  const c = colors[Math.abs(id) % colors.length];
+  const hash = String(seed).split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  const c = colors[Math.abs(hash) % colors.length];
   const init = (name || 'U').slice(0, 1).toUpperCase();
   return `https://ui-avatars.com/api/?name=${encodeURIComponent(init)}&background=${c}&color=fff&size=128&bold=true&rounded=true`;
 };
 
 const isExpired = (story: StoryType): boolean => {
-  if (story.is_active === false) return true;
+  if (story.is_active === 0 || story.is_active === (false as any)) return true;
   if (!story.expires_at) return false;
   return parseServerTime(story.expires_at) < Date.now();
-};
-
-const makeSlug = (title: string, id: number): string => {
-  const base = (title || 'story')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 60);
-  return `${base}-${id}`;
 };
 
 // ============================================================
@@ -176,18 +174,22 @@ export const Linkify: React.FC<{ text: string; className?: string }> = ({ text, 
 };
 
 // ============================================================
-// API HELPERS
+// API HELPERS — auto-attach Bearer token
 // ============================================================
-const apiFetch = async (url: string, options?: RequestInit) => {
-  const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
+const apiFetch = async (url: string, options: RequestInit = {}) => {
+  const token = getToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> | undefined),
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(url, { ...options, headers });
+  const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error || `Request failed (${res.status})`);
+    throw new Error((data as any)?.error || `Request failed (${res.status})`);
   }
-  return res.json();
+  return data;
 };
 
 // ============================================================
@@ -201,10 +203,10 @@ interface StoryViewerProps {
   onNext?: () => void;
   onPrev?: () => void;
   allStories?: StoryType[];
-  onProfileClick?: (id: number) => void;
-  onDeleteStory?: (storyId: number) => Promise<void> | void;
+  onProfileClick?: (id: string) => void;
+  onDeleteStory?: (storyId: string) => Promise<void> | void;
   deleteLoading?: boolean;
-  onViewRecorded?: (storyId: number) => void;
+  onViewRecorded?: (storyId: string) => void;
 }
 
 export const StoryViewer: React.FC<StoryViewerProps> = ({
@@ -231,34 +233,32 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
   const lastNavAtRef = useRef(0);
   const didAdvanceRef = useRef(false);
   const pointerDownRef = useRef<{ x: number; y: number; t: number } | null>(null);
-  const viewRecordedRef = useRef<number | null>(null);
+  const viewRecordedRef = useRef<string | null>(null);
 
-  const isAuthor = !!currentUser && currentUser.id === user.id;
+  const isAuthor = !!currentUser && String(currentUser.id) === String(user.id);
 
-  // Group stories by user, sort by created_at desc
   const userStories = useMemo(() => {
     const src = allStories.length ? allStories : [story];
     return src
-      .filter((s) => Number(s.user_id) === Number(story.user_id))
+      .filter((s) => String(s.user_id) === String(story.user_id))
       .slice()
       .sort((a, b) => parseServerTime(b.created_at) - parseServerTime(a.created_at));
   }, [allStories, story]);
 
-  const currentIndex = userStories.findIndex((s) => Number(s.id) === Number(story.id));
+  const currentIndex = userStories.findIndex((s) => String(s.id) === String(story.id));
 
   const storyIsText = story.type === 'text';
   const displayMediaUrl = story.media_url || story.media_thumb || '';
 
-  // Record view once per mount
+  // Record view once per story id
   useEffect(() => {
     if (viewRecordedRef.current === story.id) return;
     viewRecordedRef.current = story.id;
-    apiFetch(`/api/stories/${story.id}/view`, { method: 'POST' })
+    apiFetch(`/api/stories/${encodeURIComponent(story.id)}/view`, { method: 'POST' })
       .then(() => onViewRecorded?.(story.id))
       .catch(() => {});
   }, [story.id, onViewRecorded]);
 
-  // Reset progress on story change
   useEffect(() => {
     didAdvanceRef.current = false;
     setProgress(0);
@@ -269,7 +269,6 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
     }
   }, [story.id, storyIsText]);
 
-  // Preload image
   useEffect(() => {
     if (storyIsText || !displayMediaUrl) {
       setMediaReady(true);
@@ -293,7 +292,6 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
     else if (dir === 'prev' && onPrev) onPrev();
   }, [onNext, onPrev]);
 
-  // Progress ticker
   useEffect(() => {
     if (!mediaReady) return;
     setProgress(0);
@@ -302,9 +300,7 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
     const tickMs = 50;
     const duration = DEFAULT_STORY_DURATION_MS;
 
-    if (progressIntervalRef.current) {
-      clearInterval(progressIntervalRef.current);
-    }
+    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
 
     progressIntervalRef.current = window.setInterval(() => {
       if (isPaused) return;
@@ -327,7 +323,6 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
     };
   }, [story.id, isPaused, mediaReady, safeNavigate]);
 
-  // Keyboard controls
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); safeNavigate('next'); }
@@ -376,7 +371,7 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
   };
 
   const handleShare = async () => {
-    const url = `${window.location.origin}/story/${story.slug || makeSlug(story.text_content || 'story', story.id)}`;
+    const url = `${window.location.origin}/story/${story.slug}`;
     const shareData = {
       title: story.text_content?.slice(0, 80) || `${user.name}'s Story`,
       text: story.text_content?.slice(0, 160) || `Check out this story on JobsReport`,
@@ -426,7 +421,6 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
         onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUp}
       >
-        {/* Prev / Next same-user */}
         <button
           type="button"
           aria-label="Previous"
@@ -446,7 +440,6 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
           <ChevronRight size={20} className="text-white/90" />
         </button>
 
-        {/* Progress bars */}
         <div className="absolute top-0 left-0 right-0 pt-2 px-3 z-30 flex gap-1.5">
           {userStories.map((_, i) => (
             <div key={i} className="h-1 bg-white/20 flex-1 rounded-full overflow-hidden">
@@ -460,7 +453,6 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
           ))}
         </div>
 
-        {/* Header — author + views */}
         <div
           className="absolute top-0 left-0 right-0 px-4 pt-6 pb-4 z-30 flex items-center justify-between bg-gradient-to-b from-[#0B1120]/90 via-[#0B1120]/40 to-transparent"
           data-no-nav="true"
@@ -504,7 +496,6 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
           </div>
         </div>
 
-        {/* Body */}
         <div className="flex-1 bg-[#0B1120] relative">
           <div className="absolute inset-0 z-[10] flex items-center justify-center">
             {storyIsText ? (
@@ -535,7 +526,6 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
           </div>
         </div>
 
-        {/* Bottom bar — views count */}
         <div
           className="absolute bottom-0 left-0 right-0 p-3 pb-6 z-20 bg-gradient-to-t from-[#0B1120] via-[#0B1120]/80 to-transparent pt-10"
           data-no-nav="true"
@@ -559,7 +549,6 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
           </div>
         </div>
 
-        {/* Delete confirm */}
         {showDeleteConfirm && (
           <div className="absolute inset-0 z-[500] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
             <div className="w-full max-w-[400px] bg-[#0F172A] rounded-2xl border border-[#1E293B] shadow-2xl overflow-hidden">
@@ -590,9 +579,9 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
                   <button
                     onClick={handleDeleteStory}
                     className="flex-1 py-3 rounded-xl bg-[#F3425F] hover:bg-[#E41E3F] text-white font-bold transition-all flex items-center justify-center gap-2"
-                    disabled={deletingStory}
+                    disabled={deletingStory || deleteLoading}
                   >
-                    {deletingStory ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                    {deletingStory || deleteLoading ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
                     Delete
                   </button>
                 </div>
@@ -606,11 +595,11 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
 };
 
 // ============================================================
-// STORY REEL — horizontal scroller for HomePage
+// STORY REEL — horizontal scroller (used by HomePage + StoryPage)
 // ============================================================
 interface StoryReelProps {
   stories: StoryType[];
-  onProfileClick: (id: number) => void;
+  onProfileClick: (id: string) => void;
   onCreateStory?: () => void;
   onViewStory: (story: StoryType) => void;
   currentUser: StoryUser | null;
@@ -627,26 +616,21 @@ export const StoryReel: React.FC<StoryReelProps> = ({
   onRequestLogin,
   loading = false,
 }) => {
-  const active = useMemo(
-    () => stories.filter((s) => !isExpired(s)),
-    [stories]
-  );
+  const active = useMemo(() => stories.filter((s) => !isExpired(s)), [stories]);
 
-  // Unique per user (latest story)
   const uniqueUsers = useMemo(() => {
-    const seen = new Set<number>();
+    const seen = new Set<string>();
     const out: StoryType[] = [];
     const sorted = [...active].sort(
       (a, b) => parseServerTime(b.created_at) - parseServerTime(a.created_at)
     );
-    // Current user's own first
-    const meId = Number(currentUser?.id || 0);
-    const mine = sorted.filter((s) => Number(s.user_id) === meId);
-    const others = sorted.filter((s) => Number(s.user_id) !== meId);
+    const meId = String(currentUser?.id || '');
+    const mine = sorted.filter((s) => String(s.user_id) === meId);
+    const others = sorted.filter((s) => String(s.user_id) !== meId);
     if (mine[0]) out.push(mine[0]);
     for (const s of others) {
-      if (seen.has(Number(s.user_id))) continue;
-      seen.add(Number(s.user_id));
+      if (seen.has(String(s.user_id))) continue;
+      seen.add(String(s.user_id));
       out.push(s);
     }
     return out;
@@ -654,7 +638,6 @@ export const StoryReel: React.FC<StoryReelProps> = ({
 
   return (
     <div className="w-full bg-[#0F172A] border-b-[8px] border-[#050B18] py-3.5 px-3 overflow-x-auto flex gap-2.5 scrollbar-hide">
-      {/* Create card */}
       <div
         className="min-w-[110px] sm:min-w-[135px] h-[200px] sm:h-[240px] bg-[#0F172A] rounded-2xl shadow-sm overflow-hidden cursor-pointer relative group flex-shrink-0 border border-[#1E293B]"
         onClick={() => (currentUser ? onCreateStory?.() : onRequestLogin())}
@@ -664,7 +647,7 @@ export const StoryReel: React.FC<StoryReelProps> = ({
         <img
           src={
             currentUser?.profile_image_url ||
-            getDefaultAvatar(currentUser?.name || 'User', currentUser?.id || 0)
+            getDefaultAvatar(currentUser?.name || 'User', currentUser?.id || 'anon')
           }
           alt="Create"
           className="h-[75%] w-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-80"
@@ -769,7 +752,6 @@ export const CreateStoryModal: React.FC<CreateStoryModalProps> = ({
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Deadline — default 7 days from now
   const defaultDeadline = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() + 7);
@@ -802,14 +784,22 @@ export const CreateStoryModal: React.FC<CreateStoryModalProps> = ({
     try {
       const fd = new FormData();
       fd.append('file', file);
+      fd.append('name', file.name);
+      fd.append('altText', `Story by ${currentUser.name}`);
+
       const res = await fetch('/api/upload', { method: 'POST', body: fd });
       const data = await res.json().catch(() => null);
-      if (!res.ok || !data?.success) {
+
+      if (!res.ok) {
         throw new Error(data?.error || 'Upload failed');
       }
-      const url = data?.uploaded?.original?.url || data?.uploaded?.feed?.url;
-      const thumb = data?.uploaded?.thumbnail?.url || url;
-      if (!url) throw new Error('No URL returned');
+
+      // ✅ Matches your /api/upload response shape
+      const url = data?.url || data?.dataUrl;
+      const thumb = data?.url || data?.dataUrl;
+
+      if (!url) throw new Error('No URL returned from upload');
+
       setImageUrl(url);
       setImageThumb(thumb);
       setMode('image');
@@ -829,9 +819,8 @@ export const CreateStoryModal: React.FC<CreateStoryModalProps> = ({
       const expiresIso = new Date(deadline + 'T23:59:59').toISOString();
 
       const payload: CreateStoryPayload = {
-        user_id: currentUser.id,
         type: mode,
-        text_content: mode === 'text' ? text.trim() : null as any,
+        text_content: mode === 'text' ? text.trim() : null,
         background_style: mode === 'text' ? background : null,
         media_url: mode === 'image' ? imageUrl : null,
         media_thumb: mode === 'image' ? imageThumb : null,
@@ -849,7 +838,6 @@ export const CreateStoryModal: React.FC<CreateStoryModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[200] bg-[#050B18] flex flex-col text-white overflow-hidden animate-fade-in">
-      {/* Top bar */}
       <div className="flex justify-between items-center p-4 bg-[#0B1120] border-b border-[#1E293B]">
         <button
           onClick={onClose}
@@ -867,7 +855,6 @@ export const CreateStoryModal: React.FC<CreateStoryModalProps> = ({
         </button>
       </div>
 
-      {/* Preview */}
       <div
         className="flex-1 flex items-center justify-center relative overflow-hidden"
         style={{ background: mode === 'text' ? background : '#050B18' }}
@@ -917,7 +904,6 @@ export const CreateStoryModal: React.FC<CreateStoryModalProps> = ({
         />
       </div>
 
-      {/* Bottom controls */}
       <div className="bg-[#0B1120] border-t border-[#1E293B] p-4 flex flex-col gap-4">
         {mode === 'text' && (
           <div className="flex gap-3 overflow-x-auto scrollbar-hide px-2 py-1">
@@ -935,7 +921,6 @@ export const CreateStoryModal: React.FC<CreateStoryModalProps> = ({
           </div>
         )}
 
-        {/* Deadline picker */}
         <div className="flex items-center justify-between gap-3 px-2 py-2 rounded-2xl bg-[#070D1D] border border-[#1E293B]">
           <div className="flex items-center gap-2 text-white/80">
             <Calendar size={16} />
@@ -950,7 +935,6 @@ export const CreateStoryModal: React.FC<CreateStoryModalProps> = ({
           />
         </div>
 
-        {/* Mode toggle */}
         <div className="flex items-center justify-between px-2">
           <div className="flex gap-2 bg-[#070D1D] p-1 rounded-2xl border border-[#1E293B]">
             <button
@@ -1007,10 +991,8 @@ export const PublicStoryPage: React.FC = () => {
     async function load() {
       setLoading(true);
       try {
-        const idMatch = slug?.match(/-(\d+)$/);
-        if (!idMatch) { setNotFound(true); return; }
-        const id = idMatch[1];
-        const data = await apiFetch(`/api/stories/${id}`);
+        if (!slug) { setNotFound(true); return; }
+        const data = await apiFetch(`/api/stories/${encodeURIComponent(slug)}`);
         if (cancelled) return;
         if (!data || data.error) { setNotFound(true); return; }
         setStory(data);
@@ -1020,7 +1002,7 @@ export const PublicStoryPage: React.FC = () => {
         if (!cancelled) setLoading(false);
       }
     }
-    if (slug) load();
+    load();
     return () => { cancelled = true; };
   }, [slug]);
 
@@ -1051,7 +1033,7 @@ export const PublicStoryPage: React.FC = () => {
     );
   }
 
-  const storyUrl = `https://jobsreport.online/story/${story.slug || makeSlug(story.text_content || 'story', story.id)}`;
+  const storyUrl = `https://jobsreport.online/story/${story.slug}`;
   const authorName = story.user?.name || 'User';
   const title = story.text_content?.slice(0, 70) || `${authorName}'s Story`;
   const description = story.text_content?.slice(0, 160) || `Job story shared by ${authorName} on JobsReport.`;
@@ -1069,7 +1051,7 @@ export const PublicStoryPage: React.FC = () => {
     author: {
       '@type': 'Person',
       name: authorName,
-      url: `https://jobsreport.online/companies/${(authorName || '').toLowerCase().replace(/\s+/g, '-')}`,
+      url: `https://jobsreport.online/story/${story.slug}`,
     },
     publisher: {
       '@type': 'Organization',
@@ -1104,7 +1086,6 @@ export const PublicStoryPage: React.FC = () => {
       />
 
       <div className="max-w-2xl mx-auto px-4 py-10 space-y-6">
-        {/* Author */}
         <div className="flex items-center gap-3">
           <img
             src={story.user?.profile_image_url || getDefaultAvatar(authorName, story.user_id)}
@@ -1117,7 +1098,6 @@ export const PublicStoryPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Story body */}
         <article className="rounded-3xl overflow-hidden border border-white/5 bg-white/[0.01]">
           {story.type === 'text' ? (
             <div
@@ -1137,7 +1117,6 @@ export const PublicStoryPage: React.FC = () => {
           )}
         </article>
 
-        {/* Meta */}
         <div className="flex items-center justify-between text-sm text-gray-500">
           <div className="flex items-center gap-2">
             <Eye size={16} />
@@ -1149,7 +1128,6 @@ export const PublicStoryPage: React.FC = () => {
           </div>
         </div>
 
-        {/* CTA */}
         <div className="flex gap-3">
           <button
             onClick={() => navigate('/')}
@@ -1177,9 +1155,7 @@ export const PublicStoryPage: React.FC = () => {
 };
 
 // ============================================================
-// MAIN PAGE — Story feed orchestrator
-// (used when the route /stories is visited; also exposes
-//  reusable StoryReel + StoryViewer for HomePage)
+// MAIN PAGE — Story feed (/stories route)
 // ============================================================
 export default function StoryPage() {
   const { user: authUser } = useAuth() as any;
@@ -1187,11 +1163,11 @@ export default function StoryPage() {
 
   const currentUser: StoryUser | null = authUser
     ? {
-        id: authUser.id,
+        id: String(authUser.id),
         name: authUser.name || authUser.username || 'User',
-        username: authUser.username,
+        username: authUser.username || null,
         email: authUser.email,
-        profile_image_url: authUser.profile_image_url || authUser.avatar_url,
+        profile_image_url: authUser.profile_image_url || authUser.avatar_url || null,
       }
     : null;
 
@@ -1224,12 +1200,12 @@ export default function StoryPage() {
     await loadStories();
   };
 
-  const handleDelete = async (storyId: number) => {
-    await apiFetch(`/api/stories/${storyId}`, { method: 'DELETE' });
+  const handleDelete = async (storyId: string) => {
+    await apiFetch(`/api/stories/${encodeURIComponent(storyId)}`, { method: 'DELETE' });
     setStories((prev) => prev.filter((s) => s.id !== storyId));
   };
 
-  const handleViewRecorded = (storyId: number) => {
+  const handleViewRecorded = (storyId: string) => {
     setStories((prev) =>
       prev.map((s) =>
         s.id === storyId ? { ...s, views_count: (s.views_count || 0) + 1 } : s
@@ -1263,7 +1239,7 @@ export default function StoryPage() {
         <StoryReel
           stories={stories}
           loading={loading}
-          onProfileClick={(id) => navigate(`/companies/${id}`)}
+          onProfileClick={(id) => navigate(`/story/${id}`)}
           onCreateStory={() => setCreateOpen(true)}
           onViewStory={(s) => setViewingStory(s)}
           currentUser={currentUser}
@@ -1276,7 +1252,6 @@ export default function StoryPage() {
           </div>
         )}
 
-        {/* Grid view of all active stories */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {stories.map((s) => (
             <button
@@ -1340,7 +1315,7 @@ export default function StoryPage() {
             if (prev) setViewingStory(prev);
             else setViewingStory(null);
           }}
-          onProfileClick={(id) => navigate(`/companies/${id}`)}
+          onProfileClick={(id) => navigate(`/story/${id}`)}
           onDeleteStory={handleDelete}
           onViewRecorded={handleViewRecorded}
         />
