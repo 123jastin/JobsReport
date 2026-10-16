@@ -23,6 +23,7 @@ import ContactUsPage from './pages/ContactUsPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import TermsOfServicePage from './pages/TermsOfServicePage';
 import DisclaimerPage from './pages/DisclaimerPage';
+import StoryPage, { PublicStoryPage } from './pages/Story';
 
 import { AuthProvider } from './context/AuthContext';
 import { CountryProvider } from './context/CountryContext';
@@ -70,6 +71,10 @@ export default function App() {
                 <Route path="/reports/:country" element={<ReportsPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
                 <Route path="/report/:slug" element={<ReportDetailPage />} />
+
+                {/* 📖 Job Stories */}
+                <Route path="/stories" element={<StoryPage />} />
+                <Route path="/story/:slug" element={<PublicStoryPage />} />
 
                 {/* 📄 Legal & Info Pages */}
                 <Route path="/about-us" element={<AboutUsPage />} />
