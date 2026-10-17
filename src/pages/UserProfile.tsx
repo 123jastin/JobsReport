@@ -1,1554 +1,1270 @@
-import { useState, useEffect, FormEvent, ChangeEvent, useRef, useMemo } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { useNavigate, Link } from 'react-router-dom';
-import {
-  Building2, Briefcase, MapPin, Globe, FileText, Upload, File,
-  Bold, Italic, Underline, List, Trash2, Plus, AlertCircle,
-  ChevronDown, CheckCircle, RefreshCw, ArrowLeft, Eye,
-  Image as ImageIcon, Sparkles, Search, ExternalLink, Pencil,
-  ArrowRight, Loader2
-} from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import SEO from '../components/SEO';
 import { useUserAuth, getUserToken } from '../context/UserAuthContext';
+import {
+  X, Plus, Share2, Eye, Calendar, Clock,
+  ChevronLeft, ChevronDown, RefreshCw, Loader2,
+  MapPin, Briefcase, GraduationCap, BadgeCheck,
+  Instagram, Globe, Pencil, ExternalLink,
+  Image as ImageIcon, MessageCircle, UserPlus, UserCheck, Camera,
+  Building2, CheckCircle, Copy
+} from 'lucide-react';
+import {
+  StoryViewer,
+  CreateStoryModal,
+  type StoryType,
+  type StoryUser,
+  type CreateStoryPayload,
+} from './Story';
 
 // ============================================================
 // TYPES
 // ============================================================
-interface JobFile {
-  url: string;
-  thumbnail: string;
-  name: string;
-  type: string;
-  file?: File;
-  seoTitle?: string;
-  seoSlug?: string;
-}
-
-interface CompanyRow {
+export interface ProfileUser {
   id: string;
   name: string;
-  industry?: string;
-  logoUrl?: string;
-  website?: string;
+  username?: string | null;
+  email?: string;
+  profile_image_url?: string | null;
+  cover_image_url?: string | null;
+  bio?: string | null;
+  headline?: string | null;
+  work?: string | null;
+  education?: string | null;
+  location?: string | null;
+  website?: string | null;
+  country?: string | null;
+  role?: string;
+  is_verified?: number;
+  followers_count?: number;
+  jobs_count?: number;
+  stories_count?: number;
+  is_following?: boolean;
+  created_at?: string | null;
+}
+
+interface JobItem {
+  id: string;
+  title: string;
+  company: string;
+  company_logo?: string | null;
+  location?: string | null;
+  role?: string | null;
+  salary?: string | null;
+  employment_type?: string | null;
+  posted_at?: string | null;
+  slug?: string | null;
 }
 
 // ============================================================
-// SEARCHABLE COMBOBOX
+// CONSTANTS
 // ============================================================
-interface SearchableSelectProps {
-  value: string;
-  onChange: (value: string) => void;
-  options: { value: string; label: string }[];
-  placeholder?: string;
-  emptyMessage?: string;
-  initialCount?: number;
+const JOBS_PER_PAGE = 6;
+const STORIES_PER_PAGE = 6;
+const TOP_STORIES_COUNT = 5;
+
+// ============================================================
+// HELPERS
+// ============================================================
+const DEFAULT_AVATAR = (name: string, seed: string | number) => {
+  const colors = ['1877F2', '45BD62', 'F3425F', 'F7B928', '9360F7'];
+  const hash = String(seed).split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  const c = colors[Math.abs(hash) % colors.length];
+  const init = (name || 'U').slice(0, 1).toUpperCase();
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(init)}&background=${c}&color=fff&size=200&bold=true&rounded=true`;
+};
+
+const fmtCount = (n: number) => {
+  const num = Number(n || 0);
+  if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + 'M';
+  if (num >= 1_000) return (num / 1_000).toFixed(1) + 'K';
+  return String(num);
+};
+
+const parseServerTime = (value?: string): number => {
+  const s = String(value ?? '').trim();
+  if (!s) return Date.now();
+  if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(s)) {
+    const t = Date.parse(s);
+    return Number.isFinite(t) ? t : Date.now();
+  }
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(s)) {
+    const iso = s.replace(' ', 'T') + 'Z';
+    const t = Date.parse(iso);
+    return Number.isFinite(t) ? t : Date.now();
+  }
+  const t = Date.parse(s);
+  return Number.isFinite(t) ? t : Date.now();
+};
+
+const formatRelative = (iso?: string): string => {
+  const t = parseServerTime(iso);
+  const diff = Date.now() - t;
+  if (diff < 60_000) return 'just now';
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h`;
+  if (diff < 604_800_000) return `${Math.floor(diff / 86_400_000)}d`;
+  return new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
+
+const isExpired = (story: StoryType): boolean => {
+  if (story.is_active === 0 || story.is_active === (false as any)) return true;
+  if (!story.expires_at) return false;
+  return parseServerTime(story.expires_at) < Date.now();
+};
+
+// ============================================================
+// API
+// ============================================================
+const apiFetch = async (url: string, options: RequestInit = {}) => {
+  const token = getUserToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> | undefined),
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(url, { ...options, headers });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as any)?.error || `Request failed (${res.status})`);
+  return data;
+};
+
+const uploadImageFile = async (file: File): Promise<string> => {
+  if (!file.type.startsWith('image/')) throw new Error('Only images allowed');
+  if (file.size > 8 * 1024 * 1024) throw new Error('Max 8MB');
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('name', file.name);
+  const res = await fetch('/api/upload', { method: 'POST', body: fd });
+  const data = await res.json();
+  if (!res.ok || !data?.url) throw new Error(data?.error || 'Upload failed');
+  return data.url as string;
+};
+
+// ============================================================
+// EDIT PROFILE MODAL (LinkedIn removed)
+// ============================================================
+interface EditProfileModalProps {
+  user: ProfileUser;
+  onClose: () => void;
+  onSave: (updates: Partial<ProfileUser>) => Promise<void>;
 }
 
-const SearchableSelect = ({
-  value,
-  onChange,
-  options,
-  placeholder = 'Search...',
-  emptyMessage = 'No matches found',
-  initialCount = 3,
-}: SearchableSelectProps) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [search, setSearch] = useState('');
-  const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onClose, onSave }) => {
+  const [name, setName] = useState(user.name || '');
+  const [headline, setHeadline] = useState(user.headline || '');
+  const [bio, setBio] = useState(user.bio || '');
+  const [work, setWork] = useState(user.work || '');
+  const [education, setEducation] = useState(user.education || '');
+  const [location, setLocation] = useState(user.location || '');
+  const [website, setWebsite] = useState(user.website || '');
+  const [avatarUrl, setAvatarUrl] = useState(user.profile_image_url || '');
+  const [coverUrl, setCoverUrl] = useState(user.cover_image_url || '');
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-        setSearch('');
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
-  const filtered = useMemo(() => {
-    const base = search.trim()
-      ? options.filter((o) => o.label.toLowerCase().includes(search.toLowerCase()))
-      : options;
-    return search.trim() ? base : base.slice(0, initialCount);
-  }, [options, search, initialCount]);
+  const uploadImage = async (file: File, setter: (url: string) => void, setBusy: (v: boolean) => void) => {
+    setError(null);
+    setBusy(true);
+    try {
+      const url = await uploadImageFile(file);
+      setter(url);
+    } catch (err: any) {
+      setError(err?.message || 'Upload failed');
+    } finally {
+      setBusy(false);
+    }
+  };
 
-  const displayValue =
-    value && !isOpen ? options.find((o) => o.value === value)?.label || value : search;
+  const handleSave = async () => {
+    if (!name.trim()) { setError('Name is required'); return; }
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave({
+        name: name.trim(),
+        headline: headline.trim() || null,
+        bio: bio.trim() || null,
+        work: work.trim() || null,
+        education: education.trim() || null,
+        location: location.trim() || null,
+        website: website.trim() || null,
+        profile_image_url: avatarUrl || null,
+        cover_image_url: coverUrl || null,
+      });
+      onClose();
+    } catch (err: any) {
+      setError(err?.message || 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
-    <div ref={containerRef} className="relative">
-      <div
-        className="w-full bg-white/[0.03] border border-white/10 px-4 py-3 rounded-2xl text-sm text-white focus-within:border-[#1877F2] transition-colors cursor-pointer flex items-center justify-between gap-2"
-        onClick={() => {
-          setIsOpen(true);
-          setTimeout(() => inputRef.current?.focus(), 0);
-        }}
-      >
-        <Search size={14} className="text-gray-500 shrink-0" />
-        <input
-          ref={inputRef}
-          type="text"
-          value={isOpen ? search : displayValue}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            if (!isOpen) setIsOpen(true);
-          }}
-          onFocus={() => setIsOpen(true)}
-          placeholder={value ? '' : placeholder}
-          className="bg-transparent border-none outline-none text-sm text-white w-full placeholder:text-gray-600"
-        />
-        <ChevronDown size={16} className="text-gray-500 shrink-0" />
-      </div>
-
-      {isOpen && (
-        <div className="absolute z-50 mt-1 w-full bg-[#0B1120] border border-white/10 rounded-2xl shadow-2xl max-h-64 overflow-y-auto">
-          {filtered.length === 0 ? (
-            <div className="px-4 py-3 text-xs text-gray-500 text-center">
-              {emptyMessage}
-            </div>
-          ) : (
-            filtered.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => {
-                  onChange(opt.value);
-                  setIsOpen(false);
-                  setSearch('');
-                }}
-                className={`w-full text-left px-4 py-3 text-sm transition-colors ${
-                  opt.value === value
-                    ? 'bg-[#1877F2]/20 text-[#4A9EFF]'
-                    : 'text-gray-300 hover:bg-white/5'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))
-          )}
-          {!search.trim() && options.length > initialCount && (
-            <div className="px-4 py-2 text-[10px] text-gray-500 text-center font-mono uppercase border-t border-white/5">
-              Type above to search {options.length} total
-            </div>
-          )}
+    <div className="fixed inset-0 z-[300] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="w-full max-w-[560px] bg-[#0B1120] rounded-3xl border border-white/10 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
+          <h2 className="text-white font-bold text-lg">Edit Profile</h2>
+          <button onClick={onClose} className="w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center">
+            <X size={18} className="text-gray-400" />
+          </button>
         </div>
-      )}
+
+        <div className="overflow-y-auto flex-1">
+          <div className="relative h-[140px] bg-gradient-to-br from-[#1877F2]/30 via-[#7B4DFF]/20 to-[#A033FF]/30">
+            {coverUrl && <img src={coverUrl} alt="cover" className="w-full h-full object-cover" />}
+            <button
+              onClick={() => coverInputRef.current?.click()}
+              disabled={uploadingCover}
+              className="absolute bottom-2 right-2 px-3 py-1.5 rounded-lg bg-black/60 hover:bg-black/80 text-white text-xs font-bold flex items-center gap-1.5 backdrop-blur"
+            >
+              {uploadingCover ? <Loader2 size={12} className="animate-spin" /> : <ImageIcon size={12} />}
+              Change cover
+            </button>
+            <input
+              type="file"
+              ref={coverInputRef}
+              className="hidden"
+              accept="image/*"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) uploadImage(f, setCoverUrl, setUploadingCover);
+                e.currentTarget.value = '';
+              }}
+            />
+          </div>
+
+          <div className="px-5 -mt-12 relative z-10">
+            <div className="relative w-24 h-24 rounded-full border-4 border-[#0B1120] overflow-hidden bg-[#1E293B]">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-2xl font-black text-white">
+                  {name.slice(0, 1).toUpperCase() || '?'}
+                </div>
+              )}
+              <button
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={uploadingAvatar}
+                className="absolute inset-0 bg-black/50 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center"
+              >
+                {uploadingAvatar ? <Loader2 size={20} className="text-white animate-spin" /> : <ImageIcon size={20} className="text-white" />}
+              </button>
+              <input
+                type="file"
+                ref={avatarInputRef}
+                className="hidden"
+                accept="image/*"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) uploadImage(f, setAvatarUrl, setUploadingAvatar);
+                  e.currentTarget.value = '';
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="p-5 space-y-4">
+            <Field label="Name" value={name} onChange={setName} placeholder="Your name" required />
+            <Field label="Headline" value={headline} onChange={setHeadline} placeholder="e.g. Software Engineer • Nairobi" maxLength={80} />
+            <Field label="Bio" value={bio} onChange={setBio} placeholder="Short bio" textarea maxLength={200} />
+            <Field label="Work" value={work} onChange={setWork} placeholder="Current company" icon={<Briefcase size={14} />} />
+            <Field label="Education" value={education} onChange={setEducation} placeholder="School or university" icon={<GraduationCap size={14} />} />
+            <Field label="Location" value={location} onChange={setLocation} placeholder="City, Country" icon={<MapPin size={14} />} />
+            <Field label="Website" value={website} onChange={setWebsite} placeholder="https://..." icon={<Globe size={14} />} />
+          </div>
+        </div>
+
+        {error && (
+          <div className="px-5 py-3 bg-red-500/10 border-t border-red-500/20">
+            <p className="text-xs text-red-400">{error}</p>
+          </div>
+        )}
+
+        <div className="p-4 border-t border-white/5 flex gap-2">
+          <button
+            onClick={onClose}
+            className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold text-sm transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex-1 py-3 rounded-xl bg-[#1877F2] hover:bg-[#166FE5] disabled:opacity-50 text-white font-bold text-sm transition-colors flex items-center justify-center gap-2"
+          >
+            {saving && <Loader2 size={14} className="animate-spin" />}
+            Save
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
 
-// ============================================================
-// FLAT SECTION
-// ============================================================
-const Section: React.FC<{ title: string; icon: React.ReactNode; children: React.ReactNode }> = ({
-  title,
-  icon,
-  children,
-}) => (
-  <div className="border-t border-white/5 pt-6">
-    <h2 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 mb-4">
-      <span className="text-[#4A9EFF]">{icon}</span>
-      {title}
-    </h2>
-    {children}
+const Field: React.FC<{
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  textarea?: boolean;
+  maxLength?: number;
+  required?: boolean;
+  icon?: React.ReactNode;
+}> = ({ label, value, onChange, placeholder, textarea, maxLength, required, icon }) => (
+  <div>
+    <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+      {icon}
+      {label}
+      {required && <span className="text-red-400">*</span>}
+    </label>
+    {textarea ? (
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        maxLength={maxLength}
+        rows={3}
+        className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3.5 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm resize-none"
+      />
+    ) : (
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        maxLength={maxLength}
+        className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3.5 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
+      />
+    )}
   </div>
 );
 
-const Label: React.FC<{ children: React.ReactNode; required?: boolean }> = ({ children, required }) => (
-  <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">
-    {children}
-    {required && <span className="text-red-400 ml-0.5">*</span>}
-  </label>
-);
+// ============================================================
+// JOB CARD
+// ============================================================
+const JobCard: React.FC<{ job: JobItem }> = ({ job }) => {
+  const href = `/market/${job.slug || `${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${job.id}`}`;
+  return (
+    <Link
+      to={href}
+      className="block p-4 bg-white/[0.02] border border-white/5 rounded-2xl hover:bg-white/[0.04] hover:border-[#1877F2]/30 transition-all group"
+    >
+      <div className="flex items-start gap-3">
+        <div className="w-11 h-11 rounded-xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
+          {job.company_logo ? (
+            <img src={job.company_logo} alt={job.company} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400">
+              {job.company?.charAt(0)?.toUpperCase() || '?'}
+            </div>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          {job.role && (
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#1877F2]/10 text-[#4A9EFF] uppercase tracking-wider">
+              {job.role}
+            </span>
+          )}
+          <h3 className="text-sm font-bold text-white group-hover:text-[#4A9EFF] transition-colors truncate mt-1">
+            {job.title}
+          </h3>
+          <div className="flex items-center gap-2 mt-1.5 text-[11px] text-gray-500 flex-wrap">
+            <span className="flex items-center gap-1">
+              <Briefcase size={10} />{job.company}
+            </span>
+            {job.location && (
+              <span className="flex items-center gap-1">
+                <MapPin size={10} />{job.location}
+              </span>
+            )}
+          </div>
+          {job.salary && (
+            <span className="text-[10px] text-emerald-400 font-mono mt-1.5 block">{job.salary}</span>
+          )}
+        </div>
+      </div>
+    </Link>
+  );
+};
 
 // ============================================================
-// MAIN PAGE
+// MAIN COMPONENT
 // ============================================================
-type Step = 'choose-company' | 'job-form' | 'create-company';
-
-export default function UserJobInput() {
-  const { user: authUser, loading: authLoading } = useUserAuth();
+export default function UserProfile() {
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user: authUser } = useUserAuth();
 
-  // ── Auth guard
-  useEffect(() => {
-    if (!authLoading && !authUser) {
-      navigate('/login');
-    }
-  }, [authUser, authLoading, navigate]);
-
-  // ── Flow state
-  const [step, setStep] = useState<Step>('choose-company');
-  const [selectedCompany, setSelectedCompany] = useState<string>('');
-
-  // ── Data
-  const [companies, setCompanies] = useState<CompanyRow[]>([]);
-  const [roles, setRoles] = useState<{ id: string; title: string }[]>([]);
+  const [user, setUser] = useState<ProfileUser | null>(null);
+  const [jobs, setJobs] = useState<JobItem[]>([]);
+  const [stories, setStories] = useState<StoryType[]>([]);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [activeTab, setActiveTab] = useState<'jobs' | 'stories' | 'about'>('jobs');
+  const [editing, setEditing] = useState(false);
+  const [following, setFollowing] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
 
-  // ── Job form
-  const [title, setTitle] = useState('');
-  const [selectedRole, setSelectedRole] = useState('');
-  const [location, setLocation] = useState('');
-  const [salary, setSalary] = useState('');
-  const [expiresAt, setExpiresAt] = useState('');
-  const [applicationType, setApplicationType] = useState<'url' | 'email' | 'whatsapp' | 'instructions'>('url');
-  const [applicationValue, setApplicationValue] = useState('');
-  const [files, setFiles] = useState<JobFile[]>([]);
-  const [description, setDescription] = useState('');
-  const [descEditMode, setDescEditMode] = useState<'visual' | 'code'>('visual');
-  const descriptionEditorRef = useRef<HTMLDivElement>(null);
-  const [locations, setLocations] = useState({
-    street_address: '',
-    city: '',
-    region: '',
-    country: 'Tanzania',
-    postcode: '',
-  });
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [advanced, setAdvanced] = useState({
-    job_category: '',
-    industry: '',
-    employment_type: 'FULL_TIME',
-    workplace_type: 'Onsite',
-    education_level: 'Any',
-    experience_months: 0,
-    skills: [] as string[],
-    benefits: [] as string[],
-    salary_min: null as number | null,
-    salary_max: null as number | null,
-    salary_currency: 'TZS',
-  });
+  // ─── Pagination state ───
+  const [jobsVisible, setJobsVisible] = useState(JOBS_PER_PAGE);
+  const [storiesVisible, setStoriesVisible] = useState(STORIES_PER_PAGE);
 
-  // ── Create Company form
-  const [newCompany, setNewCompany] = useState({
-    name: '',
-    url: '',
-    logoUrl: '',
-    description: '',
-    industry: '',
-    streetAddress: '',
-    area: '',
-    locality: '',
-    district: '',
-    postalCode: '',
-    postalArea: '',
-    country: 'TZ',
-    foundedYear: '',
-    employeeCount: '',
-  });
-  const [uploadingLogo, setUploadingLogo] = useState(false);
-  const [creatingCompany, setCreatingCompany] = useState(false);
-  const logoInputRef = useRef<HTMLInputElement>(null);
+  // Story viewing
+  const [viewingStory, setViewingStory] = useState<StoryType | null>(null);
+  const [createStoryOpen, setCreateStoryOpen] = useState(false);
 
-  const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  // Inline cover / avatar upload state
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
-  const profileWork = String((authUser as any)?.work || '').trim();
+  // Share toast
+  const [shareToast, setShareToast] = useState<string | null>(null);
+
+  const currentUser: StoryUser | null = authUser
+    ? {
+        id: String(authUser.id),
+        name: authUser.name || authUser.username || 'User',
+        username: authUser.username || null,
+        email: authUser.email,
+        profile_image_url: authUser.profile_image_url || null,
+      }
+    : null;
+
+  const isOwnProfile = authUser && user && String(authUser.id) === String(user.id);
+  const hasCompany = String((authUser as any)?.work || '').trim().length > 0;
+
+  // ─── Reset pagination on tab change ───
+  useEffect(() => {
+    setJobsVisible(JOBS_PER_PAGE);
+    setStoriesVisible(STORIES_PER_PAGE);
+  }, [activeTab]);
 
   // ────────────────────────────────────────────────────────
-  // INITIAL LOAD
+  // LOAD PROFILE
   // ────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!authUser) return;
+    let cancelled = false;
 
     async function load() {
+      if (!id) { setNotFound(true); return; }
+      setLoading(true);
       try {
-        // Load companies
-        const compRes = await fetch('/api/companies?all=true');
-        if (compRes.ok) {
-          const compData = await compRes.json();
-          const list = Array.isArray(compData) ? compData : compData.companies || [];
-          setCompanies(list);
-        }
+        const data = await apiFetch(`/api/users/${encodeURIComponent(id)}`);
+        if (cancelled) return;
+        if (!data?.user) { setNotFound(true); return; }
 
-        // Load roles
-        const rolesRes = await fetch('/api/filters');
-        if (rolesRes.ok) {
-          const rolesData = await rolesRes.json();
-          const cats = Array.isArray(rolesData.categories) ? rolesData.categories : [];
-          const list = cats.map((c: any) => ({ id: c.slug, title: c.name }));
-          setRoles(list);
-          if (list.length > 0) setSelectedRole(list[0].title);
-        }
+        setUser(data.user);
+        setFollowing(!!data.user.is_following);
 
-        // Pre-select profile company if set
-        if (profileWork) {
-          setSelectedCompany(profileWork);
+        const jobsData = await apiFetch(`/api/users/${encodeURIComponent(id)}/jobs`).catch(() => ({ jobs: [] }));
+        if (!cancelled) setJobs(Array.isArray(jobsData?.jobs) ? jobsData.jobs : []);
+
+        const storiesData = await apiFetch(`/api/users/${encodeURIComponent(id)}/stories`).catch(() => ({ stories: [] }));
+        if (!cancelled) {
+          const list: StoryType[] = Array.isArray(storiesData?.stories) ? storiesData.stories : [];
+          setStories(list.filter((s) => !isExpired(s)));
         }
       } catch (err) {
-        console.error('Load failed:', err);
+        if (!cancelled) setNotFound(true);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
 
     load();
-  }, [authUser, profileWork]);
-
-  // Sync description editor
-  useEffect(() => {
-    if (descEditMode === 'visual' && descriptionEditorRef.current) {
-      descriptionEditorRef.current.innerHTML = description;
-    }
-  }, [descEditMode]);
+    return () => { cancelled = true; };
+  }, [id]);
 
   // ────────────────────────────────────────────────────────
-  // HELPERS
+  // Sorted jobs (newest first) + paginated slice
   // ────────────────────────────────────────────────────────
-  const showMsg = (type: 'success' | 'error', text: string) => {
-    setMessage({ type, text });
-    setTimeout(() => setMessage(null), 5000);
-  };
+  const sortedJobs = useMemo(() => {
+    return [...jobs].sort((a, b) => {
+      const ta = parseServerTime(a.posted_at);
+      const tb = parseServerTime(b.posted_at);
+      return tb - ta;
+    });
+  }, [jobs]);
 
-  // Companies to show in the choose-company step:
-  // - Profile company first (if set)
-  // - Then other companies (deduped)
-  const chooseCompanyOptions = useMemo(() => {
-    const others = companies
-      .filter((c) => c.name.toLowerCase() !== profileWork.toLowerCase())
-      .map((c) => ({ value: c.name, label: c.name }));
-    const profile = profileWork
-      ? [{ value: profileWork, label: profileWork }]
-      : [];
-    return [...profile, ...others];
-  }, [companies, profileWork]);
+  const visibleJobs = useMemo(
+    () => sortedJobs.slice(0, jobsVisible),
+    [sortedJobs, jobsVisible]
+  );
+
+  const hasMoreJobs = jobsVisible < sortedJobs.length;
 
   // ────────────────────────────────────────────────────────
-  // STEP 1: CHOOSE COMPANY
+  // Sorted stories
   // ────────────────────────────────────────────────────────
-  const handleChooseCompany = (company: string) => {
-    if (!company.trim()) {
-      showMsg('error', 'Please select a company');
-      return;
-    }
-    setSelectedCompany(company);
-    setStep('job-form');
-  };
+  const sortedStories = useMemo(() => {
+    return [...stories].sort((a, b) => {
+      const ta = parseServerTime(a.created_at);
+      const tb = parseServerTime(b.created_at);
+      return tb - ta;
+    });
+  }, [stories]);
 
-  const handleGoCreateCompany = () => {
-    setNewCompany((prev) => ({
-      ...prev,
-      name: prev.name || '',
-    }));
-    setStep('create-company');
-  };
+  const topStories = useMemo(
+    () => sortedStories.slice(0, TOP_STORIES_COUNT),
+    [sortedStories]
+  );
 
-  // ────────────────────────────────────────────────────────
-  // STEP 3: CREATE COMPANY
-  // ────────────────────────────────────────────────────────
-  const handleLogoUpload = async (file: File) => {
-    if (!file.type.startsWith('image/')) {
-      showMsg('error', 'Logo must be an image');
-      return;
-    }
-    if (file.size > 4 * 1024 * 1024) {
-      showMsg('error', 'Logo must be under 4MB');
-      return;
-    }
-    setUploadingLogo(true);
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('name', file.name);
-      fd.append('altText', `${newCompany.name || 'Company'} logo`);
-      const res = await fetch('/api/upload', { method: 'POST', body: fd });
-      const data = await res.json();
-      if (!res.ok || !data?.url) throw new Error(data?.error || 'Upload failed');
-      setNewCompany((prev) => ({ ...prev, logoUrl: data.url }));
-    } catch (err: any) {
-      showMsg('error', err?.message || 'Logo upload failed');
-    } finally {
-      setUploadingLogo(false);
-    }
-  };
+  const visibleStories = useMemo(
+    () => sortedStories.slice(0, storiesVisible),
+    [sortedStories, storiesVisible]
+  );
 
-  const handleCreateCompany = async (e: FormEvent) => {
-    e.preventDefault();
-
-    if (!newCompany.name.trim()) {
-      showMsg('error', 'Company name is required');
-      return;
-    }
-    if (!newCompany.industry.trim()) {
-      showMsg('error', 'Industry is required');
-      return;
-    }
-    if (!newCompany.description.trim()) {
-      showMsg('error', 'Description is required');
-      return;
-    }
-
-    setCreatingCompany(true);
-    try {
-      // 1. Create company
-      const res = await fetch('/api/companies', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newCompany.name.trim(),
-          url: newCompany.url.trim(),
-          logoUrl: newCompany.logoUrl,
-          description: newCompany.description.trim(),
-          industry: newCompany.industry.trim(),
-          streetAddress: newCompany.streetAddress.trim(),
-          area: newCompany.area.trim(),
-          locality: newCompany.locality.trim(),
-          district: newCompany.district.trim(),
-          postalCode: newCompany.postalCode.trim(),
-          postalArea: newCompany.postalArea.trim(),
-          country: newCompany.country,
-          foundedYear: newCompany.foundedYear.trim(),
-          employeeCount: newCompany.employeeCount.trim(),
-        }),
-      });
-
-      let data: any = {};
-      try {
-        const text = await res.text();
-        data = text ? JSON.parse(text) : {};
-      } catch {
-        data = { error: `Server error (${res.status})` };
-      }
-
-      if (!res.ok) {
-        showMsg('error', data.error || 'Failed to create company');
-        return;
-      }
-
-      // 2. Update user's work on profile
-      const token = getUserToken();
-      if (token) {
-        await fetch('/api/users/me', {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ work: newCompany.name.trim() }),
-        }).catch(() => {});
-      }
-
-      // 3. Move to job form
-      setSelectedCompany(newCompany.name.trim());
-      setStep('job-form');
-      showMsg('success', `Company "${newCompany.name}" created!`);
-    } catch (err: any) {
-      showMsg('error', err?.message || 'Failed to create company');
-    } finally {
-      setCreatingCompany(false);
-    }
-  };
+  const hasMoreStories = storiesVisible < sortedStories.length;
 
   // ────────────────────────────────────────────────────────
-  // FILE UPLOAD (job attachments)
+  // FOLLOW
   // ────────────────────────────────────────────────────────
-  const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
-    const selected = e.target.files;
-    if (!selected) return;
-
-    for (let i = 0; i < selected.length; i++) {
-      const file = selected[i];
-      const isImage = file.type.startsWith('image/');
-      const baseName = file.name.replace(/\.[^/.]+$/, '');
-      const cleanSlug = baseName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-
-      if (isImage) {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setFiles((prev) => [
-            ...prev,
-            {
-              url: reader.result as string,
-              thumbnail: reader.result as string,
-              name: file.name,
-              type: 'image',
-              file,
-              seoTitle: `${title || 'Job'} - ${baseName}`,
-              seoSlug: `${cleanSlug}-${Date.now().toString(36)}.${file.name.split('.').pop()}`,
-            },
-          ]);
-        };
-        reader.readAsDataURL(file);
-      } else if (
-        file.type === 'application/pdf' ||
-        /\.(doc|docx|xls|xlsx|ppt|pptx)$/i.test(file.name)
-      ) {
-        const docExt = file.name.split('.').pop()?.toUpperCase() || 'DOC';
-        const svgThumb =
-          'data:image/svg+xml,' +
-          encodeURIComponent(`
-          <svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">
-            <rect fill="#1e293b" width="200" height="200" rx="12"/>
-            <text fill="#60a5fa" font-size="40" font-weight="bold" text-anchor="middle" x="100" y="100">${docExt}</text>
-            <text fill="#94a3b8" font-size="14" text-anchor="middle" x="100" y="140">Document</text>
-          </svg>
-        `);
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setFiles((prev) => [
-            ...prev,
-            {
-              url: reader.result as string,
-              thumbnail: svgThumb,
-              name: file.name,
-              type: file.type === 'application/pdf' ? 'pdf' : 'document',
-              file,
-              seoTitle: `${title || 'Job'} - ${baseName}`,
-              seoSlug: `${cleanSlug}-${Date.now().toString(36)}.${file.name.split('.').pop()}`,
-            },
-          ]);
-        };
-        reader.readAsDataURL(file);
-      } else {
-        showMsg('error', `Unsupported file type: ${file.name}`);
-      }
-    }
-    e.target.value = '';
-  };
-
-  // ────────────────────────────────────────────────────────
-  // STEP 2: SUBMIT JOB
-  // ────────────────────────────────────────────────────────
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  const handleFollow = async () => {
     if (!authUser) { navigate('/login'); return; }
+    if (!user || followLoading) return;
 
-    const token = getUserToken();
-    if (!token) { navigate('/login'); return; }
+    setFollowLoading(true);
+    const next = !following;
+    setFollowing(next);
 
-    if (!title.trim()) { showMsg('error', 'Job title is required'); return; }
-    if (!selectedRole) { showMsg('error', 'Please select a category'); return; }
-    if (!expiresAt) { showMsg('error', 'Please set an expiry date'); return; }
-    if (applicationType === 'url' && !applicationValue.trim()) { showMsg('error', 'Application URL is required'); return; }
-    if (applicationType === 'email' && !applicationValue.trim()) { showMsg('error', 'Application email is required'); return; }
-    if (applicationType === 'whatsapp' && !applicationValue.trim()) { showMsg('error', 'WhatsApp number is required'); return; }
-    if (applicationType === 'instructions' && !applicationValue.trim()) { showMsg('error', 'Instructions are required'); return; }
-    if (!locations.street_address.trim()) { showMsg('error', 'Street address is required'); return; }
-    if (!locations.city.trim()) { showMsg('error', 'City is required'); return; }
-    if (!locations.region.trim()) { showMsg('error', 'Region is required'); return; }
-    if (!locations.country.trim()) { showMsg('error', 'Country is required'); return; }
-    if (!locations.postcode.trim()) { showMsg('error', 'Postcode is required'); return; }
-
-    setSubmitting(true);
     try {
-      const uploadedFiles = [];
-      for (const file of files) {
-        if (!file.file) continue;
-        const fd = new FormData();
-        fd.append('file', file.file, file.seoSlug || file.name);
-        fd.append('name', file.seoSlug || file.name);
-        fd.append('altText', file.seoTitle || file.name);
-        const res = await fetch('/api/upload', { method: 'POST', body: fd });
-        if (res.ok) {
-          const data = await res.json();
-          uploadedFiles.push({
-            url: data.url,
-            thumbnail: data.thumbnail_url || data.url,
-            name: file.name,
-            type: file.type,
-            seoTitle: file.seoTitle,
-          });
-        }
-      }
-
-      let applyUrl = '';
-      let whatsapp_number = '';
-      let application_instructions = '';
-
-      if (applicationType === 'url') applyUrl = applicationValue;
-      else if (applicationType === 'email') {
-        applyUrl = applicationValue.startsWith('mailto:') ? applicationValue : `mailto:${applicationValue}`;
-      } else if (applicationType === 'whatsapp') {
-        whatsapp_number = applicationValue;
-        applyUrl = `https://wa.me/${applicationValue.replace(/[^0-9]/g, '')}`;
-      } else if (applicationType === 'instructions') {
-        application_instructions = applicationValue;
-        applyUrl = 'https://jobsreport.online/contact-us';
-      }
-
-      const res = await fetch('/api/user/jobs', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          title: title.trim(),
-          company: selectedCompany,
-          role: selectedRole,
-          location: location || locations.city || 'Remote',
-          url: applyUrl,
-          applicationType,
-          applicationValue,
-          salary: salary?.trim() || 'Not Disclosed',
-          expiresAt,
-          description,
-          is_active: 1,
-          job_category: advanced.job_category || 'Other',
-          industry: advanced.industry || '',
-          employment_type: advanced.employment_type,
-          workplace_type: advanced.workplace_type,
-          education_level: advanced.education_level,
-          experience_months: advanced.experience_months,
-          skills: advanced.skills,
-          benefits: advanced.benefits,
-          salary_min: advanced.salary_min,
-          salary_max: advanced.salary_max,
-          salary_currency: advanced.salary_currency,
-          street_address: locations.street_address,
-          city: locations.city,
-          region: locations.region,
-          country: locations.country,
-          postcode: locations.postcode,
-          whatsapp_number,
-          application_instructions,
-          images: uploadedFiles,
-        }),
+      await apiFetch(`/api/users/${encodeURIComponent(user.id)}/follow`, {
+        method: next ? 'POST' : 'DELETE',
       });
-
-      let result: any = {};
-      try {
-        const text = await res.text();
-        result = text ? JSON.parse(text) : {};
-      } catch {
-        result = { error: `Server error (${res.status}). Please try again.` };
-      }
-
-      if (res.ok) {
-        showMsg('success', 'Job posted successfully! Redirecting...');
-        setTimeout(() => navigate('/market'), 1500);
-      } else {
-        showMsg('error', result.error || `Failed to post job (${res.status})`);
-      }
-    } catch (err: any) {
-      console.error(err);
-      showMsg('error', err?.message || 'Something went wrong');
+      setUser((prev) =>
+        prev ? {
+          ...prev,
+          followers_count: (prev.followers_count || 0) + (next ? 1 : -1),
+          is_following: next,
+        } : prev
+      );
+    } catch {
+      setFollowing(!next);
     } finally {
-      setSubmitting(false);
+      setFollowLoading(false);
     }
+  };
+
+  // ────────────────────────────────────────────────────────
+  // SAVE PROFILE
+  // ────────────────────────────────────────────────────────
+  const handleSaveProfile = async (updates: Partial<ProfileUser>) => {
+    await apiFetch('/api/users/me', {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+    setUser((prev) => (prev ? { ...prev, ...updates } : prev));
+  };
+
+  // ────────────────────────────────────────────────────────
+  // INLINE COVER / AVATAR UPLOAD
+  // ────────────────────────────────────────────────────────
+  const handleCoverUpload = async (file: File) => {
+    setUploadError(null);
+    setUploadingCover(true);
+    try {
+      const url = await uploadImageFile(file);
+      await apiFetch('/api/users/me', {
+        method: 'PUT',
+        body: JSON.stringify({ cover_image_url: url }),
+      });
+      setUser((prev) => (prev ? { ...prev, cover_image_url: url } : prev));
+    } catch (err: any) {
+      setUploadError(err?.message || 'Cover upload failed');
+    } finally {
+      setUploadingCover(false);
+    }
+  };
+
+  const handleAvatarUpload = async (file: File) => {
+    setUploadError(null);
+    setUploadingAvatar(true);
+    try {
+      const url = await uploadImageFile(file);
+      await apiFetch('/api/users/me', {
+        method: 'PUT',
+        body: JSON.stringify({ profile_image_url: url }),
+      });
+      setUser((prev) => (prev ? { ...prev, profile_image_url: url } : prev));
+    } catch (err: any) {
+      setUploadError(err?.message || 'Avatar upload failed');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  // ────────────────────────────────────────────────────────
+  // SHARE PROFILE — copy link + toast
+  // ────────────────────────────────────────────────────────
+  const handleShareProfile = async () => {
+    const url = `${window.location.origin}/u/${user?.username || user?.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareToast('Link copied to clipboard!');
+      setTimeout(() => setShareToast(null), 2500);
+    } catch {
+      setShareToast('Copy failed. Please try manually.');
+      setTimeout(() => setShareToast(null), 3000);
+    }
+  };
+
+  // ────────────────────────────────────────────────────────
+  // POST JOB — guard on company
+  // ────────────────────────────────────────────────────────
+  const handlePostJob = () => {
+    if (!hasCompany) {
+      // Navigate with flag — UserJobInput will show "Choose your company or create one"
+      navigate('/post-job?needs-company=1');
+      return;
+    }
+    navigate('/post-job');
+  };
+
+  // ────────────────────────────────────────────────────────
+  // CREATE / DELETE STORY
+  // ────────────────────────────────────────────────────────
+  const handleCreateStory = async (payload: CreateStoryPayload) => {
+    await apiFetch('/api/stories', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    const storiesData = await apiFetch(`/api/users/${encodeURIComponent(id!)}/stories`).catch(() => ({ stories: [] }));
+    const list: StoryType[] = Array.isArray(storiesData?.stories) ? storiesData.stories : [];
+    setStories(list.filter((s) => !isExpired(s)));
+    setUser((prev) => prev ? { ...prev, stories_count: (prev.stories_count || 0) + 1 } : prev);
+  };
+
+  const handleDeleteStory = async (storyId: string) => {
+    await apiFetch(`/api/stories/${encodeURIComponent(storyId)}`, { method: 'DELETE' });
+    setStories((prev) => prev.filter((s) => s.id !== storyId));
+    setUser((prev) => prev ? { ...prev, stories_count: Math.max(0, (prev.stories_count || 0) - 1) } : prev);
   };
 
   // ────────────────────────────────────────────────────────
   // RENDER STATES
   // ────────────────────────────────────────────────────────
-  if (authLoading || loading) {
+  if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
         <RefreshCw size={24} className="text-[#4A9EFF] animate-spin" />
         <span className="text-[10px] font-mono text-gray-500 tracking-widest uppercase">
-          Loading job builder...
+          Loading profile...
         </span>
       </div>
     );
   }
 
-  if (!authUser) return null;
-
-  // ═══════════════════════════════════════════════════════
-  // STEP 1 — CHOOSE COMPANY
-  // ═══════════════════════════════════════════════════════
-  if (step === 'choose-company') {
+  if (notFound || !user) {
     return (
       <>
-        <SEO
-          title="Post a Job | JobsReport"
-          description="Choose the company you're hiring for."
-        />
-
-        <div className="max-w-3xl mx-auto px-4 py-8 pb-16">
+        <SEO title="Profile Not Found | JobsReport" description="This profile does not exist." />
+        <div className="text-center py-24 px-4">
+          <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4">
+            <X size={24} className="text-red-400" />
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-2">Profile Not Found</h2>
+          <p className="text-gray-400 mb-6 text-sm">This user doesn't exist or the profile was removed.</p>
           <Link
             to="/"
-            className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-6 text-sm"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#1877F2] hover:bg-[#166FE5] rounded-xl text-white font-bold text-sm"
           >
-            <ArrowLeft size={16} />
-            Back to Home
+            <ChevronLeft size={16} /> Back Home
           </Link>
-
-          <div className="mb-8">
-            <h1 className="text-2xl md:text-3xl font-black text-white">
-              Post a Job
-            </h1>
-            <p className="text-gray-400 text-sm mt-1">
-              First, choose the company you're hiring for.
-            </p>
-          </div>
-
-          <AnimatePresence>
-            {message && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className={`mb-6 p-3 rounded-xl flex items-center gap-2 text-sm ${
-                  message.type === 'success'
-                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                    : 'bg-red-500/10 text-red-400 border border-red-500/20'
-                }`}
-              >
-                {message.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
-                {message.text}
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Profile company suggestion */}
-          {profileWork && (
-            <div className="mb-6">
-              <p className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-3">
-                Your Company (from profile)
-              </p>
-              <button
-                type="button"
-                onClick={() => handleChooseCompany(profileWork)}
-                className="w-full flex items-center gap-3 p-4 bg-gradient-to-r from-[#1877F2]/10 to-[#7B4DFF]/10 border border-[#1877F2]/30 rounded-2xl hover:from-[#1877F2]/20 hover:to-[#7B4DFF]/20 transition-all text-left"
-              >
-                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#1877F2] to-[#7B4DFF] flex items-center justify-center shrink-0">
-                  <Building2 size={20} className="text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-white font-bold truncate">{profileWork}</p>
-                  <p className="text-[11px] text-gray-500 mt-0.5">Works at {profileWork}</p>
-                </div>
-                <ArrowRight size={18} className="text-[#4A9EFF] shrink-0" />
-              </button>
-            </div>
-          )}
-
-          {/* Search company */}
-          <div className="mb-6">
-            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-3">
-              {profileWork ? 'Or choose another company' : 'Choose a company'}
-            </p>
-            <SearchableSelect
-              value=""
-              onChange={(name) => handleChooseCompany(name)}
-              options={chooseCompanyOptions}
-              placeholder="Search companies..."
-              emptyMessage="No company found"
-              initialCount={3}
-            />
-          </div>
-
-          {/* Create company */}
-          <div className="border-t border-white/5 pt-6">
-            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-3">
-              Company not listed?
-            </p>
-            <button
-              type="button"
-              onClick={handleGoCreateCompany}
-              className="w-full flex items-center justify-between gap-3 p-4 bg-white/[0.02] border border-dashed border-white/10 rounded-2xl hover:border-[#1877F2]/40 hover:bg-white/[0.04] transition-all text-left"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/10 flex items-center justify-center">
-                  <Plus size={18} className="text-[#4A9EFF]" />
-                </div>
-                <div>
-                  <p className="text-white font-bold text-sm">Create New Company</p>
-                  <p className="text-[11px] text-gray-500 mt-0.5">
-                    Add your company to the JobsReport catalog
-                  </p>
-                </div>
-              </div>
-              <ArrowRight size={18} className="text-gray-500" />
-            </button>
-          </div>
         </div>
       </>
     );
   }
 
-  // ═══════════════════════════════════════════════════════
-  // STEP 3 — CREATE COMPANY
-  // ═══════════════════════════════════════════════════════
-  if (step === 'create-company') {
-    return (
-      <>
-        <SEO
-          title="Create Company | JobsReport"
-          description="Add your company to the JobsReport catalog."
-        />
+  const handle = user.username ? `@${user.username}` : (user.email || '').split('@')[0];
+  const avatar = user.profile_image_url || DEFAULT_AVATAR(user.name, user.id);
+  const isVerified = user.is_verified === 1 || user.is_verified === true as any;
 
-        <div className="max-w-3xl mx-auto px-4 py-8 pb-16">
-          <button
-            onClick={() => setStep('choose-company')}
-            className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-6 text-sm"
-          >
-            <ArrowLeft size={16} />
-            Back to Company Selection
-          </button>
-
-          <div className="mb-8">
-            <h1 className="text-2xl md:text-3xl font-black text-white">
-              Create Company
-            </h1>
-            <p className="text-gray-400 text-sm mt-1">
-              Add your company to the catalog, then post your job.
-            </p>
-          </div>
-
-          <AnimatePresence>
-            {message && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className={`mb-6 p-3 rounded-xl flex items-center gap-2 text-sm ${
-                  message.type === 'success'
-                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                    : 'bg-red-500/10 text-red-400 border border-red-500/20'
-                }`}
-              >
-                {message.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
-                {message.text}
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <form onSubmit={handleCreateCompany} className="space-y-0">
-            {/* BASIC */}
-            <Section title="Basic Information" icon={<Building2 size={14} />}>
-              <div className="space-y-4">
-                <div>
-                  <Label required>Company Name</Label>
-                  <input
-                    type="text"
-                    value={newCompany.name}
-                    onChange={(e) => setNewCompany({ ...newCompany, name: e.target.value })}
-                    placeholder="e.g. Vodacom Tanzania"
-                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <Label required>Industry</Label>
-                  <input
-                    type="text"
-                    value={newCompany.industry}
-                    onChange={(e) => setNewCompany({ ...newCompany, industry: e.target.value })}
-                    placeholder="e.g. Telecommunications"
-                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <Label>Website</Label>
-                  <input
-                    type="url"
-                    value={newCompany.url}
-                    onChange={(e) => setNewCompany({ ...newCompany, url: e.target.value })}
-                    placeholder="https://company.com"
-                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
-                  />
-                </div>
-
-                <div>
-                  <Label>Founded Year</Label>
-                  <input
-                    type="text"
-                    value={newCompany.foundedYear}
-                    onChange={(e) => setNewCompany({ ...newCompany, foundedYear: e.target.value })}
-                    placeholder="e.g. 2005"
-                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
-                  />
-                </div>
-
-                <div>
-                  <Label>Employee Count</Label>
-                  <input
-                    type="text"
-                    value={newCompany.employeeCount}
-                    onChange={(e) => setNewCompany({ ...newCompany, employeeCount: e.target.value })}
-                    placeholder="e.g. 500-1000"
-                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
-                  />
-                </div>
-
-                <div>
-                  <Label required>About</Label>
-                  <textarea
-                    value={newCompany.description}
-                    onChange={(e) => setNewCompany({ ...newCompany, description: e.target.value })}
-                    placeholder="Short description of the company..."
-                    rows={5}
-                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm resize-none"
-                    required
-                  />
-                </div>
-              </div>
-            </Section>
-
-            {/* LOGO */}
-            <Section title="Company Logo" icon={<ImageIcon size={14} />}>
-              {newCompany.logoUrl ? (
-                <div className="flex items-center gap-3 p-4 bg-white/[0.02] border border-white/10 rounded-2xl">
-                  <img
-                    src={newCompany.logoUrl}
-                    alt="Logo"
-                    className="w-16 h-16 rounded-xl object-cover border border-white/10"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-white text-sm font-bold">Logo uploaded</p>
-                    <button
-                      type="button"
-                      onClick={() => setNewCompany({ ...newCompany, logoUrl: '' })}
-                      className="text-[11px] text-red-400 hover:text-red-300 mt-1"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <label className="flex items-center justify-center gap-2 p-6 border-2 border-dashed border-white/10 hover:border-[#1877F2]/40 rounded-2xl cursor-pointer transition-all group">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) handleLogoUpload(f);
-                      e.target.value = '';
-                    }}
-                    className="hidden"
-                    disabled={uploadingLogo}
-                  />
-                  {uploadingLogo ? (
-                    <>
-                      <Loader2 size={18} className="text-[#4A9EFF] animate-spin" />
-                      <span className="text-sm text-[#4A9EFF]">Uploading...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Upload size={18} className="text-gray-500 group-hover:text-[#4A9EFF]" />
-                      <span className="text-sm text-gray-400 group-hover:text-[#4A9EFF]">
-                        Upload company logo (optional)
-                      </span>
-                    </>
-                  )}
-                </label>
-              )}
-            </Section>
-
-            {/* ADDRESS */}
-            <Section title="Address" icon={<MapPin size={14} />}>
-              <div className="space-y-3">
-                <div>
-                  <Label>Street Address</Label>
-                  <input
-                    type="text"
-                    value={newCompany.streetAddress}
-                    onChange={(e) => setNewCompany({ ...newCompany, streetAddress: e.target.value })}
-                    placeholder="e.g. Plot 1520, Mwai Kibaki Road"
-                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
-                  />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <Label>Area</Label>
-                    <input
-                      type="text"
-                      value={newCompany.area}
-                      onChange={(e) => setNewCompany({ ...newCompany, area: e.target.value })}
-                      placeholder="e.g. Mikocheni"
-                      className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
-                    />
-                  </div>
-                  <div>
-                    <Label>Locality / City</Label>
-                    <input
-                      type="text"
-                      value={newCompany.locality}
-                      onChange={(e) => setNewCompany({ ...newCompany, locality: e.target.value })}
-                      placeholder="e.g. Dar es Salaam"
-                      className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <Label>District</Label>
-                    <input
-                      type="text"
-                      value={newCompany.district}
-                      onChange={(e) => setNewCompany({ ...newCompany, district: e.target.value })}
-                      placeholder="e.g. Kinondoni"
-                      className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
-                    />
-                  </div>
-                  <div>
-                    <Label>Postal Code</Label>
-                    <input
-                      type="text"
-                      value={newCompany.postalCode}
-                      onChange={(e) => setNewCompany({ ...newCompany, postalCode: e.target.value })}
-                      placeholder="e.g. 14111"
-                      className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <Label>Postal Area</Label>
-                    <input
-                      type="text"
-                      value={newCompany.postalArea}
-                      onChange={(e) => setNewCompany({ ...newCompany, postalArea: e.target.value })}
-                      placeholder="e.g. Mikocheni"
-                      className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
-                    />
-                  </div>
-                  <div>
-                    <Label>Country</Label>
-                    <select
-                      value={newCompany.country}
-                      onChange={(e) => setNewCompany({ ...newCompany, country: e.target.value })}
-                      className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white text-sm focus:outline-none focus:border-[#1877F2]"
-                    >
-                      <option value="TZ">🇹🇿 Tanzania</option>
-                      <option value="KE">🇰🇪 Kenya</option>
-                      <option value="UG">🇺🇬 Uganda</option>
-                      <option value="RW">🇷🇼 Rwanda</option>
-                      <option value="ZA">🇿🇦 South Africa</option>
-                      <option value="NG">🇳🇬 Nigeria</option>
-                      <option value="GH">🇬🇭 Ghana</option>
-                      <option value="US">🇺🇸 United States</option>
-                      <option value="GB">🇬🇧 United Kingdom</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            </Section>
-
-            {/* SUBMIT */}
-            <div className="border-t border-white/5 mt-6 pt-6 flex gap-2">
-              <button
-                type="button"
-                onClick={() => setStep('choose-company')}
-                className="flex-1 py-4 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-bold text-sm transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={creatingCompany}
-                className="flex-[2] py-4 rounded-2xl bg-gradient-to-r from-[#1877F2] to-[#7B4DFF] hover:opacity-90 disabled:opacity-60 text-white font-bold text-sm transition-all flex items-center justify-center gap-2"
-              >
-                {creatingCompany ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle size={16} />
-                    Create & Continue
-                  </>
-                )}
-              </button>
-            </div>
-          </form>
-        </div>
-      </>
-    );
-  }
-
-  // ═══════════════════════════════════════════════════════
-  // STEP 2 — JOB FORM
-  // ═══════════════════════════════════════════════════════
   return (
     <>
       <SEO
-        title="Post a Job | JobsReport"
-        description="Post a job opening to reach thousands of qualified candidates on JobsReport."
+        title={`${user.name}${user.headline ? ' — ' + user.headline : ''} | JobsReport`}
+        description={user.bio || `${user.name} on JobsReport — job listings and career stories.`}
+        ogTitle={user.name}
+        ogDescription={user.bio || ''}
+        ogImage={user.profile_image_url || user.cover_image_url || undefined}
       />
 
-      <div className="max-w-3xl mx-auto px-4 py-8 pb-16">
-        <button
-          onClick={() => setStep('choose-company')}
-          className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-6 text-sm"
-        >
-          <ArrowLeft size={16} />
-          Change Company
-        </button>
+      {/* Full-bleed cover */}
+      <div className="relative w-full h-[220px] sm:h-[280px] md:h-[320px] bg-gradient-to-br from-[#1877F2]/40 via-[#7B4DFF]/30 to-[#A033FF]/40 overflow-hidden">
+        {user.cover_image_url ? (
+          <img src={user.cover_image_url} alt="cover" className="w-full h-full object-cover" />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-[14px] text-white/40 font-bold uppercase tracking-widest">
+              No cover yet
+            </div>
+          </div>
+        )}
+        <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-[#050B18] via-[#050B18]/60 to-transparent pointer-events-none" />
 
-        <div className="mb-8">
-          <h1 className="text-2xl md:text-3xl font-black text-white">
-            Post a Job
-          </h1>
-          <p className="text-gray-400 text-sm mt-1">
-            Hiring on behalf of{' '}
-            <span className="text-white font-bold">{selectedCompany}</span>
-          </p>
+        {isOwnProfile && (
+          <>
+            <button
+              onClick={() => coverInputRef.current?.click()}
+              disabled={uploadingCover}
+              className="absolute bottom-3 right-3 px-3 py-2 rounded-xl bg-black/60 hover:bg-black/80 text-white text-xs font-bold flex items-center gap-1.5 backdrop-blur-md border border-white/10"
+            >
+              {uploadingCover ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />}
+              {uploadingCover ? 'Uploading…' : 'Edit cover'}
+            </button>
+            <input
+              type="file"
+              ref={coverInputRef}
+              className="hidden"
+              accept="image/*"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleCoverUpload(f);
+                e.currentTarget.value = '';
+              }}
+            />
+          </>
+        )}
+      </div>
+
+      {/* Share toast */}
+      {shareToast && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[400] px-4 py-3 rounded-xl bg-[#0B1120] border border-emerald-500/30 shadow-2xl flex items-center gap-2">
+          <CheckCircle size={16} className="text-emerald-400" />
+          <span className="text-sm text-white font-medium">{shareToast}</span>
+        </div>
+      )}
+
+      {/* Body */}
+      <div className="max-w-3xl mx-auto px-4 pb-16">
+        {uploadError && (
+          <div className="mt-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+            <p className="text-xs text-red-400">{uploadError}</p>
+          </div>
+        )}
+
+        <div className="flex items-start gap-4 -mt-[60px] sm:-mt-[70px] px-1 sm:px-2 relative z-10">
+          <div className="relative shrink-0">
+            <div className="w-[92px] h-[92px] sm:w-[110px] sm:h-[110px] rounded-full p-[3px] bg-gradient-to-br from-[#1877F2] via-[#7B4DFF] to-[#A033FF]">
+              <div className="w-full h-full rounded-full overflow-hidden border-[3px] border-[#050B18] bg-[#0B1120]">
+                <img
+                  src={avatar}
+                  alt={user.name}
+                  className="w-full h-full object-cover"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = DEFAULT_AVATAR(user.name, user.id); }}
+                />
+              </div>
+            </div>
+            {isOwnProfile && (
+              <button
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={uploadingAvatar}
+                className="absolute bottom-1 right-1 w-8 h-8 rounded-full bg-[#0B1120] border-2 border-[#050B18] flex items-center justify-center hover:bg-[#1E293B] transition-colors"
+                aria-label="Edit avatar"
+              >
+                {uploadingAvatar ? (
+                  <Loader2 size={13} className="text-white animate-spin" />
+                ) : (
+                  <Camera size={13} className="text-white" />
+                )}
+              </button>
+            )}
+            <input
+              type="file"
+              ref={avatarInputRef}
+              className="hidden"
+              accept="image/*"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleAvatarUpload(f);
+                e.currentTarget.value = '';
+              }}
+            />
+          </div>
+
+          <div className="flex-1 min-w-0 pt-14 sm:pt-16">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <h1 className="text-xl sm:text-2xl font-black text-white leading-tight truncate">
+                {user.name}
+              </h1>
+              {isVerified && <BadgeCheck size={18} className="text-[#4A9EFF] shrink-0" />}
+            </div>
+            {handle && (
+              <p className="text-[13px] text-gray-500 font-medium mt-0.5 truncate">{handle}</p>
+            )}
+          </div>
         </div>
 
-        <AnimatePresence>
-          {message && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className={`mb-6 p-3 rounded-xl flex items-center gap-2 text-sm ${
-                message.type === 'success'
-                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                  : 'bg-red-500/10 text-red-400 border border-red-500/20'
+        {user.headline && (
+          <p className="text-white text-[15px] font-semibold mt-4 leading-snug">
+            {user.headline}
+          </p>
+        )}
+
+        {user.bio && (
+          <p className="text-gray-300 text-[14px] leading-relaxed mt-2 whitespace-pre-wrap">
+            {user.bio}
+          </p>
+        )}
+
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-3 text-[12.5px] text-gray-500">
+          {user.work && (
+            <span className="flex items-center gap-1.5">
+              <Briefcase size={12} className="text-gray-400" />
+              {user.work}
+            </span>
+          )}
+          {user.education && (
+            <span className="flex items-center gap-1.5">
+              <GraduationCap size={12} className="text-gray-400" />
+              {user.education}
+            </span>
+          )}
+          {user.location && (
+            <span className="flex items-center gap-1.5">
+              <MapPin size={12} className="text-gray-400" />
+              {user.location}
+            </span>
+          )}
+          {user.website && (
+            <a
+              href={user.website}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-[#4A9EFF] hover:underline"
+            >
+              <Globe size={12} />
+              {user.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+            </a>
+          )}
+        </div>
+
+        <div className="flex items-center gap-5 mt-4 text-[13px]">
+          <div>
+            <span className="font-bold text-white">{fmtCount(user.followers_count || 0)}</span>
+            <span className="text-gray-500 ml-1">followers</span>
+          </div>
+          <div>
+            <span className="font-bold text-white">{fmtCount(user.jobs_count || jobs.length)}</span>
+            <span className="text-gray-500 ml-1">job adverts</span>
+          </div>
+          <div>
+            <span className="font-bold text-white">{fmtCount(user.stories_count || stories.length)}</span>
+            <span className="text-gray-500 ml-1">stories</span>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-2 mt-4">
+          {isOwnProfile ? (
+            <>
+              <button
+                onClick={() => setEditing(true)}
+                className="flex-1 h-10 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-white font-bold text-[13px] flex items-center justify-center gap-2 transition-colors"
+              >
+                <Pencil size={14} />
+                Edit Profile
+              </button>
+              <button
+                onClick={handlePostJob}
+                className="flex-1 h-10 rounded-xl bg-gradient-to-r from-[#1877F2] to-[#7B4DFF] hover:opacity-90 text-white font-bold text-[13px] flex items-center justify-center gap-1.5 transition-opacity"
+              >
+                <Plus size={14} />
+                Post a Job
+              </button>
+              <button
+                onClick={() => setCreateStoryOpen(true)}
+                className="h-10 w-10 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-white flex items-center justify-center transition-colors"
+                aria-label="New Story"
+                title="New Story"
+              >
+                <Camera size={14} />
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={handleFollow}
+                disabled={followLoading}
+                className={`flex-1 h-10 rounded-xl font-bold text-[13px] flex items-center justify-center gap-2 transition-colors disabled:opacity-60 ${
+                  following
+                    ? 'bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-white'
+                    : 'bg-[#1877F2] hover:bg-[#166FE5] text-white'
+                }`}
+              >
+                {followLoading ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : following ? (
+                  <UserCheck size={14} />
+                ) : (
+                  <UserPlus size={14} />
+                )}
+                {following ? 'Following' : 'Follow'}
+              </button>
+              <button
+                onClick={handleShareProfile}
+                className="h-10 w-10 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-white flex items-center justify-center transition-colors"
+                aria-label="Share profile"
+                title="Copy profile link"
+              >
+                <Share2 size={14} />
+              </button>
+            </>
+          )}
+        </div>
+
+        {/* Mini stories row — LATEST 5 */}
+        {topStories.length > 0 && (
+          <div className="mt-6">
+            <div className="flex gap-3 overflow-x-auto scrollbar-hide py-1 -mx-1 px-1">
+              {topStories.map((s) => {
+                const thumb = s.media_thumb || '';
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => setViewingStory(s)}
+                    className="flex flex-col items-center gap-1.5 shrink-0 group"
+                  >
+                    <div className="w-16 h-16 rounded-full p-[2.5px] bg-gradient-to-br from-[#1877F2] via-[#7B4DFF] to-[#A033FF]">
+                      <div className="w-full h-full rounded-full overflow-hidden border-[3px] border-[#050B18] bg-[#0B1120]">
+                        {s.type === 'text' && !thumb ? (
+                          <div
+                            className="w-full h-full flex items-center justify-center text-[8px] font-black text-white px-1 text-center leading-tight"
+                            style={{ background: s.background_style || '#0B1120' }}
+                          >
+                            {(s.text_content || '').slice(0, 12)}
+                          </div>
+                        ) : (
+                          <img src={thumb} alt="" className="w-full h-full object-cover" loading="lazy" />
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-gray-400 max-w-[64px] truncate">
+                      {formatRelative(s.created_at)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Tabs */}
+        <div className="flex items-center gap-6 mt-6 border-b border-white/[0.06]">
+          {[
+            { key: 'jobs' as const, label: 'Job Adverts', icon: <Briefcase size={14} />, count: jobs.length },
+            { key: 'stories' as const, label: 'Stories', icon: <Instagram size={14} />, count: stories.length },
+            { key: 'about' as const, label: 'About', icon: <MessageCircle size={14} /> },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`relative pb-3 text-[13px] font-bold flex items-center gap-1.5 transition-colors ${
+                activeTab === tab.key ? 'text-white' : 'text-gray-500 hover:text-gray-300'
               }`}
             >
-              {message.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
-              {message.text}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <form onSubmit={handleSubmit} className="space-y-0">
-          {/* COMPANY (locked) */}
-          <Section title="Company You're Hiring For" icon={<Building2 size={14} />}>
-            <div className="flex items-center gap-3 p-4 bg-white/[0.02] border border-white/10 rounded-2xl">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#1877F2] to-[#7B4DFF] flex items-center justify-center shrink-0">
-                <Building2 size={18} className="text-white" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-white font-bold truncate">{selectedCompany}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setStep('choose-company')}
-                className="text-[10px] font-bold text-[#4A9EFF] hover:underline uppercase tracking-wider shrink-0"
-              >
-                Change
-              </button>
-            </div>
-          </Section>
-
-          {/* BASICS */}
-          <Section title="Job Basics" icon={<Briefcase size={14} />}>
-            <div className="space-y-4">
-              <div>
-                <Label required>Job Title</Label>
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Senior Frontend Engineer"
-                  className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <Label required>Category / Role</Label>
-                  <SearchableSelect
-                    value={selectedRole}
-                    onChange={setSelectedRole}
-                    options={roles.map((r) => ({ value: r.title, label: r.title }))}
-                    placeholder="Search categories..."
-                    emptyMessage="No category found"
-                    initialCount={3}
-                  />
-                </div>
-                <div>
-                  <Label>Location Label</Label>
-                  <input
-                    type="text"
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    placeholder="e.g. Dar es Salaam"
-                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <Label>Salary (optional)</Label>
-                  <input
-                    type="text"
-                    value={salary}
-                    onChange={(e) => setSalary(e.target.value)}
-                    placeholder="e.g. TZS 1,500,000"
-                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
-                  />
-                </div>
-                <div>
-                  <Label required>Expires On</Label>
-                  <input
-                    type="date"
-                    value={expiresAt}
-                    onChange={(e) => setExpiresAt(e.target.value)}
-                    min={new Date().toISOString().split('T')[0]}
-                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white text-sm focus:outline-none focus:border-[#1877F2]"
-                    required
-                  />
-                </div>
-              </div>
-            </div>
-          </Section>
-
-          {/* LOCATIONS */}
-          <Section title="Locations" icon={<MapPin size={14} />}>
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <Label required>Street Address</Label>
-                  <input
-                    type="text"
-                    value={locations.street_address}
-                    onChange={(e) => setLocations({ ...locations, street_address: e.target.value })}
-                    placeholder="e.g. Plot 1520, Mwai Kibaki Road"
-                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
-                  />
-                </div>
-                <div>
-                  <Label required>City</Label>
-                  <input
-                    type="text"
-                    value={locations.city}
-                    onChange={(e) => setLocations({ ...locations, city: e.target.value })}
-                    placeholder="e.g. Dar es Salaam"
-                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <Label required>Region</Label>
-                  <input
-                    type="text"
-                    value={locations.region}
-                    onChange={(e) => setLocations({ ...locations, region: e.target.value })}
-                    placeholder="e.g. Kinondoni"
-                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
-                  />
-                </div>
-                <div>
-                  <Label required>Country</Label>
-                  <input
-                    type="text"
-                    value={locations.country}
-                    onChange={(e) => setLocations({ ...locations, country: e.target.value })}
-                    placeholder="e.g. Tanzania"
-                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
-                  />
-                </div>
-                <div>
-                  <Label required>Postcode</Label>
-                  <input
-                    type="text"
-                    value={locations.postcode}
-                    onChange={(e) => setLocations({ ...locations, postcode: e.target.value })}
-                    placeholder="e.g. 14111"
-                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
-                  />
-                </div>
-              </div>
-            </div>
-          </Section>
-
-          {/* APPLICATION */}
-          <Section title="How to Apply" icon={<ExternalLink size={14} />}>
-            <div className="space-y-3">
-              <div className="flex flex-wrap gap-1 p-1 bg-white/[0.03] border border-white/10 rounded-xl">
-                {(['url', 'email', 'whatsapp', 'instructions'] as const).map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => setApplicationType(type)}
-                    className={`px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
-                      applicationType === type
-                        ? 'bg-[#1877F2] text-white'
-                        : 'text-gray-400 hover:text-white'
-                    }`}
-                  >
-                    {type === 'url' && '🔗 URL'}
-                    {type === 'email' && '✉️ Email'}
-                    {type === 'whatsapp' && '💬 WhatsApp'}
-                    {type === 'instructions' && '📋 Instructions'}
-                  </button>
-                ))}
-              </div>
-              {applicationType === 'url' && (
-                <input
-                  type="url"
-                  value={applicationValue}
-                  onChange={(e) => setApplicationValue(e.target.value)}
-                  placeholder="https://company.com/careers/apply"
-                  className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
-                />
+              {tab.icon}
+              {tab.label}
+              {tab.count !== undefined && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                  activeTab === tab.key ? 'bg-[#1877F2]/20 text-[#4A9EFF]' : 'bg-white/5 text-gray-500'
+                }`}>
+                  {tab.count}
+                </span>
               )}
-              {applicationType === 'email' && (
-                <input
-                  type="email"
-                  value={applicationValue}
-                  onChange={(e) => setApplicationValue(e.target.value)}
-                  placeholder="careers@company.com"
-                  className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
-                />
+              {activeTab === tab.key && (
+                <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-[#1877F2] to-[#A033FF] rounded-full" />
               )}
-              {applicationType === 'whatsapp' && (
-                <input
-                  type="text"
-                  value={applicationValue}
-                  onChange={(e) => setApplicationValue(e.target.value)}
-                  placeholder="+255 712 345 678"
-                  className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-green-500 text-sm"
-                />
-              )}
-              {applicationType === 'instructions' && (
-                <textarea
-                  value={applicationValue}
-                  onChange={(e) => setApplicationValue(e.target.value)}
-                  placeholder="e.g. Submit your CV to..."
-                  rows={4}
-                  className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-violet-500 text-sm resize-none"
-                />
-              )}
-            </div>
-          </Section>
+            </button>
+          ))}
+        </div>
 
-          {/* ATTACHMENTS */}
-          <Section title="Attachments" icon={<File size={14} />}>
-            <label className="flex items-center justify-center gap-2 p-6 border-2 border-dashed border-white/10 hover:border-[#1877F2]/40 rounded-2xl cursor-pointer transition-all group">
-              <input
-                type="file"
-                accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
-                multiple
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-              <Upload size={18} className="text-gray-500 group-hover:text-[#4A9EFF] transition-colors" />
-              <span className="text-sm text-gray-400 group-hover:text-[#4A9EFF]">
-                {files.length > 0 ? `${files.length} file(s) selected` : 'Upload files (optional)'}
-              </span>
-            </label>
-            {files.length > 0 && (
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mt-3">
-                {files.map((f, i) => (
-                  <div key={i} className="relative group rounded-xl overflow-hidden border border-white/10 bg-white/[0.02]">
-                    {f.type === 'image' ? (
-                      <img src={f.thumbnail || f.url} alt={f.name} className="w-full h-20 object-cover" />
-                    ) : (
-                      <div className="w-full h-20 flex flex-col items-center justify-center p-1">
-                        <File size={20} className="text-blue-400" />
-                        <span className="text-[9px] text-gray-500 mt-1 truncate w-full text-center">
-                          {f.name.slice(0, 12)}
-                        </span>
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setFiles((prev) => prev.filter((_, idx) => idx !== i))}
-                      className="absolute top-1 right-1 w-6 h-6 bg-red-500 hover:bg-red-400 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                    >
-                      <Trash2 size={10} />
-                    </button>
+        {/* TAB CONTENT */}
+        <div className="mt-4">
+          {activeTab === 'jobs' && (
+            <div>
+              {sortedJobs.length === 0 ? (
+                <EmptyState
+                  icon={<Briefcase size={28} />}
+                  title="No job adverts yet"
+                  subtitle={isOwnProfile ? 'Post a job to attract candidates' : "This user hasn't posted any jobs yet"}
+                  action={isOwnProfile ? { label: 'Post a Job', onClick: handlePostJob } : undefined}
+                />
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {visibleJobs.map((j) => <JobCard key={j.id} job={j} />)}
                   </div>
-                ))}
-              </div>
-            )}
-          </Section>
 
-          {/* DESCRIPTION */}
-          <Section title="Job Description" icon={<FileText size={14} />}>
-            <div className="space-y-3">
-              <div className="flex justify-end">
-                <div className="flex bg-white/5 p-0.5 rounded-lg text-[10px] font-bold">
-                  <button
-                    type="button"
-                    onClick={() => setDescEditMode('visual')}
-                    className={`px-2.5 py-1 rounded-md uppercase ${
-                      descEditMode === 'visual' ? 'bg-[#1877F2] text-white' : 'text-gray-400'
-                    }`}
-                  >
-                    Visual
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (descriptionEditorRef.current) {
-                        setDescription(descriptionEditorRef.current.innerHTML);
-                      }
-                      setDescEditMode('code');
-                    }}
-                    className={`px-2.5 py-1 rounded-md uppercase ${
-                      descEditMode === 'code' ? 'bg-[#1877F2] text-white' : 'text-gray-400'
-                    }`}
-                  >
-                    HTML
-                  </button>
-                </div>
-              </div>
-              {descEditMode === 'visual' && (
-                <div className="flex flex-wrap items-center gap-0.5 p-1.5 bg-white/[0.03] border border-white/10 rounded-xl">
-                  <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('bold'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><Bold size={14} /></button>
-                  <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('italic'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><Italic size={14} /></button>
-                  <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('underline'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><Underline size={14} /></button>
-                  <span className="w-px h-4 bg-white/10 mx-1" />
-                  <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('formatBlock', false, 'h3'); }} className="px-2 py-1.5 hover:bg-white/10 rounded-lg text-xs font-bold">H3</button>
-                  <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('formatBlock', false, 'p'); }} className="px-2 py-1.5 hover:bg-white/10 rounded-lg text-xs">P</button>
-                  <span className="w-px h-4 bg-white/10 mx-1" />
-                  <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('insertUnorderedList'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><List size={14} /></button>
-                  <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('insertOrderedList'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><List size={14} /></button>
-                </div>
-              )}
-              {descEditMode === 'visual' ? (
-                <div
-                  ref={descriptionEditorRef}
-                  contentEditable
-                  suppressContentEditableWarning
-                  onInput={() => {
-                    if (descriptionEditorRef.current) {
-                      setDescription(descriptionEditorRef.current.innerHTML);
-                    }
-                  }}
-                  className="w-full min-h-[500px] max-h-[900px] bg-white/[0.01] border border-white/10 rounded-2xl p-5 text-gray-200 focus:outline-none focus:border-[#1877F2]/40 overflow-y-auto resize-y"
-                  style={{ fontSize: '15px', lineHeight: '1.8' }}
-                  data-placeholder="Describe the role, responsibilities, requirements..."
-                />
-              ) : (
-                <textarea
-                  value={description}
-                  onChange={(e) => {
-                    setDescription(e.target.value);
-                    if (descriptionEditorRef.current) {
-                      descriptionEditorRef.current.innerHTML = e.target.value;
-                    }
-                  }}
-                  className="w-full min-h-[500px] max-h-[900px] bg-white/[0.01] border border-white/10 rounded-2xl p-5 text-[#4A9EFF] font-mono focus:outline-none focus:border-[#1877F2]/40 overflow-y-auto resize-y text-[13px] leading-relaxed"
-                  placeholder="<p>Edit HTML directly...</p>"
-                />
+                  {hasMoreJobs && (
+                    <div className="flex justify-center mt-4">
+                      <button
+                        onClick={() => setJobsVisible((v) => v + JOBS_PER_PAGE)}
+                        className="px-6 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-white font-bold text-xs uppercase tracking-wider transition-colors flex items-center gap-2"
+                      >
+                        <ChevronDown size={14} />
+                        See More ({sortedJobs.length - jobsVisible} remaining)
+                      </button>
+                    </div>
+                  )}
+
+                  {!hasMoreJobs && jobsVisible > JOBS_PER_PAGE && (
+                    <div className="flex justify-center mt-4">
+                      <button
+                        onClick={() => setJobsVisible(JOBS_PER_PAGE)}
+                        className="text-xs text-gray-500 hover:text-white font-bold uppercase tracking-wider transition-colors"
+                      >
+                        Show Less
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
-          </Section>
+          )}
 
-          {/* ADVANCED */}
-          <div className="border-t border-white/5 mt-6 pt-6">
-            <button
-              type="button"
-              onClick={() => setShowAdvanced((v) => !v)}
-              className="w-full flex items-center justify-between text-[11px] font-bold text-gray-400 uppercase tracking-widest hover:text-white transition-colors"
-            >
-              <span className="flex items-center gap-2">
-                <Sparkles size={14} className="text-violet-400" />
-                Advanced Options
-              </span>
-              <ChevronDown
-                size={16}
-                className={`transition-transform ${showAdvanced ? 'rotate-180' : ''}`}
-              />
-            </button>
-            {showAdvanced && (
-              <div className="mt-4 space-y-3">
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                  <input
-                    type="text"
-                    placeholder="Category"
-                    value={advanced.job_category}
-                    onChange={(e) => setAdvanced((p) => ({ ...p, job_category: e.target.value }))}
-                    className="bg-white/[0.03] border border-white/10 px-3 py-2.5 rounded-lg text-xs text-white"
-                  />
-                  <select
-                    value={advanced.employment_type}
-                    onChange={(e) => setAdvanced((p) => ({ ...p, employment_type: e.target.value }))}
-                    className="bg-white/[0.03] border border-white/10 px-3 py-2.5 rounded-lg text-xs text-white"
-                  >
-                    <option value="FULL_TIME">Full Time</option>
-                    <option value="PART_TIME">Part Time</option>
-                    <option value="CONTRACT">Contract</option>
-                    <option value="TEMPORARY">Temporary</option>
-                    <option value="INTERNSHIP">Internship</option>
-                  </select>
-                  <select
-                    value={advanced.workplace_type}
-                    onChange={(e) => setAdvanced((p) => ({ ...p, workplace_type: e.target.value }))}
-                    className="bg-white/[0.03] border border-white/10 px-3 py-2.5 rounded-lg text-xs text-white"
-                  >
-                    <option value="Onsite">Onsite</option>
-                    <option value="Remote">Remote</option>
-                    <option value="Hybrid">Hybrid</option>
-                  </select>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                  <select
-                    value={advanced.education_level}
-                    onChange={(e) => setAdvanced((p) => ({ ...p, education_level: e.target.value }))}
-                    className="bg-white/[0.03] border border-white/10 px-3 py-2.5 rounded-lg text-xs text-white"
-                  >
-                    <option value="Any">Any Education</option>
-                    <option value="High School">High School</option>
-                    <option value="Diploma">Diploma</option>
-                    <option value="Bachelor">Bachelor</option>
-                    <option value="Master">Master</option>
-                    <option value="PhD">PhD</option>
-                  </select>
-                  <input
-                    type="number"
-                    placeholder="Experience (months)"
-                    value={advanced.experience_months || ''}
-                    onChange={(e) => setAdvanced((p) => ({ ...p, experience_months: parseInt(e.target.value) || 0 }))}
-                    className="bg-white/[0.03] border border-white/10 px-3 py-2.5 rounded-lg text-xs text-white"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Industry"
-                    value={advanced.industry}
-                    onChange={(e) => setAdvanced((p) => ({ ...p, industry: e.target.value }))}
-                    className="bg-white/[0.03] border border-white/10 px-3 py-2.5 rounded-lg text-xs text-white"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    placeholder="Skills (comma-separated)"
-                    value={advanced.skills.join(', ')}
-                    onChange={(e) => setAdvanced((p) => ({ ...p, skills: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) }))}
-                    className="bg-white/[0.03] border border-white/10 px-3 py-2.5 rounded-lg text-xs text-white"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Benefits (comma-separated)"
-                    value={advanced.benefits.join(', ')}
-                    onChange={(e) => setAdvanced((p) => ({ ...p, benefits: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) }))}
-                    className="bg-white/[0.03] border border-white/10 px-3 py-2.5 rounded-lg text-xs text-white"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* SUBMIT */}
-          <div className="border-t border-white/5 mt-6 pt-6 flex gap-2">
-            <button
-              type="button"
-              onClick={() => setStep('choose-company')}
-              className="flex-1 py-4 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-bold text-sm transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="flex-[2] py-4 rounded-2xl bg-gradient-to-r from-[#1877F2] to-[#7B4DFF] hover:opacity-90 disabled:opacity-60 text-white font-bold text-sm transition-all flex items-center justify-center gap-2"
-            >
-              {submitting ? (
-                <>
-                  <RefreshCw size={16} className="animate-spin" />
-                  Publishing...
-                </>
+          {activeTab === 'stories' && (
+            <div>
+              {sortedStories.length === 0 ? (
+                <EmptyState
+                  icon={<Instagram size={28} />}
+                  title="No stories yet"
+                  subtitle={isOwnProfile ? 'Share your first story — job wins, tips, updates' : "This user hasn't shared any stories yet"}
+                  action={isOwnProfile ? { label: 'Create Story', onClick: () => setCreateStoryOpen(true) } : undefined}
+                />
               ) : (
                 <>
-                  <CheckCircle size={16} />
-                  Publish Job
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {visibleStories.map((s) => {
+                      const thumb = s.media_thumb || '';
+                      return (
+                        <button
+                          key={s.id}
+                          onClick={() => setViewingStory(s)}
+                          className="relative aspect-[9/16] rounded-2xl overflow-hidden border border-white/5 bg-white/[0.02] hover:border-[#1877F2]/30 transition-all text-left"
+                        >
+                          {s.type === 'text' ? (
+                            <div
+                              className="absolute inset-0 p-3 flex items-center justify-center text-center"
+                              style={{ background: s.background_style || '#0B1120' }}
+                            >
+                              <span className="text-white text-xs font-bold line-clamp-6">
+                                {s.text_content}
+                              </span>
+                            </div>
+                          ) : thumb ? (
+                            <img
+                              src={thumb}
+                              alt=""
+                              className="absolute inset-0 w-full h-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#1877F2] to-[#7B4DFF]">
+                              <ImageIcon size={28} className="text-white" />
+                            </div>
+                          )}
+                          <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent">
+                            <p className="text-white/80 text-[10px] flex items-center gap-1">
+                              <Eye size={9} /> {fmtCount(s.views_count || 0)} · {formatRelative(s.created_at)}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {hasMoreStories && (
+                    <div className="flex justify-center mt-4">
+                      <button
+                        onClick={() => setStoriesVisible((v) => v + STORIES_PER_PAGE)}
+                        className="px-6 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-white font-bold text-xs uppercase tracking-wider transition-colors flex items-center gap-2"
+                      >
+                        <ChevronDown size={14} />
+                        See More ({sortedStories.length - storiesVisible} remaining)
+                      </button>
+                    </div>
+                  )}
+
+                  {!hasMoreStories && storiesVisible > STORIES_PER_PAGE && (
+                    <div className="flex justify-center mt-4">
+                      <button
+                        onClick={() => setStoriesVisible(STORIES_PER_PAGE)}
+                        className="text-xs text-gray-500 hover:text-white font-bold uppercase tracking-wider transition-colors"
+                      >
+                        Show Less
+                      </button>
+                    </div>
+                  )}
                 </>
               )}
-            </button>
-          </div>
-        </form>
+            </div>
+          )}
+
+          {activeTab === 'about' && (
+            <div className="space-y-3">
+              <AboutCard
+                icon={<MessageCircle size={16} />}
+                title="Bio"
+                value={user.bio || (isOwnProfile ? 'Add a short bio' : 'No bio available')}
+                muted={!user.bio}
+                onClick={isOwnProfile && !user.bio ? () => setEditing(true) : undefined}
+              />
+              <AboutCard
+                icon={<Briefcase size={16} />}
+                title="Work"
+                value={user.work || (isOwnProfile ? 'Add current company' : 'Not specified')}
+                muted={!user.work}
+                onClick={isOwnProfile && !user.work ? () => setEditing(true) : undefined}
+              />
+              <AboutCard
+                icon={<GraduationCap size={16} />}
+                title="Education"
+                value={user.education || (isOwnProfile ? 'Add education' : 'Not specified')}
+                muted={!user.education}
+                onClick={isOwnProfile && !user.education ? () => setEditing(true) : undefined}
+              />
+              <AboutCard
+                icon={<MapPin size={16} />}
+                title="Location"
+                value={user.location || (isOwnProfile ? 'Add location' : 'Not specified')}
+                muted={!user.location}
+                onClick={isOwnProfile && !user.location ? () => setEditing(true) : undefined}
+              />
+              {user.website && (
+                <AboutCard
+                  icon={<Globe size={16} />}
+                  title="Website"
+                  value={user.website}
+                  link={user.website}
+                />
+              )}
+              <AboutCard
+                icon={<Calendar size={16} />}
+                title="Joined"
+                value={user.created_at ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '—'}
+              />
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* MODALS */}
+      {editing && isOwnProfile && user && (
+        <EditProfileModal
+          user={user}
+          onClose={() => setEditing(false)}
+          onSave={handleSaveProfile}
+        />
+      )}
+
+      {createStoryOpen && currentUser && (
+        <CreateStoryModal
+          currentUser={currentUser}
+          onClose={() => setCreateStoryOpen(false)}
+          onCreate={handleCreateStory}
+        />
+      )}
+
+      {viewingStory && (
+        <StoryViewer
+          story={viewingStory}
+          user={
+            viewingStory.user || {
+              id: viewingStory.user_id,
+              name: user.name,
+              profile_image_url: user.profile_image_url,
+            }
+          }
+          currentUser={currentUser}
+          allStories={sortedStories}
+          onClose={() => setViewingStory(null)}
+          onNext={() => {
+            const idx = sortedStories.findIndex((s) => s.id === viewingStory.id);
+            const next = sortedStories[idx + 1];
+            if (next) setViewingStory(next); else setViewingStory(null);
+          }}
+          onPrev={() => {
+            const idx = sortedStories.findIndex((s) => s.id === viewingStory.id);
+            const prev = sortedStories[idx - 1];
+            if (prev) setViewingStory(prev); else setViewingStory(null);
+          }}
+          onDeleteStory={isOwnProfile ? handleDeleteStory : undefined}
+        />
+      )}
     </>
   );
 }
+
+// ============================================================
+// SMALL COMPONENTS
+// ============================================================
+const EmptyState: React.FC<{
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  action?: { label: string; onClick: () => void };
+}> = ({ icon, title, subtitle, action }) => (
+  <div className="text-center py-16 px-4 rounded-3xl border border-white/5 bg-white/[0.01]">
+    <div className="w-14 h-14 rounded-full bg-white/[0.04] flex items-center justify-center mx-auto mb-3 text-gray-500">
+      {icon}
+    </div>
+    <p className="text-white font-bold text-sm mb-1">{title}</p>
+    <p className="text-gray-500 text-xs mb-4 max-w-xs mx-auto">{subtitle}</p>
+    {action && (
+      <button
+        onClick={action.onClick}
+        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#1877F2] hover:bg-[#166FE5] text-white text-xs font-bold"
+      >
+        <Plus size={12} /> {action.label}
+      </button>
+    )}
+  </div>
+);
+
+const AboutCard: React.FC<{
+  icon: React.ReactNode;
+  title: string;
+  value: string;
+  muted?: boolean;
+  link?: string;
+  onClick?: () => void;
+}> = ({ icon, title, value, muted, link, onClick }) => (
+  <div
+    className={`flex items-start gap-3 p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] ${onClick ? 'cursor-pointer hover:bg-white/[0.04] hover:border-[#1877F2]/30 transition-all' : ''}`}
+    onClick={onClick}
+  >
+    <div className="w-9 h-9 rounded-xl bg-white/[0.04] flex items-center justify-center text-gray-400 shrink-0">
+      {icon}
+    </div>
+    <div className="flex-1 min-w-0">
+      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{title}</p>
+      {link ? (
+        <a
+          href={link.startsWith('http') ? link : `https://${link}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[13px] text-[#4A9EFF] hover:underline break-all flex items-center gap-1"
+        >
+          {value}
+          <ExternalLink size={11} />
+        </a>
+      ) : (
+        <p className={`text-[13px] break-words ${muted ? 'text-gray-500 italic' : 'text-white'}`}>
+          {value}
+        </p>
+      )}
+    </div>
+  </div>
+);
