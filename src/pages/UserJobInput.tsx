@@ -1,4 +1,4 @@
-import { useState, useEffect, FormEvent, ChangeEvent, useRef } from 'react';
+import { useState, useEffect, FormEvent, ChangeEvent, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
@@ -6,23 +6,14 @@ import {
   Bold, Italic, Underline, List, Trash2, Plus, AlertCircle,
   ChevronDown, CheckCircle, RefreshCw, ArrowLeft, Eye,
   Image as ImageIcon, Sparkles, DollarSign, Clock, Search,
-  ExternalLink, LogOut
+  ExternalLink, Pencil
 } from 'lucide-react';
 import SEO from '../components/SEO';
 import { useUserAuth, getUserToken } from '../context/UserAuthContext';
-import { useCountry } from '../context/CountryContext';
 
 // ============================================================
 // TYPES
 // ============================================================
-interface UserCompany {
-  id: string;
-  name: string;
-  industry?: string;
-  logoUrl?: string;
-  website?: string;
-}
-
 interface JobFile {
   url: string;
   thumbnail: string;
@@ -34,14 +25,15 @@ interface JobFile {
 }
 
 // ============================================================
-// SEARCHABLE COMBOBOX
+// SEARCHABLE COMBOBOX (search on top, show 3 initially)
 // ============================================================
 interface SearchableSelectProps {
   value: string;
   onChange: (value: string) => void;
-  options: { value: string; label: string; sublabel?: string }[];
+  options: { value: string; label: string }[];
   placeholder?: string;
   emptyMessage?: string;
+  initialCount?: number;
 }
 
 const SearchableSelect = ({
@@ -50,6 +42,7 @@ const SearchableSelect = ({
   options,
   placeholder = 'Search...',
   emptyMessage = 'No matches found',
+  initialCount = 3,
 }: SearchableSelectProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -67,9 +60,12 @@ const SearchableSelect = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const filtered = search.trim()
-    ? options.filter((o) => o.label.toLowerCase().includes(search.toLowerCase()))
-    : options;
+  const filtered = useMemo(() => {
+    const base = search.trim()
+      ? options.filter((o) => o.label.toLowerCase().includes(search.toLowerCase()))
+      : options;
+    return search.trim() ? base : base.slice(0, initialCount);
+  }, [options, search, initialCount]);
 
   const displayValue =
     value && !isOpen ? options.find((o) => o.value === value)?.label || value : search;
@@ -83,6 +79,7 @@ const SearchableSelect = ({
           setTimeout(() => inputRef.current?.focus(), 0);
         }}
       >
+        <Search size={14} className="text-gray-500 shrink-0" />
         <input
           ref={inputRef}
           type="text"
@@ -120,12 +117,14 @@ const SearchableSelect = ({
                     : 'text-gray-300 hover:bg-white/5'
                 }`}
               >
-                <div className="font-medium">{opt.label}</div>
-                {opt.sublabel && (
-                  <div className="text-[11px] text-gray-500 mt-0.5">{opt.sublabel}</div>
-                )}
+                {opt.label}
               </button>
             ))
+          )}
+          {!search.trim() && options.length > initialCount && (
+            <div className="px-4 py-2 text-[10px] text-gray-500 text-center font-mono uppercase border-t border-white/5">
+              Type above to search {options.length} total
+            </div>
           )}
         </div>
       )}
@@ -134,11 +133,34 @@ const SearchableSelect = ({
 };
 
 // ============================================================
+// FLAT SECTION (no card — just plain, with top border)
+// ============================================================
+const Section: React.FC<{ title: string; icon: React.ReactNode; children: React.ReactNode }> = ({
+  title,
+  icon,
+  children,
+}) => (
+  <div className="border-t border-white/5 pt-6">
+    <h2 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 mb-4">
+      <span className="text-[#4A9EFF]">{icon}</span>
+      {title}
+    </h2>
+    {children}
+  </div>
+);
+
+const Label: React.FC<{ children: React.ReactNode; required?: boolean }> = ({ children, required }) => (
+  <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">
+    {children}
+    {required && <span className="text-red-400 ml-0.5">*</span>}
+  </label>
+);
+
+// ============================================================
 // MAIN PAGE
 // ============================================================
 export default function UserJobInput() {
   const { user: authUser, loading: authLoading } = useUserAuth();
-  const { selectedCountry } = useCountry();
   const navigate = useNavigate();
 
   // ── Auth guard
@@ -149,16 +171,12 @@ export default function UserJobInput() {
   }, [authUser, authLoading, navigate]);
 
   // ── Data fetching
-  const [companies, setCompanies] = useState<UserCompany[]>([]);
   const [roles, setRoles] = useState<{ id: string; title: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
   // ── Form state
   const [title, setTitle] = useState('');
-  const [selectedCompany, setSelectedCompany] = useState('');
-  const [customCompanyName, setCustomCompanyName] = useState('');
-  const [isCustomCompany, setIsCustomCompany] = useState(false);
-  const [selectedRole, setSelectedRole] = useState('Software Developer');
+  const [selectedRole, setSelectedRole] = useState('');
   const [location, setLocation] = useState('');
   const [salary, setSalary] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
@@ -175,8 +193,18 @@ export default function UserJobInput() {
   const [descEditMode, setDescEditMode] = useState<'visual' | 'code'>('visual');
   const descriptionEditorRef = useRef<HTMLDivElement>(null);
 
-  // ── Schema data
-  const [schemaData, setSchemaData] = useState({
+  // ── Locations (required)
+  const [locations, setLocations] = useState({
+    street_address: '',
+    city: '',
+    region: '',
+    country: 'Tanzania',
+    postcode: '',
+  });
+
+  // ── Advanced schema (optional)
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [advanced, setAdvanced] = useState({
     job_category: '',
     industry: '',
     employment_type: 'FULL_TIME',
@@ -188,54 +216,30 @@ export default function UserJobInput() {
     salary_min: null as number | null,
     salary_max: null as number | null,
     salary_currency: 'TZS',
-    street_address: '',
-    city: '',
-    region: '',
-    country: 'Tanzania',
-    postcode: '',
   });
 
-  const [showSchema, setShowSchema] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // ── Company from profile (mandatory)
+  const companyName = String((authUser as any)?.work || '').trim();
+  const hasCompany = companyName.length > 0;
+
   // ────────────────────────────────────────────────────────
-  // LOAD USER'S COMPANY + COMPANIES + ROLES
+  // LOAD ROLES
   // ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!authUser) return;
 
     async function load() {
       try {
-        // Fetch all companies for search
-        const compRes = await fetch('/api/companies?all=true');
-        if (compRes.ok) {
-          const compData = await compRes.json();
-          const list = Array.isArray(compData) ? compData : compData.companies || [];
-          setCompanies(list);
-
-          // Auto-match user's "work" field to a company
-          const userWork = (authUser as any)?.work || '';
-          if (userWork) {
-            const matched = list.find(
-              (c: any) => c.name.toLowerCase() === userWork.toLowerCase()
-            );
-            if (matched) {
-              setSelectedCompany(matched.name);
-            } else {
-              // Pre-fill as custom company if no match
-              setCustomCompanyName(userWork);
-              setIsCustomCompany(true);
-            }
-          }
-        }
-
-        // Fetch roles
         const rolesRes = await fetch('/api/filters');
         if (rolesRes.ok) {
           const rolesData = await rolesRes.json();
           const cats = Array.isArray(rolesData.categories) ? rolesData.categories : [];
-          setRoles(cats.map((c: any) => ({ id: c.slug, title: c.name })));
+          const list = cats.map((c: any) => ({ id: c.slug, title: c.name }));
+          setRoles(list);
+          if (list.length > 0) setSelectedRole(list[0].title);
         }
       } catch (err) {
         console.error('Load failed:', err);
@@ -247,7 +251,7 @@ export default function UserJobInput() {
     load();
   }, [authUser]);
 
-  // Sync description editor when switching modes
+  // Sync description editor
   useEffect(() => {
     if (descEditMode === 'visual' && descriptionEditorRef.current) {
       descriptionEditorRef.current.innerHTML = description;
@@ -339,14 +343,17 @@ export default function UserJobInput() {
       return;
     }
 
-    // Validation
-    const targetCompany = isCustomCompany ? customCompanyName.trim() : selectedCompany;
+    // ── Validation
+    if (!hasCompany) {
+      showMsg('error', 'Please set your company on your profile first');
+      return;
+    }
     if (!title.trim()) {
       showMsg('error', 'Job title is required');
       return;
     }
-    if (!targetCompany) {
-      showMsg('error', 'Please select or enter a company');
+    if (!selectedRole) {
+      showMsg('error', 'Please select a category');
       return;
     }
     if (!expiresAt) {
@@ -357,10 +364,29 @@ export default function UserJobInput() {
       showMsg('error', 'Application URL is required');
       return;
     }
+    if (applicationType === 'email' && !applicationValue.trim()) {
+      showMsg('error', 'Application email is required');
+      return;
+    }
+    if (applicationType === 'whatsapp' && !applicationValue.trim()) {
+      showMsg('error', 'WhatsApp number is required');
+      return;
+    }
+    if (applicationType === 'instructions' && !applicationValue.trim()) {
+      showMsg('error', 'Application instructions are required');
+      return;
+    }
+
+    // Locations required
+    if (!locations.street_address.trim()) { showMsg('error', 'Street address is required'); return; }
+    if (!locations.city.trim()) { showMsg('error', 'City is required'); return; }
+    if (!locations.region.trim()) { showMsg('error', 'Region is required'); return; }
+    if (!locations.country.trim()) { showMsg('error', 'Country is required'); return; }
+    if (!locations.postcode.trim()) { showMsg('error', 'Postcode is required'); return; }
 
     setSubmitting(true);
     try {
-      // 1. Upload files to R2
+      // 1. Upload files
       const uploadedFiles = [];
       for (const file of files) {
         if (!file.file) continue;
@@ -393,11 +419,13 @@ export default function UserJobInput() {
           : `mailto:${applicationValue}`;
       } else if (applicationType === 'whatsapp') {
         whatsapp_number = applicationValue;
+        applyUrl = `https://wa.me/${applicationValue.replace(/[^0-9]/g, '')}`;
       } else if (applicationType === 'instructions') {
         application_instructions = applicationValue;
+        applyUrl = 'https://jobsreport.online/contact-us';
       }
 
-      // 3. Submit job (via a NEW user endpoint)
+      // 3. Submit
       const res = await fetch('/api/user/jobs', {
         method: 'POST',
         headers: {
@@ -406,44 +434,53 @@ export default function UserJobInput() {
         },
         body: JSON.stringify({
           title: title.trim(),
-          company: targetCompany,
+          company: companyName,
           role: selectedRole,
-          location: location || 'Remote',
+          location: location || locations.city || 'Remote',
           url: applyUrl,
+          applicationType,
+          applicationValue,
           salary: salary?.trim() || 'Not Disclosed',
           expiresAt,
           description,
           is_active: 1,
           // Schema
-          job_category: schemaData.job_category || 'Other',
-          industry: schemaData.industry || '',
-          employment_type: schemaData.employment_type,
-          workplace_type: schemaData.workplace_type,
-          education_level: schemaData.education_level,
-          experience_months: schemaData.experience_months,
-          skills: schemaData.skills,
-          benefits: schemaData.benefits,
-          salary_min: schemaData.salary_min,
-          salary_max: schemaData.salary_max,
-          salary_currency: schemaData.salary_currency,
-          street_address: schemaData.street_address,
-          city: schemaData.city,
-          region: schemaData.region,
-          country: schemaData.country,
-          postcode: schemaData.postcode,
+          job_category: advanced.job_category || 'Other',
+          industry: advanced.industry || '',
+          employment_type: advanced.employment_type,
+          workplace_type: advanced.workplace_type,
+          education_level: advanced.education_level,
+          experience_months: advanced.experience_months,
+          skills: advanced.skills,
+          benefits: advanced.benefits,
+          salary_min: advanced.salary_min,
+          salary_max: advanced.salary_max,
+          salary_currency: advanced.salary_currency,
+          street_address: locations.street_address,
+          city: locations.city,
+          region: locations.region,
+          country: locations.country,
+          postcode: locations.postcode,
           whatsapp_number,
           application_instructions,
           images: uploadedFiles,
         }),
       });
 
-      const result = await res.json();
+      // Safe JSON parse
+      let result: any = {};
+      try {
+        const text = await res.text();
+        result = text ? JSON.parse(text) : {};
+      } catch {
+        result = { error: `Server error (${res.status}). Please try again.` };
+      }
 
       if (res.ok) {
         showMsg('success', 'Job posted successfully! Redirecting...');
         setTimeout(() => navigate('/market'), 1500);
       } else {
-        showMsg('error', result.error || 'Failed to post job');
+        showMsg('error', result.error || `Failed to post job (${res.status})`);
       }
     } catch (err: any) {
       console.error(err);
@@ -454,7 +491,7 @@ export default function UserJobInput() {
   };
 
   // ────────────────────────────────────────────────────────
-  // RENDER
+  // RENDER STATES
   // ────────────────────────────────────────────────────────
   if (authLoading || loading) {
     return (
@@ -467,12 +504,53 @@ export default function UserJobInput() {
     );
   }
 
-  if (!authUser) {
-    return null; // redirect in progress
+  if (!authUser) return null;
+
+  // ────────────────────────────────────────────────────────
+  // BLOCK: no company set on profile
+  // ────────────────────────────────────────────────────────
+  if (!hasCompany) {
+    return (
+      <>
+        <SEO
+          title="Set Company First | JobsReport"
+          description="Please set your company on your profile before posting jobs."
+        />
+        <div className="max-w-3xl mx-auto px-4 py-16">
+          <div className="text-center space-y-4">
+            <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto">
+              <Building2 size={28} className="text-amber-400" />
+            </div>
+            <h1 className="text-2xl font-bold text-white">Company Required</h1>
+            <p className="text-gray-400 text-sm max-w-md mx-auto leading-relaxed">
+              Before posting a job, please set the company you work for on your profile.
+              This ensures employers post on behalf of their real company.
+            </p>
+            <div className="flex items-center justify-center gap-2 pt-4">
+              <Link
+                to={`/u/${authUser.id}`}
+                className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-[#1877F2] to-[#7B4DFF] hover:opacity-90 text-white font-bold text-sm transition-opacity"
+              >
+                <Pencil size={14} />
+                Edit My Profile
+              </Link>
+              <Link
+                to="/"
+                className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold text-sm transition-colors"
+              >
+                <ArrowLeft size={14} />
+                Back Home
+              </Link>
+            </div>
+          </div>
+        </div>
+      </>
+    );
   }
 
-  const targetCompanyName = isCustomCompany ? customCompanyName : selectedCompany;
-
+  // ────────────────────────────────────────────────────────
+  // MAIN RENDER
+  // ────────────────────────────────────────────────────────
   return (
     <>
       <SEO
@@ -481,7 +559,7 @@ export default function UserJobInput() {
       />
 
       <div className="max-w-3xl mx-auto px-4 py-8 pb-16">
-        {/* Back + header */}
+        {/* Back */}
         <Link
           to="/"
           className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-6 text-sm"
@@ -490,27 +568,25 @@ export default function UserJobInput() {
           Back to Home
         </Link>
 
-        <div className="mb-6">
+        {/* Header */}
+        <div className="mb-8">
           <div className="flex items-center gap-2 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#1877F2] to-[#7B4DFF] flex items-center justify-center">
-              <Briefcase size={20} className="text-white" />
-            </div>
             <h1 className="text-2xl md:text-3xl font-black text-white">Post a Job</h1>
           </div>
           <p className="text-gray-400 text-sm">
-            Reach thousands of qualified candidates. Hiring on behalf of{' '}
-            <span className="text-white font-bold">{targetCompanyName || 'your company'}</span>.
+            Hiring on behalf of{' '}
+            <span className="text-white font-bold">{companyName}</span>
           </p>
         </div>
 
-        {/* Success/Error toast */}
+        {/* Toast */}
         <AnimatePresence>
           {message && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className={`mb-4 p-3 rounded-xl flex items-center gap-2 text-sm ${
+              className={`mb-6 p-3 rounded-xl flex items-center gap-2 text-sm ${
                 message.type === 'success'
                   ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                   : 'bg-red-500/10 text-red-400 border border-red-500/20'
@@ -522,230 +598,231 @@ export default function UserJobInput() {
           )}
         </AnimatePresence>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* ─── Company (searchable, pre-filled from profile) ─── */}
-          <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-5 space-y-4">
-            <h2 className="text-sm font-bold text-white uppercase tracking-widest flex items-center gap-2">
-              <Building2 size={14} className="text-[#4A9EFF]" />
-              Company You're Hiring For
-            </h2>
-
-            <div className="flex gap-2 mb-3">
-              <button
-                type="button"
-                onClick={() => setIsCustomCompany(false)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
-                  !isCustomCompany
-                    ? 'bg-[#1877F2] text-white'
-                    : 'bg-white/5 text-gray-400 hover:text-white'
-                }`}
-              >
-                Select Existing
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsCustomCompany(true)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
-                  isCustomCompany
-                    ? 'bg-[#1877F2] text-white'
-                    : 'bg-white/5 text-gray-400 hover:text-white'
-                }`}
-              >
-                Enter Manually
-              </button>
-            </div>
-
-            {isCustomCompany ? (
-              <input
-                type="text"
-                value={customCompanyName}
-                onChange={(e) => setCustomCompanyName(e.target.value)}
-                placeholder="Company name"
-                className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2]"
-              />
-            ) : (
-              <SearchableSelect
-                value={selectedCompany}
-                onChange={setSelectedCompany}
-                options={companies.map((c) => ({
-                  value: c.name,
-                  label: c.name,
-                  sublabel: c.industry,
-                }))}
-                placeholder="Search companies..."
-                emptyMessage="No company found. Try 'Enter Manually'."
-              />
-            )}
-
-            {(authUser as any)?.work && (
-              <div className="flex items-center gap-2 text-xs text-gray-500">
-                <CheckCircle size={12} className="text-emerald-400" />
-                <span>
-                  Your profile lists <strong className="text-white">{(authUser as any).work}</strong> as
-                  your workplace
-                </span>
+        <form onSubmit={handleSubmit} className="space-y-0">
+          {/* ═══════════════════════════════════════════════════ */}
+          {/* COMPANY (locked — from profile)                    */}
+          {/* ═══════════════════════════════════════════════════ */}
+          <Section title="Company You're Hiring For" icon={<Building2 size={14} />}>
+            <div className="flex items-center gap-3 p-4 bg-white/[0.02] border border-white/10 rounded-2xl">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#1877F2] to-[#7B4DFF] flex items-center justify-center shrink-0">
+                <Building2 size={18} className="text-white" />
               </div>
-            )}
-          </div>
-
-          {/* ─── Job Basics ─── */}
-          <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-5 space-y-4">
-            <h2 className="text-sm font-bold text-white uppercase tracking-widest flex items-center gap-2">
-              <Briefcase size={14} className="text-[#4A9EFF]" />
-              Job Basics
-            </h2>
-
-            <div>
-              <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">
-                Job Title *
-              </label>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Senior Frontend Engineer"
-                className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">
-                  Category / Role
-                </label>
-                <select
-                  value={selectedRole}
-                  onChange={(e) => setSelectedRole(e.target.value)}
-                  className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white text-sm focus:outline-none focus:border-[#1877F2]"
-                >
-                  {roles.map((r) => (
-                    <option key={r.id} value={r.title}>
-                      {r.title}
-                    </option>
-                  ))}
-                </select>
+              <div className="flex-1 min-w-0">
+                <p className="text-white font-bold truncate">{companyName}</p>
+                <p className="text-[11px] text-gray-500 mt-0.5">From your profile</p>
               </div>
+              <Link
+                to={`/u/${authUser.id}`}
+                className="text-[10px] font-bold text-[#4A9EFF] hover:underline uppercase tracking-wider shrink-0"
+              >
+                Change
+              </Link>
+            </div>
+          </Section>
 
+          {/* ═══════════════════════════════════════════════════ */}
+          {/* JOB BASICS                                          */}
+          {/* ═══════════════════════════════════════════════════ */}
+          <Section title="Job Basics" icon={<Briefcase size={14} />}>
+            <div className="space-y-4">
               <div>
-                <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">
-                  Location
-                </label>
+                <Label required>Job Title</Label>
                 <input
                   type="text"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  placeholder="e.g. Dar es Salaam, Tanzania"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. Senior Frontend Engineer"
                   className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">
-                  Salary (optional)
-                </label>
-                <input
-                  type="text"
-                  value={salary}
-                  onChange={(e) => setSalary(e.target.value)}
-                  placeholder="e.g. TZS 1,500,000 - 2,500,000"
-                  className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">
-                  Expires On *
-                </label>
-                <input
-                  type="date"
-                  value={expiresAt}
-                  onChange={(e) => setExpiresAt(e.target.value)}
-                  min={new Date().toISOString().split('T')[0]}
-                  className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white text-sm focus:outline-none focus:border-[#1877F2]"
                   required
                 />
               </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <Label required>Category / Role</Label>
+                  <SearchableSelect
+                    value={selectedRole}
+                    onChange={setSelectedRole}
+                    options={roles.map((r) => ({ value: r.title, label: r.title }))}
+                    placeholder="Search categories..."
+                    emptyMessage="No category found"
+                    initialCount={3}
+                  />
+                </div>
+
+                <div>
+                  <Label>Location Label</Label>
+                  <input
+                    type="text"
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder="e.g. Dar es Salaam, Tanzania"
+                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <Label>Salary (optional)</Label>
+                  <input
+                    type="text"
+                    value={salary}
+                    onChange={(e) => setSalary(e.target.value)}
+                    placeholder="e.g. TZS 1,500,000 - 2,500,000"
+                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
+                  />
+                </div>
+
+                <div>
+                  <Label required>Expires On</Label>
+                  <input
+                    type="date"
+                    value={expiresAt}
+                    onChange={(e) => setExpiresAt(e.target.value)}
+                    min={new Date().toISOString().split('T')[0]}
+                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white text-sm focus:outline-none focus:border-[#1877F2]"
+                    required
+                  />
+                </div>
+              </div>
             </div>
-          </div>
+          </Section>
 
-          {/* ─── Application Method ─── */}
-          <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-5 space-y-4">
-            <h2 className="text-sm font-bold text-white uppercase tracking-widest flex items-center gap-2">
-              <ExternalLink size={14} className="text-[#4A9EFF]" />
-              How to Apply
-            </h2>
+          {/* ═══════════════════════════════════════════════════ */}
+          {/* LOCATIONS (required)                                */}
+          {/* ═══════════════════════════════════════════════════ */}
+          <Section title="Locations" icon={<MapPin size={14} />}>
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <Label required>Street Address</Label>
+                  <input
+                    type="text"
+                    value={locations.street_address}
+                    onChange={(e) => setLocations({ ...locations, street_address: e.target.value })}
+                    placeholder="e.g. Plot 1520, Mwai Kibaki Road"
+                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
+                  />
+                </div>
+                <div>
+                  <Label required>City</Label>
+                  <input
+                    type="text"
+                    value={locations.city}
+                    onChange={(e) => setLocations({ ...locations, city: e.target.value })}
+                    placeholder="e.g. Dar es Salaam"
+                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
+                  />
+                </div>
+              </div>
 
-            <div className="flex flex-wrap gap-1 p-1 bg-white/[0.03] border border-white/10 rounded-xl">
-              {(['url', 'email', 'whatsapp', 'instructions'] as const).map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => setApplicationType(type)}
-                  className={`px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
-                    applicationType === type
-                      ? 'bg-[#1877F2] text-white'
-                      : 'text-gray-400 hover:text-white'
-                  }`}
-                >
-                  {type === 'url' && '🔗 URL'}
-                  {type === 'email' && '✉️ Email'}
-                  {type === 'whatsapp' && '💬 WhatsApp'}
-                  {type === 'instructions' && '📋 Instructions'}
-                </button>
-              ))}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <Label required>Region</Label>
+                  <input
+                    type="text"
+                    value={locations.region}
+                    onChange={(e) => setLocations({ ...locations, region: e.target.value })}
+                    placeholder="e.g. Kinondoni"
+                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
+                  />
+                </div>
+                <div>
+                  <Label required>Country</Label>
+                  <input
+                    type="text"
+                    value={locations.country}
+                    onChange={(e) => setLocations({ ...locations, country: e.target.value })}
+                    placeholder="e.g. Tanzania"
+                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
+                  />
+                </div>
+                <div>
+                  <Label required>Postcode</Label>
+                  <input
+                    type="text"
+                    value={locations.postcode}
+                    onChange={(e) => setLocations({ ...locations, postcode: e.target.value })}
+                    placeholder="e.g. 14111"
+                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
+                  />
+                </div>
+              </div>
             </div>
+          </Section>
 
-            {applicationType === 'url' && (
-              <input
-                type="url"
-                value={applicationValue}
-                onChange={(e) => setApplicationValue(e.target.value)}
-                placeholder="https://company.com/careers/apply"
-                className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
-              />
-            )}
+          {/* ═══════════════════════════════════════════════════ */}
+          {/* APPLICATION METHOD                                  */}
+          {/* ═══════════════════════════════════════════════════ */}
+          <Section title="How to Apply" icon={<ExternalLink size={14} />}>
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-1 p-1 bg-white/[0.03] border border-white/10 rounded-xl">
+                {(['url', 'email', 'whatsapp', 'instructions'] as const).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setApplicationType(type)}
+                    className={`px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+                      applicationType === type
+                        ? 'bg-[#1877F2] text-white'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    {type === 'url' && '🔗 URL'}
+                    {type === 'email' && '✉️ Email'}
+                    {type === 'whatsapp' && '💬 WhatsApp'}
+                    {type === 'instructions' && '📋 Instructions'}
+                  </button>
+                ))}
+              </div>
 
-            {applicationType === 'email' && (
-              <input
-                type="email"
-                value={applicationValue}
-                onChange={(e) => setApplicationValue(e.target.value)}
-                placeholder="careers@company.com"
-                className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
-              />
-            )}
+              {applicationType === 'url' && (
+                <input
+                  type="url"
+                  value={applicationValue}
+                  onChange={(e) => setApplicationValue(e.target.value)}
+                  placeholder="https://company.com/careers/apply"
+                  className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
+                />
+              )}
 
-            {applicationType === 'whatsapp' && (
-              <input
-                type="text"
-                value={applicationValue}
-                onChange={(e) => setApplicationValue(e.target.value)}
-                placeholder="+255 712 345 678"
-                className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-green-500 text-sm"
-              />
-            )}
+              {applicationType === 'email' && (
+                <input
+                  type="email"
+                  value={applicationValue}
+                  onChange={(e) => setApplicationValue(e.target.value)}
+                  placeholder="careers@company.com"
+                  className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#1877F2] text-sm"
+                />
+              )}
 
-            {applicationType === 'instructions' && (
-              <textarea
-                value={applicationValue}
-                onChange={(e) => setApplicationValue(e.target.value)}
-                placeholder="e.g. Submit your CV to the HR office at..."
-                rows={4}
-                className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-violet-500 text-sm resize-none"
-              />
-            )}
-          </div>
+              {applicationType === 'whatsapp' && (
+                <input
+                  type="text"
+                  value={applicationValue}
+                  onChange={(e) => setApplicationValue(e.target.value)}
+                  placeholder="+255 712 345 678"
+                  className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-green-500 text-sm"
+                />
+              )}
 
-          {/* ─── Files ─── */}
-          <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-5 space-y-4">
-            <h2 className="text-sm font-bold text-white uppercase tracking-widest flex items-center gap-2">
-              <File size={14} className="text-[#4A9EFF]" />
-              Attachments
-            </h2>
+              {applicationType === 'instructions' && (
+                <textarea
+                  value={applicationValue}
+                  onChange={(e) => setApplicationValue(e.target.value)}
+                  placeholder="e.g. Submit your CV to the HR office at..."
+                  rows={4}
+                  className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-violet-500 text-sm resize-none"
+                />
+              )}
+            </div>
+          </Section>
 
+          {/* ═══════════════════════════════════════════════════ */}
+          {/* ATTACHMENTS                                         */}
+          {/* ═══════════════════════════════════════════════════ */}
+          <Section title="Attachments" icon={<File size={14} />}>
             <label className="flex items-center justify-center gap-2 p-6 border-2 border-dashed border-white/10 hover:border-[#1877F2]/40 rounded-2xl cursor-pointer transition-all group">
               <input
                 type="file"
@@ -761,7 +838,7 @@ export default function UserJobInput() {
             </label>
 
             {files.length > 0 && (
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mt-3">
                 {files.map((f, i) => (
                   <div
                     key={i}
@@ -788,155 +865,122 @@ export default function UserJobInput() {
                 ))}
               </div>
             )}
-          </div>
+          </Section>
 
-          {/* ─── Description (BIG) ─── */}
-          <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold text-white uppercase tracking-widest flex items-center gap-2">
-                <FileText size={14} className="text-[#4A9EFF]" />
-                Job Description
-              </h2>
-              <div className="flex bg-white/5 p-0.5 rounded-lg text-[10px] font-bold">
-                <button
-                  type="button"
-                  onClick={() => setDescEditMode('visual')}
-                  className={`px-2.5 py-1 rounded-md uppercase ${
-                    descEditMode === 'visual' ? 'bg-[#1877F2] text-white' : 'text-gray-400'
-                  }`}
-                >
-                  Visual
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
+          {/* ═══════════════════════════════════════════════════ */}
+          {/* DESCRIPTION                                         */}
+          {/* ═══════════════════════════════════════════════════ */}
+          <Section title="Job Description" icon={<FileText size={14} />}>
+            <div className="space-y-3">
+              <div className="flex justify-end">
+                <div className="flex bg-white/5 p-0.5 rounded-lg text-[10px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setDescEditMode('visual')}
+                    className={`px-2.5 py-1 rounded-md uppercase ${
+                      descEditMode === 'visual' ? 'bg-[#1877F2] text-white' : 'text-gray-400'
+                    }`}
+                  >
+                    Visual
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (descriptionEditorRef.current) {
+                        setDescription(descriptionEditorRef.current.innerHTML);
+                      }
+                      setDescEditMode('code');
+                    }}
+                    className={`px-2.5 py-1 rounded-md uppercase ${
+                      descEditMode === 'code' ? 'bg-[#1877F2] text-white' : 'text-gray-400'
+                    }`}
+                  >
+                    HTML
+                  </button>
+                </div>
+              </div>
+
+              {descEditMode === 'visual' && (
+                <div className="flex flex-wrap items-center gap-0.5 p-1.5 bg-white/[0.03] border border-white/10 rounded-xl">
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('bold'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><Bold size={14} /></button>
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('italic'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><Italic size={14} /></button>
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('underline'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><Underline size={14} /></button>
+                  <span className="w-px h-4 bg-white/10 mx-1" />
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('formatBlock', false, 'h3'); }} className="px-2 py-1.5 hover:bg-white/10 rounded-lg text-xs font-bold">H3</button>
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('formatBlock', false, 'p'); }} className="px-2 py-1.5 hover:bg-white/10 rounded-lg text-xs">P</button>
+                  <span className="w-px h-4 bg-white/10 mx-1" />
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('insertUnorderedList'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><List size={14} /></button>
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); document.execCommand('insertOrderedList'); }} className="p-1.5 hover:bg-white/10 rounded-lg"><List size={14} /></button>
+                </div>
+              )}
+
+              {descEditMode === 'visual' ? (
+                <div
+                  ref={descriptionEditorRef}
+                  contentEditable
+                  suppressContentEditableWarning
+                  onInput={() => {
                     if (descriptionEditorRef.current) {
                       setDescription(descriptionEditorRef.current.innerHTML);
                     }
-                    setDescEditMode('code');
                   }}
-                  className={`px-2.5 py-1 rounded-md uppercase ${
-                    descEditMode === 'code' ? 'bg-[#1877F2] text-white' : 'text-gray-400'
-                  }`}
-                >
-                  HTML
-                </button>
+                  className="w-full min-h-[500px] max-h-[900px] bg-white/[0.01] border border-white/10 rounded-2xl p-5 text-gray-200 focus:outline-none focus:border-[#1877F2]/40 overflow-y-auto resize-y"
+                  style={{ fontSize: '15px', lineHeight: '1.8' }}
+                  data-placeholder="Describe the role, responsibilities, requirements, benefits..."
+                />
+              ) : (
+                <textarea
+                  value={description}
+                  onChange={(e) => {
+                    setDescription(e.target.value);
+                    if (descriptionEditorRef.current) {
+                      descriptionEditorRef.current.innerHTML = e.target.value;
+                    }
+                  }}
+                  className="w-full min-h-[500px] max-h-[900px] bg-white/[0.01] border border-white/10 rounded-2xl p-5 text-[#4A9EFF] font-mono focus:outline-none focus:border-[#1877F2]/40 overflow-y-auto resize-y text-[13px] leading-relaxed"
+                  placeholder="<p>Edit HTML directly...</p>"
+                />
+              )}
+
+              <div className="flex items-center justify-between text-[10px] text-gray-500 font-mono">
+                <span>{description.length} characters</span>
+                <span>{descEditMode === 'visual' ? 'WYSIWYG' : 'HTML'} mode</span>
               </div>
             </div>
+          </Section>
 
-            {/* Toolbar */}
-            {descEditMode === 'visual' && (
-              <div className="flex flex-wrap items-center gap-0.5 p-1.5 bg-white/[0.03] border border-white/10 rounded-xl">
-                <button
-                  type="button"
-                  onMouseDown={(e) => { e.preventDefault(); document.execCommand('bold'); }}
-                  className="p-1.5 hover:bg-white/10 rounded-lg"
-                  title="Bold"
-                ><Bold size={14} /></button>
-                <button
-                  type="button"
-                  onMouseDown={(e) => { e.preventDefault(); document.execCommand('italic'); }}
-                  className="p-1.5 hover:bg-white/10 rounded-lg"
-                  title="Italic"
-                ><Italic size={14} /></button>
-                <button
-                  type="button"
-                  onMouseDown={(e) => { e.preventDefault(); document.execCommand('underline'); }}
-                  className="p-1.5 hover:bg-white/10 rounded-lg"
-                  title="Underline"
-                ><Underline size={14} /></button>
-                <span className="w-px h-4 bg-white/10 mx-1" />
-                <button
-                  type="button"
-                  onMouseDown={(e) => { e.preventDefault(); document.execCommand('formatBlock', false, 'h3'); }}
-                  className="px-2 py-1.5 hover:bg-white/10 rounded-lg text-xs font-bold"
-                >H3</button>
-                <button
-                  type="button"
-                  onMouseDown={(e) => { e.preventDefault(); document.execCommand('formatBlock', false, 'p'); }}
-                  className="px-2 py-1.5 hover:bg-white/10 rounded-lg text-xs"
-                >P</button>
-                <span className="w-px h-4 bg-white/10 mx-1" />
-                <button
-                  type="button"
-                  onMouseDown={(e) => { e.preventDefault(); document.execCommand('insertUnorderedList'); }}
-                  className="p-1.5 hover:bg-white/10 rounded-lg"
-                  title="Bullet list"
-                ><List size={14} /></button>
-                <button
-                  type="button"
-                  onMouseDown={(e) => { e.preventDefault(); document.execCommand('insertOrderedList'); }}
-                  className="p-1.5 hover:bg-white/10 rounded-lg"
-                  title="Numbered list"
-                ><List size={14} /></button>
-              </div>
-            )}
-
-            {/* Editor */}
-            {descEditMode === 'visual' ? (
-              <div
-                ref={descriptionEditorRef}
-                contentEditable
-                suppressContentEditableWarning
-                onInput={() => {
-                  if (descriptionEditorRef.current) {
-                    setDescription(descriptionEditorRef.current.innerHTML);
-                  }
-                }}
-                className="w-full min-h-[500px] max-h-[900px] bg-white/[0.01] border border-white/10 rounded-2xl p-5 text-gray-200 focus:outline-none focus:border-[#1877F2]/40 overflow-y-auto resize-y"
-                style={{ fontSize: '15px', lineHeight: '1.8' }}
-                data-placeholder="Describe the role, responsibilities, requirements, benefits..."
-              />
-            ) : (
-              <textarea
-                value={description}
-                onChange={(e) => {
-                  setDescription(e.target.value);
-                  if (descriptionEditorRef.current) {
-                    descriptionEditorRef.current.innerHTML = e.target.value;
-                  }
-                }}
-                className="w-full min-h-[500px] max-h-[900px] bg-white/[0.01] border border-white/10 rounded-2xl p-5 text-[#4A9EFF] font-mono focus:outline-none focus:border-[#1877F2]/40 overflow-y-auto resize-y text-[13px] leading-relaxed"
-                placeholder="<p>Edit HTML directly...</p>"
-              />
-            )}
-
-            <div className="flex items-center justify-between text-[10px] text-gray-500 font-mono">
-              <span>{description.length} characters</span>
-              <span>{descEditMode === 'visual' ? 'WYSIWYG' : 'HTML'} mode</span>
-            </div>
-          </div>
-
-          {/* ─── Advanced Schema (collapsed) ─── */}
-          <div className="bg-white/[0.02] border border-white/5 rounded-3xl overflow-hidden">
+          {/* ═══════════════════════════════════════════════════ */}
+          {/* ADVANCED OPTIONS (collapsible)                      */}
+          {/* ═══════════════════════════════════════════════════ */}
+          <div className="border-t border-white/5 mt-6 pt-6">
             <button
               type="button"
-              onClick={() => setShowSchema((v) => !v)}
-              className="w-full flex items-center justify-between p-5 text-sm font-bold text-white uppercase tracking-widest hover:bg-white/[0.02] transition-colors"
+              onClick={() => setShowAdvanced((v) => !v)}
+              className="w-full flex items-center justify-between text-[11px] font-bold text-gray-400 uppercase tracking-widest hover:text-white transition-colors"
             >
               <span className="flex items-center gap-2">
                 <Sparkles size={14} className="text-violet-400" />
-                Advanced Options (Schema for Google)
+                Advanced Options
               </span>
               <ChevronDown
                 size={16}
-                className={`text-gray-500 transition-transform ${showSchema ? 'rotate-180' : ''}`}
+                className={`transition-transform ${showAdvanced ? 'rotate-180' : ''}`}
               />
             </button>
 
-            {showSchema && (
-              <div className="p-5 pt-0 space-y-4">
+            {showAdvanced && (
+              <div className="mt-4 space-y-3">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                   <input
                     type="text"
                     placeholder="Category"
-                    value={schemaData.job_category}
-                    onChange={(e) => setSchemaData((p) => ({ ...p, job_category: e.target.value }))}
+                    value={advanced.job_category}
+                    onChange={(e) => setAdvanced((p) => ({ ...p, job_category: e.target.value }))}
                     className="bg-white/[0.03] border border-white/10 px-3 py-2.5 rounded-lg text-xs text-white"
                   />
                   <select
-                    value={schemaData.employment_type}
-                    onChange={(e) => setSchemaData((p) => ({ ...p, employment_type: e.target.value }))}
+                    value={advanced.employment_type}
+                    onChange={(e) => setAdvanced((p) => ({ ...p, employment_type: e.target.value }))}
                     className="bg-white/[0.03] border border-white/10 px-3 py-2.5 rounded-lg text-xs text-white"
                   >
                     <option value="FULL_TIME">Full Time</option>
@@ -946,8 +990,8 @@ export default function UserJobInput() {
                     <option value="INTERNSHIP">Internship</option>
                   </select>
                   <select
-                    value={schemaData.workplace_type}
-                    onChange={(e) => setSchemaData((p) => ({ ...p, workplace_type: e.target.value }))}
+                    value={advanced.workplace_type}
+                    onChange={(e) => setAdvanced((p) => ({ ...p, workplace_type: e.target.value }))}
                     className="bg-white/[0.03] border border-white/10 px-3 py-2.5 rounded-lg text-xs text-white"
                   >
                     <option value="Onsite">Onsite</option>
@@ -958,8 +1002,8 @@ export default function UserJobInput() {
 
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                   <select
-                    value={schemaData.education_level}
-                    onChange={(e) => setSchemaData((p) => ({ ...p, education_level: e.target.value }))}
+                    value={advanced.education_level}
+                    onChange={(e) => setAdvanced((p) => ({ ...p, education_level: e.target.value }))}
                     className="bg-white/[0.03] border border-white/10 px-3 py-2.5 rounded-lg text-xs text-white"
                   >
                     <option value="Any">Any Education</option>
@@ -972,46 +1016,15 @@ export default function UserJobInput() {
                   <input
                     type="number"
                     placeholder="Experience (months)"
-                    value={schemaData.experience_months || ''}
-                    onChange={(e) => setSchemaData((p) => ({ ...p, experience_months: parseInt(e.target.value) || 0 }))}
+                    value={advanced.experience_months || ''}
+                    onChange={(e) => setAdvanced((p) => ({ ...p, experience_months: parseInt(e.target.value) || 0 }))}
                     className="bg-white/[0.03] border border-white/10 px-3 py-2.5 rounded-lg text-xs text-white"
                   />
                   <input
                     type="text"
                     placeholder="Industry"
-                    value={schemaData.industry}
-                    onChange={(e) => setSchemaData((p) => ({ ...p, industry: e.target.value }))}
-                    className="bg-white/[0.03] border border-white/10 px-3 py-2.5 rounded-lg text-xs text-white"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  <input
-                    type="text"
-                    placeholder="Street"
-                    value={schemaData.street_address}
-                    onChange={(e) => setSchemaData((p) => ({ ...p, street_address: e.target.value }))}
-                    className="bg-white/[0.03] border border-white/10 px-3 py-2.5 rounded-lg text-xs text-white"
-                  />
-                  <input
-                    type="text"
-                    placeholder="City *"
-                    value={schemaData.city}
-                    onChange={(e) => setSchemaData((p) => ({ ...p, city: e.target.value }))}
-                    className="bg-white/[0.03] border border-emerald-500/20 px-3 py-2.5 rounded-lg text-xs text-white"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Region"
-                    value={schemaData.region}
-                    onChange={(e) => setSchemaData((p) => ({ ...p, region: e.target.value }))}
-                    className="bg-white/[0.03] border border-white/10 px-3 py-2.5 rounded-lg text-xs text-white"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Country"
-                    value={schemaData.country}
-                    onChange={(e) => setSchemaData((p) => ({ ...p, country: e.target.value }))}
+                    value={advanced.industry}
+                    onChange={(e) => setAdvanced((p) => ({ ...p, industry: e.target.value }))}
                     className="bg-white/[0.03] border border-white/10 px-3 py-2.5 rounded-lg text-xs text-white"
                   />
                 </div>
@@ -1020,15 +1033,15 @@ export default function UserJobInput() {
                   <input
                     type="text"
                     placeholder="Skills (comma-separated)"
-                    value={schemaData.skills.join(', ')}
-                    onChange={(e) => setSchemaData((p) => ({ ...p, skills: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) }))}
+                    value={advanced.skills.join(', ')}
+                    onChange={(e) => setAdvanced((p) => ({ ...p, skills: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) }))}
                     className="bg-white/[0.03] border border-white/10 px-3 py-2.5 rounded-lg text-xs text-white"
                   />
                   <input
                     type="text"
                     placeholder="Benefits (comma-separated)"
-                    value={schemaData.benefits.join(', ')}
-                    onChange={(e) => setSchemaData((p) => ({ ...p, benefits: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) }))}
+                    value={advanced.benefits.join(', ')}
+                    onChange={(e) => setAdvanced((p) => ({ ...p, benefits: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) }))}
                     className="bg-white/[0.03] border border-white/10 px-3 py-2.5 rounded-lg text-xs text-white"
                   />
                 </div>
@@ -1036,8 +1049,10 @@ export default function UserJobInput() {
             )}
           </div>
 
-          {/* ─── Submit ─── */}
-          <div className="flex gap-2">
+          {/* ═══════════════════════════════════════════════════ */}
+          {/* SUBMIT                                              */}
+          {/* ═══════════════════════════════════════════════════ */}
+          <div className="border-t border-white/5 mt-6 pt-6 flex gap-2">
             <Link
               to="/"
               className="flex-1 py-4 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-bold text-sm text-center transition-colors"
