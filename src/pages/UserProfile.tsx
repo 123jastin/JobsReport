@@ -7,7 +7,7 @@ import {
   ChevronLeft, ChevronRight, RefreshCw, Loader2,
   MapPin, Briefcase, GraduationCap, Link as LinkIcon, BadgeCheck,
   Instagram, Linkedin, Globe, Pencil, Settings, ExternalLink,
-  Image as ImageIcon, MessageCircle, UserPlus, UserCheck
+  Image as ImageIcon, MessageCircle, UserPlus, UserCheck, Camera
 } from 'lucide-react';
 import {
   StoryViewer,
@@ -124,6 +124,18 @@ const apiFetch = async (url: string, options: RequestInit = {}) => {
   return data;
 };
 
+const uploadImageFile = async (file: File): Promise<string> => {
+  if (!file.type.startsWith('image/')) throw new Error('Only images allowed');
+  if (file.size > 8 * 1024 * 1024) throw new Error('Max 8MB');
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('name', file.name);
+  const res = await fetch('/api/upload', { method: 'POST', body: fd });
+  const data = await res.json();
+  if (!res.ok || !data?.url) throw new Error(data?.error || 'Upload failed');
+  return data.url as string;
+};
+
 // ============================================================
 // EDIT PROFILE MODAL
 // ============================================================
@@ -153,18 +165,11 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onClose, onSa
   const coverInputRef = useRef<HTMLInputElement>(null);
 
   const uploadImage = async (file: File, setter: (url: string) => void, setBusy: (v: boolean) => void) => {
-    if (!file.type.startsWith('image/')) { setError('Only images allowed'); return; }
-    if (file.size > 8 * 1024 * 1024) { setError('Max 8MB'); return; }
     setError(null);
     setBusy(true);
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('name', file.name);
-      const res = await fetch('/api/upload', { method: 'POST', body: fd });
-      const data = await res.json();
-      if (!res.ok || !data?.url) throw new Error(data?.error || 'Upload failed');
-      setter(data.url);
+      const url = await uploadImageFile(file);
+      setter(url);
     } catch (err: any) {
       setError(err?.message || 'Upload failed');
     } finally {
@@ -344,7 +349,7 @@ const Field: React.FC<{
 );
 
 // ============================================================
-// JOB CARD (matches HomePage style)
+// JOB CARD
 // ============================================================
 const JobCard: React.FC<{ job: JobItem }> = ({ job }) => {
   const href = `/market/${job.slug || `${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${job.id}`}`;
@@ -413,6 +418,13 @@ export default function UserProfile() {
   const [viewingStory, setViewingStory] = useState<StoryType | null>(null);
   const [createStoryOpen, setCreateStoryOpen] = useState(false);
 
+  // Inline cover / avatar upload state
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
   const currentUser: StoryUser | null = authUser
     ? {
         id: String(authUser.id),
@@ -442,25 +454,20 @@ export default function UserProfile() {
         setUser(data.user);
         setFollowing(!!data.user.is_following);
 
-        // Jobs posted by this user
         const jobsData = await apiFetch(`/api/users/${encodeURIComponent(id)}/jobs`).catch(() => ({ jobs: [] }));
         if (!cancelled) setJobs(Array.isArray(jobsData?.jobs) ? jobsData.jobs : []);
 
-        // Stories by this user
         const storiesData = await apiFetch(`/api/users/${encodeURIComponent(id)}/stories`).catch(() => ({ stories: [] }));
         if (!cancelled) {
           const list: StoryType[] = Array.isArray(storiesData?.stories) ? storiesData.stories : [];
           setStories(list.filter((s) => !isExpired(s)));
         }
       } catch (err) {
-        if (!cancelled) setNotfoundDebug(err);
+        if (!cancelled) setNotFound(true);
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
-
-    // Helper (declared inside for closure over setNotFound)
-    function setNotfoundDebug(_err: any) { setNotFound(true); }
 
     load();
     return () => { cancelled = true; };
@@ -488,8 +495,8 @@ export default function UserProfile() {
           is_following: next,
         } : prev
       );
-    } catch (err) {
-      setFollowing(!next); // rollback
+    } catch {
+      setFollowing(!next);
     } finally {
       setFollowLoading(false);
     }
@@ -504,6 +511,43 @@ export default function UserProfile() {
       body: JSON.stringify(updates),
     });
     setUser((prev) => (prev ? { ...prev, ...updates } : prev));
+  };
+
+  // ────────────────────────────────────────────────────────
+  // INLINE COVER / AVATAR UPLOAD (from header)
+  // ────────────────────────────────────────────────────────
+  const handleCoverUpload = async (file: File) => {
+    setUploadError(null);
+    setUploadingCover(true);
+    try {
+      const url = await uploadImageFile(file);
+      await apiFetch('/api/users/me', {
+        method: 'PUT',
+        body: JSON.stringify({ cover_image_url: url }),
+      });
+      setUser((prev) => (prev ? { ...prev, cover_image_url: url } : prev));
+    } catch (err: any) {
+      setUploadError(err?.message || 'Cover upload failed');
+    } finally {
+      setUploadingCover(false);
+    }
+  };
+
+  const handleAvatarUpload = async (file: File) => {
+    setUploadError(null);
+    setUploadingAvatar(true);
+    try {
+      const url = await uploadImageFile(file);
+      await apiFetch('/api/users/me', {
+        method: 'PUT',
+        body: JSON.stringify({ profile_image_url: url }),
+      });
+      setUser((prev) => (prev ? { ...prev, profile_image_url: url } : prev));
+    } catch (err: any) {
+      setUploadError(err?.message || 'Avatar upload failed');
+    } finally {
+      setUploadingAvatar(false);
+    }
   };
 
   // ────────────────────────────────────────────────────────
@@ -526,7 +570,7 @@ export default function UserProfile() {
   };
 
   // ────────────────────────────────────────────────────────
-  // CREATESTORY / DELETE
+  // CREATE / DELETE STORY
   // ────────────────────────────────────────────────────────
   const handleCreateStory = async (payload: CreateStoryPayload) => {
     await apiFetch('/api/stories', {
@@ -580,9 +624,6 @@ export default function UserProfile() {
     );
   }
 
-  // ────────────────────────────────────────────────────────
-  // MAIN RENDER
-  // ────────────────────────────────────────────────────────
   const handle = user.username ? `@${user.username}` : (user.email || '').split('@')[0];
   const avatar = user.profile_image_url || DEFAULT_AVATAR(user.name, user.id);
   const isVerified = user.is_verified === 1 || user.is_verified === true as any;
@@ -594,252 +635,312 @@ export default function UserProfile() {
         description={user.bio || `${user.name} on JobsReport — job listings and career stories.`}
         ogTitle={user.name}
         ogDescription={user.bio || ''}
-        ogImage={user.profile_image_url || undefined}
+        ogImage={user.profile_image_url || user.cover_image_url || undefined}
       />
 
+      {/* ═══════════════════════════════════════════════════ */}
+      {/* FULL-BLEED COVER — 0px top/left/right, no rounded   */}
+      {/* ═══════════════════════════════════════════════════ */}
+      <div className="relative w-full h-[220px] sm:h-[280px] md:h-[320px] bg-gradient-to-br from-[#1877F2]/40 via-[#7B4DFF]/30 to-[#A033FF]/40 overflow-hidden">
+        {user.cover_image_url ? (
+          <img
+            src={user.cover_image_url}
+            alt="cover"
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-[14px] text-white/40 font-bold uppercase tracking-widest">
+              No cover yet
+            </div>
+          </div>
+        )}
+
+        {/* Soft bottom gradient for readability of overlaid content */}
+        <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-[#050B18] via-[#050B18]/60 to-transparent pointer-events-none" />
+
+        {/* Edit cover (owner only) */}
+        {isOwnProfile && (
+          <>
+            <button
+              onClick={() => coverInputRef.current?.click()}
+              disabled={uploadingCover}
+              className="absolute bottom-3 right-3 px-3 py-2 rounded-xl bg-black/60 hover:bg-black/80 text-white text-xs font-bold flex items-center gap-1.5 backdrop-blur-md border border-white/10"
+            >
+              {uploadingCover ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />}
+              {uploadingCover ? 'Uploading…' : 'Edit cover'}
+            </button>
+            <input
+              type="file"
+              ref={coverInputRef}
+              className="hidden"
+              accept="image/*"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleCoverUpload(f);
+                e.currentTarget.value = '';
+              }}
+            />
+          </>
+        )}
+      </div>
+
+      {/* ═══════════════════════════════════════════════════ */}
+      {/* PROFILE BODY                                        */}
+      {/* ═══════════════════════════════════════════════════ */}
       <div className="max-w-3xl mx-auto px-4 pb-16">
-        {/* ───────────────────────────────────────────────── */}
-        {/* HEADER                                            */}
-        {/* ───────────────────────────────────────────────── */}
-        <div className="pt-6 pb-4">
-          {/* Cover */}
-          <div className="relative w-full h-[140px] sm:h-[180px] rounded-3xl overflow-hidden bg-gradient-to-br from-[#1877F2]/30 via-[#7B4DFF]/20 to-[#A033FF]/30 mb-4">
-            {user.cover_image_url && (
-              <img src={user.cover_image_url} alt="cover" className="w-full h-full object-cover" />
-            )}
-            <div className="absolute inset-0 bg-gradient-to-t from-[#050B18]/60 via-transparent to-transparent" />
+        {uploadError && (
+          <div className="mt-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+            <p className="text-xs text-red-400">{uploadError}</p>
           </div>
+        )}
 
-          {/* Avatar + name row */}
-          <div className="flex items-start gap-4 -mt-[60px] px-1 sm:px-2 relative z-10">
-            <div className="relative shrink-0">
-              <div className="w-[92px] h-[92px] sm:w-[110px] sm:h-[110px] rounded-full p-[3px] bg-gradient-to-br from-[#1877F2] via-[#7B4DFF] to-[#A033FF]">
-                <div className="w-full h-full rounded-full overflow-hidden border-[3px] border-[#050B18] bg-[#0B1120]">
-                  <img
-                    src={avatar}
-                    alt={user.name}
-                    className="w-full h-full object-cover"
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = DEFAULT_AVATAR(user.name, user.id); }}
-                  />
-                </div>
+        {/* Avatar + name row (pulled up over cover) */}
+        <div className="flex items-start gap-4 -mt-[60px] sm:-mt-[70px] px-1 sm:px-2 relative z-10">
+          <div className="relative shrink-0">
+            <div className="w-[92px] h-[92px] sm:w-[110px] sm:h-[110px] rounded-full p-[3px] bg-gradient-to-br from-[#1877F2] via-[#7B4DFF] to-[#A033FF]">
+              <div className="w-full h-full rounded-full overflow-hidden border-[3px] border-[#050B18] bg-[#0B1120]">
+                <img
+                  src={avatar}
+                  alt={user.name}
+                  className="w-full h-full object-cover"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = DEFAULT_AVATAR(user.name, user.id); }}
+                />
               </div>
             </div>
-
-            <div className="flex-1 min-w-0 pt-14 sm:pt-16">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <h1 className="text-xl sm:text-2xl font-black text-white leading-tight truncate">
-                  {user.name}
-                </h1>
-                {isVerified && (
-                  <BadgeCheck size={18} className="text-[#4A9EFF] shrink-0" />
-                )}
-              </div>
-              {handle && (
-                <p className="text-[13px] text-gray-500 font-medium mt-0.5 truncate">{handle}</p>
-              )}
-            </div>
-          </div>
-
-          {/* Headline */}
-          {user.headline && (
-            <p className="text-white text-[15px] font-semibold mt-4 leading-snug">
-              {user.headline}
-            </p>
-          )}
-
-          {/* Bio */}
-          {user.bio && (
-            <p className="text-gray-300 text-[14px] leading-relaxed mt-2 whitespace-pre-wrap">
-              {user.bio}
-            </p>
-          )}
-
-          {/* Meta row */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-3 text-[12.5px] text-gray-500">
-            {user.work && (
-              <span className="flex items-center gap-1.5">
-                <Briefcase size={12} className="text-gray-400" />
-                {user.work}
-              </span>
-            )}
-            {user.education && (
-              <span className="flex items-center gap-1.5">
-                <GraduationCap size={12} className="text-gray-400" />
-                {user.education}
-              </span>
-            )}
-            {user.location && (
-              <span className="flex items-center gap-1.5">
-                <MapPin size={12} className="text-gray-400" />
-                {user.location}
-              </span>
-            )}
-            {user.website && (
-              <a
-                href={user.website}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 text-[#4A9EFF] hover:underline"
-              >
-                <Globe size={12} />
-                {user.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}
-              </a>
-            )}
-            {user.linkedin_url && (
-              <a
-                href={user.linkedin_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 text-[#4A9EFF] hover:underline"
-              >
-                <Linkedin size={12} />
-                LinkedIn
-              </a>
-            )}
-          </div>
-
-          {/* Stats */}
-          <div className="flex items-center gap-5 mt-4 text-[13px]">
-            <div>
-              <span className="font-bold text-white">{fmtCount(user.followers_count || 0)}</span>
-              <span className="text-gray-500 ml-1">followers</span>
-            </div>
-            <div>
-              <span className="font-bold text-white">{fmtCount(user.jobs_count || jobs.length)}</span>
-              <span className="text-gray-500 ml-1">job adverts</span>
-            </div>
-            <div>
-              <span className="font-bold text-white">{fmtCount(user.stories_count || stories.length)}</span>
-              <span className="text-gray-500 ml-1">stories</span>
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex items-center gap-2 mt-4">
-            {isOwnProfile ? (
-              <>
-                <button
-                  onClick={() => setEditing(true)}
-                  className="flex-1 h-10 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-white font-bold text-[13px] flex items-center justify-center gap-2 transition-colors"
-                >
-                  <Pencil size={14} />
-                  Edit Profile
-                </button>
-                <button
-                  onClick={() => setCreateStoryOpen(true)}
-                  className="h-10 px-4 rounded-xl bg-gradient-to-r from-[#1877F2] to-[#7B4DFF] hover:opacity-90 text-white font-bold text-[13px] flex items-center justify-center gap-1.5 transition-opacity"
-                >
-                  <Plus size={14} />
-                  New Story
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={handleFollow}
-                  disabled={followLoading}
-                  className={`flex-1 h-10 rounded-xl font-bold text-[13px] flex items-center justify-center gap-2 transition-colors disabled:opacity-60 ${
-                    following
-                      ? 'bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-white'
-                      : 'bg-[#1877F2] hover:bg-[#166FE5] text-white'
-                  }`}
-                >
-                  {followLoading ? (
-                    <Loader2 size={14} className="animate-spin" />
-                  ) : following ? (
-                    <UserCheck size={14} />
-                  ) : (
-                    <UserPlus size={14} />
-                  )}
-                  {following ? 'Following' : 'Follow'}
-                </button>
-                <button
-                  onClick={handleShareProfile}
-                  className="h-10 w-10 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-white flex items-center justify-center transition-colors"
-                  aria-label="Share profile"
-                >
-                  <Share2 size={14} />
-                </button>
-              </>
-            )}
-          </div>
-
-          {/* ───────────────────────────────────────────────── */}
-          {/* STORIES ROW (mini)                                */}
-          {/* ───────────────────────────────────────────────── */}
-          {stories.length > 0 && (
-            <div className="mt-6">
-              <div className="flex gap-3 overflow-x-auto scrollbar-hide py-1 -mx-1 px-1">
-                {stories.map((s) => {
-                  const thumb = s.media_thumb || '';
-                  return (
-                    <button
-                      key={s.id}
-                      onClick={() => setViewingStory(s)}
-                      className="flex flex-col items-center gap-1.5 shrink-0 group"
-                    >
-                      <div className="w-16 h-16 rounded-full p-[2.5px] bg-gradient-to-br from-[#1877F2] via-[#7B4DFF] to-[#A033FF]">
-                        <div className="w-full h-full rounded-full overflow-hidden border-[3px] border-[#050B18] bg-[#0B1120]">
-                          {s.type === 'text' && !thumb ? (
-                            <div
-                              className="w-full h-full flex items-center justify-center text-[8px] font-black text-white px-1 text-center leading-tight"
-                              style={{ background: s.background_style || '#0B1120' }}
-                            >
-                              {(s.text_content || '').slice(0, 12)}
-                            </div>
-                          ) : (
-                            <img src={thumb} alt="" className="w-full h-full object-cover" loading="lazy" />
-                          )}
-                        </div>
-                      </div>
-                      <span className="text-[10px] text-gray-400 max-w-[64px] truncate">
-                        {formatRelative(s.created_at)}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* ───────────────────────────────────────────────── */}
-          {/* TABS                                              */}
-          {/* ───────────────────────────────────────────────── */}
-          <div className="flex items-center gap-6 mt-6 border-b border-white/[0.06]">
-            {[
-              { key: 'jobs' as const, label: 'Job Adverts', icon: <Briefcase size={14} />, count: jobs.length },
-              { key: 'stories' as const, label: 'Stories', icon: <Instagram size={14} />, count: stories.length },
-              { key: 'about' as const, label: 'About', icon: <MessageCircle size={14} /> },
-            ].map((tab) => (
+            {/* Edit avatar (owner only) */}
+            {isOwnProfile && (
               <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`relative pb-3 text-[13px] font-bold flex items-center gap-1.5 transition-colors ${
-                  activeTab === tab.key ? 'text-white' : 'text-gray-500 hover:text-gray-300'
-                }`}
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={uploadingAvatar}
+                className="absolute bottom-1 right-1 w-8 h-8 rounded-full bg-[#0B1120] border-2 border-[#050B18] flex items-center justify-center hover:bg-[#1E293B] transition-colors"
+                aria-label="Edit avatar"
               >
-                {tab.icon}
-                {tab.label}
-                {tab.count !== undefined && (
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                    activeTab === tab.key ? 'bg-[#1877F2]/20 text-[#4A9EFF]' : 'bg-white/5 text-gray-500'
-                  }`}>
-                    {tab.count}
-                  </span>
-                )}
-                {activeTab === tab.key && (
-                  <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-[#1877F2] to-[#A033FF] rounded-full" />
+                {uploadingAvatar ? (
+                  <Loader2 size={13} className="text-white animate-spin" />
+                ) : (
+                  <Camera size={13} className="text-white" />
                 )}
               </button>
-            ))}
+            )}
+            <input
+              type="file"
+              ref={avatarInputRef}
+              className="hidden"
+              accept="image/*"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleAvatarUpload(f);
+                e.currentTarget.value = '';
+              }}
+            />
+          </div>
+
+          <div className="flex-1 min-w-0 pt-14 sm:pt-16">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <h1 className="text-xl sm:text-2xl font-black text-white leading-tight truncate">
+                {user.name}
+              </h1>
+              {isVerified && <BadgeCheck size={18} className="text-[#4A9EFF] shrink-0" />}
+            </div>
+            {handle && (
+              <p className="text-[13px] text-gray-500 font-medium mt-0.5 truncate">{handle}</p>
+            )}
           </div>
         </div>
 
-        {/* ───────────────────────────────────────────────── */}
-        {/* TAB CONTENT                                       */}
-        {/* ───────────────────────────────────────────────── */}
+        {/* Headline */}
+        {user.headline && (
+          <p className="text-white text-[15px] font-semibold mt-4 leading-snug">
+            {user.headline}
+          </p>
+        )}
+
+        {/* Bio */}
+        {user.bio && (
+          <p className="text-gray-300 text-[14px] leading-relaxed mt-2 whitespace-pre-wrap">
+            {user.bio}
+          </p>
+        )}
+
+        {/* Meta row */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-3 text-[12.5px] text-gray-500">
+          {user.work && (
+            <span className="flex items-center gap-1.5">
+              <Briefcase size={12} className="text-gray-400" />
+              {user.work}
+            </span>
+          )}
+          {user.education && (
+            <span className="flex items-center gap-1.5">
+              <GraduationCap size={12} className="text-gray-400" />
+              {user.education}
+            </span>
+          )}
+          {user.location && (
+            <span className="flex items-center gap-1.5">
+              <MapPin size={12} className="text-gray-400" />
+              {user.location}
+            </span>
+          )}
+          {user.website && (
+            <a
+              href={user.website}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-[#4A9EFF] hover:underline"
+            >
+              <Globe size={12} />
+              {user.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+            </a>
+          )}
+          {user.linkedin_url && (
+            <a
+              href={user.linkedin_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-[#4A9EFF] hover:underline"
+            >
+              <Linkedin size={12} />
+              LinkedIn
+            </a>
+          )}
+        </div>
+
+        {/* Stats */}
+        <div className="flex items-center gap-5 mt-4 text-[13px]">
+          <div>
+            <span className="font-bold text-white">{fmtCount(user.followers_count || 0)}</span>
+            <span className="text-gray-500 ml-1">followers</span>
+          </div>
+          <div>
+            <span className="font-bold text-white">{fmtCount(user.jobs_count || jobs.length)}</span>
+            <span className="text-gray-500 ml-1">job adverts</span>
+          </div>
+          <div>
+            <span className="font-bold text-white">{fmtCount(user.stories_count || stories.length)}</span>
+            <span className="text-gray-500 ml-1">stories</span>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-2 mt-4">
+          {isOwnProfile ? (
+            <>
+              <button
+                onClick={() => setEditing(true)}
+                className="flex-1 h-10 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-white font-bold text-[13px] flex items-center justify-center gap-2 transition-colors"
+              >
+                <Pencil size={14} />
+                Edit Profile
+              </button>
+              <button
+                onClick={() => setCreateStoryOpen(true)}
+                className="h-10 px-4 rounded-xl bg-gradient-to-r from-[#1877F2] to-[#7B4DFF] hover:opacity-90 text-white font-bold text-[13px] flex items-center justify-center gap-1.5 transition-opacity"
+              >
+                <Plus size={14} />
+                New Story
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={handleFollow}
+                disabled={followLoading}
+                className={`flex-1 h-10 rounded-xl font-bold text-[13px] flex items-center justify-center gap-2 transition-colors disabled:opacity-60 ${
+                  following
+                    ? 'bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-white'
+                    : 'bg-[#1877F2] hover:bg-[#166FE5] text-white'
+                }`}
+              >
+                {followLoading ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : following ? (
+                  <UserCheck size={14} />
+                ) : (
+                  <UserPlus size={14} />
+                )}
+                {following ? 'Following' : 'Follow'}
+              </button>
+              <button
+                onClick={handleShareProfile}
+                className="h-10 w-10 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-white flex items-center justify-center transition-colors"
+                aria-label="Share profile"
+              >
+                <Share2 size={14} />
+              </button>
+            </>
+          )}
+        </div>
+
+        {/* Mini stories row */}
+        {stories.length > 0 && (
+          <div className="mt-6">
+            <div className="flex gap-3 overflow-x-auto scrollbar-hide py-1 -mx-1 px-1">
+              {stories.map((s) => {
+                const thumb = s.media_thumb || '';
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => setViewingStory(s)}
+                    className="flex flex-col items-center gap-1.5 shrink-0 group"
+                  >
+                    <div className="w-16 h-16 rounded-full p-[2.5px] bg-gradient-to-br from-[#1877F2] via-[#7B4DFF] to-[#A033FF]">
+                      <div className="w-full h-full rounded-full overflow-hidden border-[3px] border-[#050B18] bg-[#0B1120]">
+                        {s.type === 'text' && !thumb ? (
+                          <div
+                            className="w-full h-full flex items-center justify-center text-[8px] font-black text-white px-1 text-center leading-tight"
+                            style={{ background: s.background_style || '#0B1120' }}
+                          >
+                            {(s.text_content || '').slice(0, 12)}
+                          </div>
+                        ) : (
+                          <img src={thumb} alt="" className="w-full h-full object-cover" loading="lazy" />
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-gray-400 max-w-[64px] truncate">
+                      {formatRelative(s.created_at)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Tabs */}
+        <div className="flex items-center gap-6 mt-6 border-b border-white/[0.06]">
+          {[
+            { key: 'jobs' as const, label: 'Job Adverts', icon: <Briefcase size={14} />, count: jobs.length },
+            { key: 'stories' as const, label: 'Stories', icon: <Instagram size={14} />, count: stories.length },
+            { key: 'about' as const, label: 'About', icon: <MessageCircle size={14} /> },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`relative pb-3 text-[13px] font-bold flex items-center gap-1.5 transition-colors ${
+                activeTab === tab.key ? 'text-white' : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              {tab.icon}
+              {tab.label}
+              {tab.count !== undefined && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                  activeTab === tab.key ? 'bg-[#1877F2]/20 text-[#4A9EFF]' : 'bg-white/5 text-gray-500'
+                }`}>
+                  {tab.count}
+                </span>
+              )}
+              {activeTab === tab.key && (
+                <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-[#1877F2] to-[#A033FF] rounded-full" />
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* TAB CONTENT */}
         <div className="mt-4">
-          {/* JOB ADVERTS */}
           {activeTab === 'jobs' && (
             <div>
               {jobs.length === 0 ? (
@@ -857,7 +958,6 @@ export default function UserProfile() {
             </div>
           )}
 
-          {/* STORIES */}
           {activeTab === 'stories' && (
             <div>
               {stories.length === 0 ? (
@@ -906,7 +1006,6 @@ export default function UserProfile() {
             </div>
           )}
 
-          {/* ABOUT */}
           {activeTab === 'about' && (
             <div className="space-y-3">
               <AboutCard
@@ -963,9 +1062,7 @@ export default function UserProfile() {
         </div>
       </div>
 
-      {/* ───────────────────────────────────────────────── */}
-      {/* MODALS                                            */}
-      {/* ───────────────────────────────────────────────── */}
+      {/* MODALS */}
       {editing && isOwnProfile && user && (
         <EditProfileModal
           user={user}
