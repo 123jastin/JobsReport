@@ -25,6 +25,7 @@ import TermsOfServicePage from './pages/TermsOfServicePage';
 import DisclaimerPage from './pages/DisclaimerPage';
 import StoryPage, { PublicStoryPage } from './pages/Story';
 import UserAuthPage from './pages/UserAuthPage';
+import UserProfile from './pages/UserProfile';
 
 import { AuthProvider } from './context/AuthContext';
 import { UserAuthProvider } from './context/UserAuthContext';
@@ -78,6 +79,10 @@ export default function App() {
                   {/* 📖 Job Stories */}
                   <Route path="/stories" element={<StoryPage />} />
                   <Route path="/story/:slug" element={<PublicStoryPage />} />
+
+                  {/* 👤 User Profiles — short URL + alias */}
+                  <Route path="/u/:id" element={<UserProfile />} />
+                  <Route path="/profile/:id" element={<UserProfile />} />
 
                   {/* 🔐 User Auth (public accounts — separate from admin) */}
                   <Route path="/login" element={<UserAuthPage />} />
