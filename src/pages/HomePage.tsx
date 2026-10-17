@@ -111,8 +111,6 @@ const scoreStory = (story: StoryType, seed: number, now: number): number => {
 
 // ============================================================
 // Bubble Content Renderer
-//   - If a story exists → show its thumbnail (image) or text+bg
-//   - Else → show user's avatar (or initial)
 // ============================================================
 const StoryBubbleContent: React.FC<{
   story?: StoryType | null;
@@ -145,7 +143,6 @@ const StoryBubbleContent: React.FC<{
         />
       );
     }
-    // Image story but no thumb → fallback
     return (
       <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-600 to-violet-600 text-white">
         <ImageIcon size={20} />
@@ -153,7 +150,6 @@ const StoryBubbleContent: React.FC<{
     );
   }
 
-  // No story → show profile avatar or initial
   return (
     <img
       src={fallbackAvatar || DEFAULT_AVATAR(fallbackName, fallbackSeed)}
@@ -218,7 +214,6 @@ const InstagramStoryBar: React.FC<InstagramStoryBarProps> = ({
         {/* ────────────── OWNER BUBBLE (always first) ────────────── */}
         {currentUser ? (
           perUser.mine ? (
-            // Owner HAS an active story → tap to view, "+" to add more
             <button
               onClick={() => onViewStory(perUser.mine!)}
               className="flex flex-col items-center gap-1.5 shrink-0 group"
@@ -243,7 +238,6 @@ const InstagramStoryBar: React.FC<InstagramStoryBarProps> = ({
                   </div>
                 </div>
 
-                {/* Small + badge to add another story */}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -261,7 +255,6 @@ const InstagramStoryBar: React.FC<InstagramStoryBarProps> = ({
               </span>
             </button>
           ) : (
-            // Owner has NO story → avatar + "+" → create
             <button
               onClick={onCreateStory}
               className="flex flex-col items-center gap-1.5 shrink-0 group"
@@ -290,7 +283,6 @@ const InstagramStoryBar: React.FC<InstagramStoryBarProps> = ({
             </button>
           )
         ) : (
-          // Not logged in → gradient "+" bubble
           <button
             onClick={onRequestLogin}
             className="flex flex-col items-center gap-1.5 shrink-0 group"
@@ -969,7 +961,7 @@ export default function HomePage() {
               setViewingStory(null);
             }
           }}
-          onProfileClick={(id) => navigate(`/story/${id}`)}
+          onProfileClick={(id) => navigate(`/u/${id}`)}
           onDeleteStory={handleDeleteStory}
           onViewRecorded={(id) => {
             setStories((prev) =>
