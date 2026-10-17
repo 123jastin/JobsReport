@@ -58,6 +58,13 @@ interface JobItem {
 }
 
 // ============================================================
+// CONSTANTS
+// ============================================================
+const JOBS_PER_PAGE = 6;
+const STORIES_PER_PAGE = 6;
+const TOP_STORIES_COUNT = 5;
+
+// ============================================================
 // HELPERS
 // ============================================================
 const DEFAULT_AVATAR = (name: string, seed: string | number) => {
@@ -213,11 +220,8 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onClose, onSa
         </div>
 
         <div className="overflow-y-auto flex-1">
-          {/* Cover */}
           <div className="relative h-[140px] bg-gradient-to-br from-[#1877F2]/30 via-[#7B4DFF]/20 to-[#A033FF]/30">
-            {coverUrl && (
-              <img src={coverUrl} alt="cover" className="w-full h-full object-cover" />
-            )}
+            {coverUrl && <img src={coverUrl} alt="cover" className="w-full h-full object-cover" />}
             <button
               onClick={() => coverInputRef.current?.click()}
               disabled={uploadingCover}
@@ -239,7 +243,6 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onClose, onSa
             />
           </div>
 
-          {/* Avatar */}
           <div className="px-5 -mt-12 relative z-10">
             <div className="relative w-24 h-24 rounded-full border-4 border-[#0B1120] overflow-hidden bg-[#1E293B]">
               {avatarUrl ? (
@@ -270,7 +273,6 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onClose, onSa
             </div>
           </div>
 
-          {/* Fields */}
           <div className="p-5 space-y-4">
             <Field label="Name" value={name} onChange={setName} placeholder="Your name" required />
             <Field label="Headline" value={headline} onChange={setHeadline} placeholder="e.g. Software Engineer • Nairobi" maxLength={80} />
@@ -414,6 +416,10 @@ export default function UserProfile() {
   const [following, setFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
 
+  // ─── Pagination state ───
+  const [jobsVisible, setJobsVisible] = useState(JOBS_PER_PAGE);
+  const [storiesVisible, setStoriesVisible] = useState(STORIES_PER_PAGE);
+
   // Story viewing
   const [viewingStory, setViewingStory] = useState<StoryType | null>(null);
   const [createStoryOpen, setCreateStoryOpen] = useState(false);
@@ -436,6 +442,12 @@ export default function UserProfile() {
     : null;
 
   const isOwnProfile = authUser && user && String(authUser.id) === String(user.id);
+
+  // ─── Reset pagination on tab change ───
+  useEffect(() => {
+    setJobsVisible(JOBS_PER_PAGE);
+    setStoriesVisible(STORIES_PER_PAGE);
+  }, [activeTab]);
 
   // ────────────────────────────────────────────────────────
   // LOAD PROFILE
@@ -472,6 +484,49 @@ export default function UserProfile() {
     load();
     return () => { cancelled = true; };
   }, [id]);
+
+  // ────────────────────────────────────────────────────────
+  // Sorted jobs (newest first) + paginated slice
+  // ────────────────────────────────────────────────────────
+  const sortedJobs = useMemo(() => {
+    return [...jobs].sort((a, b) => {
+      const ta = parseServerTime(a.posted_at);
+      const tb = parseServerTime(b.posted_at);
+      return tb - ta;
+    });
+  }, [jobs]);
+
+  const visibleJobs = useMemo(
+    () => sortedJobs.slice(0, jobsVisible),
+    [sortedJobs, jobsVisible]
+  );
+
+  const hasMoreJobs = jobsVisible < sortedJobs.length;
+
+  // ────────────────────────────────────────────────────────
+  // Sorted stories (newest first) + paginated slice
+  // ────────────────────────────────────────────────────────
+  const sortedStories = useMemo(() => {
+    return [...stories].sort((a, b) => {
+      const ta = parseServerTime(a.created_at);
+      const tb = parseServerTime(b.created_at);
+      return tb - ta;
+    });
+  }, [stories]);
+
+  // Top horizontal row = latest 5 only
+  const topStories = useMemo(
+    () => sortedStories.slice(0, TOP_STORIES_COUNT),
+    [sortedStories]
+  );
+
+  // Tab grid = paginated (6 + See More)
+  const visibleStories = useMemo(
+    () => sortedStories.slice(0, storiesVisible),
+    [sortedStories, storiesVisible]
+  );
+
+  const hasMoreStories = storiesVisible < sortedStories.length;
 
   // ────────────────────────────────────────────────────────
   // FOLLOW
@@ -514,7 +569,7 @@ export default function UserProfile() {
   };
 
   // ────────────────────────────────────────────────────────
-  // INLINE COVER / AVATAR UPLOAD (from header)
+  // INLINE COVER / AVATAR UPLOAD
   // ────────────────────────────────────────────────────────
   const handleCoverUpload = async (file: File) => {
     setUploadError(null);
@@ -643,11 +698,7 @@ export default function UserProfile() {
       {/* ═══════════════════════════════════════════════════ */}
       <div className="relative w-full h-[220px] sm:h-[280px] md:h-[320px] bg-gradient-to-br from-[#1877F2]/40 via-[#7B4DFF]/30 to-[#A033FF]/40 overflow-hidden">
         {user.cover_image_url ? (
-          <img
-            src={user.cover_image_url}
-            alt="cover"
-            className="w-full h-full object-cover"
-          />
+          <img src={user.cover_image_url} alt="cover" className="w-full h-full object-cover" />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-[14px] text-white/40 font-bold uppercase tracking-widest">
@@ -656,10 +707,8 @@ export default function UserProfile() {
           </div>
         )}
 
-        {/* Soft bottom gradient for readability of overlaid content */}
         <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-[#050B18] via-[#050B18]/60 to-transparent pointer-events-none" />
 
-        {/* Edit cover (owner only) */}
         {isOwnProfile && (
           <>
             <button
@@ -695,7 +744,6 @@ export default function UserProfile() {
           </div>
         )}
 
-        {/* Avatar + name row (pulled up over cover) */}
         <div className="flex items-start gap-4 -mt-[60px] sm:-mt-[70px] px-1 sm:px-2 relative z-10">
           <div className="relative shrink-0">
             <div className="w-[92px] h-[92px] sm:w-[110px] sm:h-[110px] rounded-full p-[3px] bg-gradient-to-br from-[#1877F2] via-[#7B4DFF] to-[#A033FF]">
@@ -708,7 +756,6 @@ export default function UserProfile() {
                 />
               </div>
             </div>
-            {/* Edit avatar (owner only) */}
             {isOwnProfile && (
               <button
                 onClick={() => avatarInputRef.current?.click()}
@@ -749,21 +796,18 @@ export default function UserProfile() {
           </div>
         </div>
 
-        {/* Headline */}
         {user.headline && (
           <p className="text-white text-[15px] font-semibold mt-4 leading-snug">
             {user.headline}
           </p>
         )}
 
-        {/* Bio */}
         {user.bio && (
           <p className="text-gray-300 text-[14px] leading-relaxed mt-2 whitespace-pre-wrap">
             {user.bio}
           </p>
         )}
 
-        {/* Meta row */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-3 text-[12.5px] text-gray-500">
           {user.work && (
             <span className="flex items-center gap-1.5">
@@ -807,7 +851,6 @@ export default function UserProfile() {
           )}
         </div>
 
-        {/* Stats */}
         <div className="flex items-center gap-5 mt-4 text-[13px]">
           <div>
             <span className="font-bold text-white">{fmtCount(user.followers_count || 0)}</span>
@@ -835,11 +878,19 @@ export default function UserProfile() {
                 Edit Profile
               </button>
               <button
-                onClick={() => setCreateStoryOpen(true)}
-                className="h-10 px-4 rounded-xl bg-gradient-to-r from-[#1877F2] to-[#7B4DFF] hover:opacity-90 text-white font-bold text-[13px] flex items-center justify-center gap-1.5 transition-opacity"
+                onClick={() => navigate('/post-job')}
+                className="flex-1 h-10 rounded-xl bg-gradient-to-r from-[#1877F2] to-[#7B4DFF] hover:opacity-90 text-white font-bold text-[13px] flex items-center justify-center gap-1.5 transition-opacity"
               >
                 <Plus size={14} />
-                New Story
+                Post a Job
+              </button>
+              <button
+                onClick={() => setCreateStoryOpen(true)}
+                className="h-10 w-10 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-white flex items-center justify-center transition-colors"
+                aria-label="New Story"
+                title="New Story"
+              >
+                <Camera size={14} />
               </button>
             </>
           ) : (
@@ -873,11 +924,11 @@ export default function UserProfile() {
           )}
         </div>
 
-        {/* Mini stories row */}
-        {stories.length > 0 && (
+        {/* ─── Mini stories row — LATEST 5 ONLY ─── */}
+        {topStories.length > 0 && (
           <div className="mt-6">
             <div className="flex gap-3 overflow-x-auto scrollbar-hide py-1 -mx-1 px-1">
-              {stories.map((s) => {
+              {topStories.map((s) => {
                 const thumb = s.media_thumb || '';
                 return (
                   <button
@@ -941,26 +992,53 @@ export default function UserProfile() {
 
         {/* TAB CONTENT */}
         <div className="mt-4">
+          {/* ─── JOB ADVERTS (6 + See More) ─── */}
           {activeTab === 'jobs' && (
             <div>
-              {jobs.length === 0 ? (
+              {sortedJobs.length === 0 ? (
                 <EmptyState
                   icon={<Briefcase size={28} />}
                   title="No job adverts yet"
                   subtitle={isOwnProfile ? 'Post a job to attract candidates' : "This user hasn't posted any jobs yet"}
-                  action={isOwnProfile ? { label: 'Post a Job', onClick: () => navigate('/admin') } : undefined}
+                  action={isOwnProfile ? { label: 'Post a Job', onClick: () => navigate('/post-job') } : undefined}
                 />
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {jobs.map((j) => <JobCard key={j.id} job={j} />)}
-                </div>
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {visibleJobs.map((j) => <JobCard key={j.id} job={j} />)}
+                  </div>
+
+                  {hasMoreJobs && (
+                    <div className="flex justify-center mt-4">
+                      <button
+                        onClick={() => setJobsVisible((v) => v + JOBS_PER_PAGE)}
+                        className="px-6 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-white font-bold text-xs uppercase tracking-wider transition-colors flex items-center gap-2"
+                      >
+                        <ChevronDown size={14} />
+                        See More ({sortedJobs.length - jobsVisible} remaining)
+                      </button>
+                    </div>
+                  )}
+
+                  {!hasMoreJobs && jobsVisible > JOBS_PER_PAGE && (
+                    <div className="flex justify-center mt-4">
+                      <button
+                        onClick={() => setJobsVisible(JOBS_PER_PAGE)}
+                        className="text-xs text-gray-500 hover:text-white font-bold uppercase tracking-wider transition-colors"
+                      >
+                        Show Less
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
 
+          {/* ─── STORIES (6 + See More) ─── */}
           {activeTab === 'stories' && (
             <div>
-              {stories.length === 0 ? (
+              {sortedStories.length === 0 ? (
                 <EmptyState
                   icon={<Instagram size={28} />}
                   title="No stories yet"
@@ -968,40 +1046,70 @@ export default function UserProfile() {
                   action={isOwnProfile ? { label: 'Create Story', onClick: () => setCreateStoryOpen(true) } : undefined}
                 />
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {stories.map((s) => {
-                    const thumb = s.media_thumb || '';
-                    return (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {visibleStories.map((s) => {
+                      const thumb = s.media_thumb || '';
+                      return (
+                        <button
+                          key={s.id}
+                          onClick={() => setViewingStory(s)}
+                          className="relative aspect-[9/16] rounded-2xl overflow-hidden border border-white/5 bg-white/[0.02] hover:border-[#1877F2]/30 transition-all text-left"
+                        >
+                          {s.type === 'text' ? (
+                            <div
+                              className="absolute inset-0 p-3 flex items-center justify-center text-center"
+                              style={{ background: s.background_style || '#0B1120' }}
+                            >
+                              <span className="text-white text-xs font-bold line-clamp-6">
+                                {s.text_content}
+                              </span>
+                            </div>
+                          ) : thumb ? (
+                            <img
+                              src={thumb}
+                              alt=""
+                              className="absolute inset-0 w-full h-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#1877F2] to-[#7B4DFF]">
+                              <ImageIcon size={28} className="text-white" />
+                            </div>
+                          )}
+                          <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent">
+                            <p className="text-white/80 text-[10px] flex items-center gap-1">
+                              <Eye size={9} /> {fmtCount(s.views_count || 0)} · {formatRelative(s.created_at)}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {hasMoreStories && (
+                    <div className="flex justify-center mt-4">
                       <button
-                        key={s.id}
-                        onClick={() => setViewingStory(s)}
-                        className="relative aspect-[9/16] rounded-2xl overflow-hidden border border-white/5 bg-white/[0.02] hover:border-[#1877F2]/30 transition-all text-left"
+                        onClick={() => setStoriesVisible((v) => v + STORIES_PER_PAGE)}
+                        className="px-6 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-white font-bold text-xs uppercase tracking-wider transition-colors flex items-center gap-2"
                       >
-                        {s.type === 'text' ? (
-                          <div
-                            className="absolute inset-0 p-3 flex items-center justify-center text-center"
-                            style={{ background: s.background_style || '#0B1120' }}
-                          >
-                            <span className="text-white text-xs font-bold line-clamp-6">
-                              {s.text_content}
-                            </span>
-                          </div>
-                        ) : thumb ? (
-                          <img src={thumb} alt="" className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
-                        ) : (
-                          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#1877F2] to-[#7B4DFF]">
-                            <ImageIcon size={28} className="text-white" />
-                          </div>
-                        )}
-                        <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent">
-                          <p className="text-white/80 text-[10px] flex items-center gap-1">
-                            <Eye size={9} /> {fmtCount(s.views_count || 0)} · {formatRelative(s.created_at)}
-                          </p>
-                        </div>
+                        <ChevronDown size={14} />
+                        See More ({sortedStories.length - storiesVisible} remaining)
                       </button>
-                    );
-                  })}
-                </div>
+                    </div>
+                  )}
+
+                  {!hasMoreStories && storiesVisible > STORIES_PER_PAGE && (
+                    <div className="flex justify-center mt-4">
+                      <button
+                        onClick={() => setStoriesVisible(STORIES_PER_PAGE)}
+                        className="text-xs text-gray-500 hover:text-white font-bold uppercase tracking-wider transition-colors"
+                      >
+                        Show Less
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -1090,16 +1198,16 @@ export default function UserProfile() {
             }
           }
           currentUser={currentUser}
-          allStories={stories}
+          allStories={sortedStories}
           onClose={() => setViewingStory(null)}
           onNext={() => {
-            const idx = stories.findIndex((s) => s.id === viewingStory.id);
-            const next = stories[idx + 1];
+            const idx = sortedStories.findIndex((s) => s.id === viewingStory.id);
+            const next = sortedStories[idx + 1];
             if (next) setViewingStory(next); else setViewingStory(null);
           }}
           onPrev={() => {
-            const idx = stories.findIndex((s) => s.id === viewingStory.id);
-            const prev = stories[idx - 1];
+            const idx = sortedStories.findIndex((s) => s.id === viewingStory.id);
+            const prev = sortedStories[idx - 1];
             if (prev) setViewingStory(prev); else setViewingStory(null);
           }}
           onDeleteStory={isOwnProfile ? handleDeleteStory : undefined}
