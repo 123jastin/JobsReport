@@ -236,8 +236,6 @@ const apiFetch = async (url: string, options: RequestInit = {}) => {
 
 // ============================================================
 // STORY VIEWER — full screen
-//   - Loads THUMBNAIL first (instant)
-//   - Then loads ORIGINAL in background and swaps when ready
 // ============================================================
 interface StoryViewerProps {
   story: StoryType;
@@ -266,6 +264,7 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
   deleteLoading = false,
   onViewRecorded,
 }) => {
+  const navigate = useNavigate();
   const [progress, setProgress] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [mediaReady, setMediaReady] = useState(false);
@@ -281,6 +280,15 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
   const viewRecordedRef = useRef<string | null>(null);
 
   const isAuthor = !!currentUser && String(currentUser.id) === String(user.id);
+
+  // ─── Profile click — parent can override; falls back to /u/:id ───
+  const handleProfileClick = useCallback(() => {
+    if (onProfileClick) {
+      onProfileClick(user.id);
+    } else {
+      navigate(`/u/${user.id}`);
+    }
+  }, [onProfileClick, user.id, navigate]);
 
   const userStories = useMemo(() => {
     const src = allStories.length ? allStories : [story];
@@ -515,9 +523,11 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
           className="absolute top-0 left-0 right-0 px-4 pt-6 pb-4 z-30 flex items-center justify-between bg-gradient-to-b from-[#0B1120]/90 via-[#0B1120]/40 to-transparent"
           data-no-nav="true"
         >
+          {/* ───── Clickable author row → UserProfile ───── */}
           <button
-            onClick={(e) => { e.stopPropagation(); onProfileClick?.(user.id); }}
+            onClick={(e) => { e.stopPropagation(); handleProfileClick(); }}
             className="flex items-center gap-3 hover:opacity-90 transition-opacity"
+            aria-label={`View ${user.name}'s profile`}
           >
             <img
               src={user.profile_image_url || getDefaultAvatar(user.name, user.id)}
@@ -656,8 +666,6 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
 
 // ============================================================
 // Story Bubble Content
-//   - If story exists → thumbnail (image) OR text+bg
-//   - Else → user avatar / initial
 // ============================================================
 const StoryBubbleContent: React.FC<{
   story?: StoryType | null;
@@ -707,10 +715,7 @@ const StoryBubbleContent: React.FC<{
 };
 
 // ============================================================
-// STORY REEL — horizontal scroller (Instagram-style, full-size cards)
-//   - Owner's own story FIRST
-//   - Other users next (deduped, latest per user)
-//   - Uses ONLY thumbnails (media_thumb) to save bandwidth
+// STORY REEL
 // ============================================================
 interface StoryReelProps {
   stories: StoryType[];
@@ -731,6 +736,14 @@ export const StoryReel: React.FC<StoryReelProps> = ({
   onRequestLogin,
   loading = false,
 }) => {
+  const navigate = useNavigate();
+
+  // ─── Fallback: if parent doesn't provide onProfileClick → /u/:id ───
+  const handleProfileClick = useCallback((id: string) => {
+    if (onProfileClick) onProfileClick(id);
+    else navigate(`/u/${id}`);
+  }, [onProfileClick, navigate]);
+
   const active = useMemo(() => stories.filter((s) => !isExpired(s)), [stories]);
 
   const uniqueUsers = useMemo(() => {
@@ -826,11 +839,11 @@ export const StoryReel: React.FC<StoryReelProps> = ({
 
             <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
 
-            {/* Author avatar chip */}
+            {/* Author avatar chip → UserProfile */}
             <button
               className="absolute top-3 left-3 w-9 h-9 rounded-full border-4 border-[#1877F2] overflow-hidden z-10 shadow-md"
-              onClick={(e) => { e.stopPropagation(); onProfileClick(story.user_id); }}
-              aria-label={`Go to ${author.name}`}
+              onClick={(e) => { e.stopPropagation(); handleProfileClick(story.user_id); }}
+              aria-label={`Go to ${author.name}'s profile`}
             >
               <img
                 src={author.profile_image_url || getDefaultAvatar(author.name, author.id)}
@@ -839,7 +852,7 @@ export const StoryReel: React.FC<StoryReelProps> = ({
               />
             </button>
 
-            {/* Small + on owner's card so they can add more */}
+            {/* Small + on owner's card */}
             {isMine && (
               <button
                 onClick={(e) => {
@@ -1117,7 +1130,7 @@ export const CreateStoryModal: React.FC<CreateStoryModalProps> = ({
 };
 
 // ============================================================
-// PUBLIC STORY PAGE — for shared link / Google indexing
+// PUBLIC STORY PAGE — author block → UserProfile
 // ============================================================
 export const PublicStoryPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -1175,6 +1188,7 @@ export const PublicStoryPage: React.FC = () => {
 
   const storyUrl = `https://jobsreport.online/story/${story.slug}`;
   const authorName = story.user?.name || 'User';
+  const authorId = story.user_id;
   const title = story.text_content?.slice(0, 70) || `${authorName}'s Story`;
   const description = story.text_content?.slice(0, 160) || `Job story shared by ${authorName} on JobsReport.`;
   const image = story.media_url || story.media_thumb || undefined;
@@ -1191,7 +1205,7 @@ export const PublicStoryPage: React.FC = () => {
     author: {
       '@type': 'Person',
       name: authorName,
-      url: `https://jobsreport.online/story/${story.slug}`,
+      url: `https://jobsreport.online/u/${authorId}`,
     },
     publisher: {
       '@type': 'Organization',
@@ -1226,17 +1240,23 @@ export const PublicStoryPage: React.FC = () => {
       />
 
       <div className="max-w-2xl mx-auto px-4 py-10 space-y-6">
-        <div className="flex items-center gap-3">
+        {/* Author block → UserProfile */}
+        <Link
+          to={`/u/${authorId}`}
+          className="flex items-center gap-3 hover:opacity-90 transition-opacity group w-fit"
+        >
           <img
             src={story.user?.profile_image_url || getDefaultAvatar(authorName, story.user_id)}
             alt={authorName}
             className="w-12 h-12 rounded-full border-2 border-blue-500 object-cover"
           />
           <div>
-            <p className="text-white font-bold">{authorName}</p>
+            <p className="text-white font-bold group-hover:text-[#4A9EFF] transition-colors">
+              {authorName}
+            </p>
             <p className="text-xs text-gray-500">{formatStoryTime(story.created_at)}</p>
           </div>
-        </div>
+        </Link>
 
         <article className="rounded-3xl overflow-hidden border border-white/5 bg-white/[0.01]">
           {story.type === 'text' ? (
@@ -1380,7 +1400,7 @@ export default function StoryPage() {
         <StoryReel
           stories={stories}
           loading={loading}
-          onProfileClick={(id) => navigate(`/story/${id}`)}
+          onProfileClick={(id) => navigate(`/u/${id}`)}
           onCreateStory={() => setCreateOpen(true)}
           onViewStory={(s) => setViewingStory(s)}
           currentUser={currentUser}
@@ -1457,7 +1477,7 @@ export default function StoryPage() {
             if (prev) setViewingStory(prev);
             else setViewingStory(null);
           }}
-          onProfileClick={(id) => navigate(`/story/${id}`)}
+          onProfileClick={(id) => navigate(`/u/${id}`)}
           onDeleteStory={handleDelete}
           onViewRecorded={handleViewRecorded}
         />
