@@ -28,7 +28,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         s.expires_at, s.created_at,
         u.name AS author_name,
         u.username AS author_username,
-        u.profile_image_url AS author_avatar
+        u.profile_image_url AS author_avatar,
+        u.is_verified AS author_verified
       FROM stories s
       LEFT JOIN users u ON u.id = s.user_id
     `;
@@ -57,6 +58,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         name: row.author_name || 'User',
         username: row.author_username || null,
         profile_image_url: row.author_avatar || '',
+        is_verified: row.author_verified ?? 0,
       },
     }));
 
@@ -115,8 +117,14 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     ).run();
 
     const created: any = await DB.prepare(`
-      SELECT s.*, u.name AS author_name, u.username AS author_username, u.profile_image_url AS author_avatar
-      FROM stories s LEFT JOIN users u ON u.id = s.user_id WHERE s.id = ?
+      SELECT s.*,
+             u.name AS author_name,
+             u.username AS author_username,
+             u.profile_image_url AS author_avatar,
+             u.is_verified AS author_verified
+      FROM stories s
+      LEFT JOIN users u ON u.id = s.user_id
+      WHERE s.id = ?
     `).bind(id).first();
 
     // ─────────────────────────────────────────────
@@ -191,6 +199,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
           name: created.author_name || 'User',
           username: created.author_username || null,
           profile_image_url: created.author_avatar || '',
+          is_verified: created.author_verified ?? 0,
         },
       },
     }, 201);
