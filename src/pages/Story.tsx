@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import SEO from '../components/SEO';
+import VerifiedBadge from '../components/VerifiedBadge';
 import { useUserAuth } from '../context/UserAuthContext';
 import {
   X, Plus, Share2, Eye, Trash2, Calendar, Clock,
@@ -28,6 +29,7 @@ export interface StoryUser {
   username?: string | null;
   email?: string;
   profile_image_url?: string | null;
+  is_verified?: number;
 }
 
 export interface StoryType {
@@ -533,7 +535,10 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
               className="w-12 h-12 rounded-full border-2 border-[#1877F2] object-cover shadow-lg"
             />
             <div className="flex flex-col items-start">
-              <span className="text-white font-bold text-[17px] drop-shadow-md">{user.name}</span>
+              <span className="text-white font-bold text-[17px] drop-shadow-md flex items-center gap-1.5">
+                {user.name}
+                {user.is_verified === 1 && <VerifiedBadge size={14} />}
+              </span>
               <span className="text-white/70 text-[12px] drop-shadow-md">
                 {formatStoryTime(story.created_at)}
               </span>
@@ -863,8 +868,9 @@ export const StoryReel: React.FC<StoryReelProps> = ({
               </button>
             )}
 
-            <p className="absolute bottom-3 left-3 text-white font-bold text-xs drop-shadow-md truncate w-[85%]">
-              {isMine ? 'Your Story' : author.name}
+            <p className="absolute bottom-3 left-3 text-white font-bold text-xs drop-shadow-md truncate w-[85%] flex items-center gap-1">
+              <span className="truncate">{isMine ? 'Your Story' : author.name}</span>
+              {author.is_verified === 1 && <VerifiedBadge size={10} />}
             </p>
           </div>
         );
@@ -1142,6 +1148,7 @@ export const PublicStoryPage: React.FC = () => {
         username: authUser.username || null,
         email: authUser.email,
         profile_image_url: authUser.profile_image_url || null,
+        is_verified: (authUser as any).is_verified || 0,
       }
     : null;
 
@@ -1234,6 +1241,7 @@ export const PublicStoryPage: React.FC = () => {
     id: story.user_id,
     name: authorName,
     profile_image_url: getDefaultAvatar(authorName, story.user_id),
+    is_verified: 0,
   };
 
   return (
@@ -1264,8 +1272,9 @@ export const PublicStoryPage: React.FC = () => {
             className="w-12 h-12 rounded-full border-2 border-blue-500 object-cover"
           />
           <div>
-            <p className="text-white font-bold group-hover:text-[#4A9EFF] transition-colors">
+            <p className="text-white font-bold group-hover:text-[#4A9EFF] transition-colors flex items-center gap-1.5">
               {authorName}
+              {story.user?.is_verified === 1 && <VerifiedBadge size={16} />}
             </p>
             <p className="text-xs text-gray-500">{formatStoryTime(story.created_at)}</p>
           </div>
@@ -1388,6 +1397,7 @@ export default function StoryPage() {
         username: authUser.username || null,
         email: authUser.email,
         profile_image_url: authUser.profile_image_url || null,
+        is_verified: (authUser as any).is_verified || 0,
       }
     : null;
 
@@ -1438,6 +1448,7 @@ export default function StoryPage() {
         id: viewingStory.user_id,
         name: 'User',
         profile_image_url: getDefaultAvatar('User', viewingStory.user_id),
+        is_verified: 0,
       }
     : null;
 
@@ -1497,8 +1508,9 @@ export default function StoryPage() {
                 />
               )}
               <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent">
-                <p className="text-white text-[10px] font-bold truncate">
-                  {s.user?.name || 'User'}
+                <p className="text-white text-[10px] font-bold truncate flex items-center gap-1">
+                  <span className="truncate">{s.user?.name || 'User'}</span>
+                  {s.user?.is_verified === 1 && <VerifiedBadge size={9} />}
                 </p>
                 <p className="text-white/60 text-[9px] flex items-center gap-1">
                   <Eye size={9} /> {fmtCount(s.views_count || 0)}
