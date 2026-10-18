@@ -27,6 +27,7 @@ import StoryPage, { PublicStoryPage } from './pages/Story';
 import UserAuthPage from './pages/UserAuthPage';
 import UserProfile from './pages/UserProfile';
 import UserJobInput from './pages/UserJobInput';
+import NotificationsPage from './pages/NotificationsPage';
 
 import { AuthProvider } from './context/AuthContext';
 import { UserAuthProvider } from './context/UserAuthContext';
@@ -87,6 +88,9 @@ export default function App() {
 
                   {/* 📝 User Job Posting */}
                   <Route path="/post-job" element={<UserJobInput />} />
+
+                  {/* 🔔 Notifications */}
+                  <Route path="/notifications" element={<NotificationsPage />} />
 
                   {/* 🔐 User Auth (public accounts — separate from admin) */}
                   <Route path="/login" element={<UserAuthPage />} />
