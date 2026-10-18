@@ -174,6 +174,7 @@ export default function UserJobInput() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const needsCompanyParam = searchParams.get('needs-company') === '1';
+  const editingJobId = searchParams.get('edit');
 
   // ── Auth guard
   useEffect(() => {
@@ -185,6 +186,7 @@ export default function UserJobInput() {
   // ── Flow
   const [step, setStep] = useState<Step>('choose-company');
   const [selectedCompany, setSelectedCompany] = useState<string>('');
+  const [loadingJobForEdit, setLoadingJobForEdit] = useState(false);
 
   // ── Data
   const [companies, setCompanies] = useState<CompanyRow[]>([]);
@@ -251,9 +253,10 @@ export default function UserJobInput() {
 
   const profileWork = String((authUser as any)?.work || '').trim();
   const hasCompany = profileWork.length > 0;
+  const isEditing = !!editingJobId;
 
   // ────────────────────────────────────────────────────────
-  // LOAD COMPANIES + ROLES
+  // LOAD COMPANIES + ROLES + EDIT JOB
   // ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!authUser) return;
@@ -275,17 +278,102 @@ export default function UserJobInput() {
           const cats = Array.isArray(rolesData.categories) ? rolesData.categories : [];
           const list = cats.map((c: any) => ({ id: c.slug, title: c.name }));
           setRoles(list);
-          if (list.length > 0) setSelectedRole(list[0].title);
+          if (list.length > 0 && !isEditing) setSelectedRole(list[0].title);
         }
 
-        // Decide initial step:
-        // - If needs-company=1 OR no profile work → choose-company
-        // - Otherwise → job form directly
-        if (needsCompanyParam || !profileWork) {
-          setStep('choose-company');
+        // ── EDIT MODE: load existing job ──
+        if (editingJobId) {
+          setLoadingJobForEdit(true);
+          try {
+            const jobRes = await fetch(
+              `/api/users/${encodeURIComponent(authUser.id)}/jobs?limit=200`
+            );
+            if (jobRes.ok) {
+              const jobData = await jobRes.json();
+              const allJobs: any[] = Array.isArray(jobData?.jobs) ? jobData.jobs : [];
+              const job = allJobs.find((j) => j.id === editingJobId);
+
+              if (job) {
+                // Prefill all fields
+                setTitle(job.title || '');
+                setSelectedCompany(job.company || '');
+                setSelectedRole(job.role || '');
+                setLocation(job.location || '');
+                setSalary(job.salary || '');
+                setDescription(job.description || '');
+                setApplicationValue(job.url || '');
+
+                // Expiry
+                if (job.expiresAt) {
+                  const d = new Date(job.expiresAt);
+                  if (Number.isFinite(d.getTime())) {
+                    setExpiresAt(d.toISOString().split('T')[0]);
+                  }
+                }
+
+                // Application type from URL
+                if (job.url?.startsWith('mailto:')) {
+                  setApplicationType('email');
+                  setApplicationValue(job.url.replace('mailto:', ''));
+                } else if (job.url?.includes('wa.me')) {
+                  setApplicationType('whatsapp');
+                  setApplicationValue(job.whatsapp_number || job.url);
+                } else if (job.application_instructions) {
+                  setApplicationType('instructions');
+                  setApplicationValue(job.application_instructions);
+                } else {
+                  setApplicationType('url');
+                }
+
+                // Locations
+                setLocations({
+                  street_address: job.street_address || '',
+                  city: job.city || '',
+                  region: job.region || '',
+                  country: job.country || 'Tanzania',
+                  postcode: job.postcode || '',
+                });
+
+                // Advanced
+                setAdvanced({
+                  job_category: job.job_category || '',
+                  industry: job.industry || '',
+                  employment_type: job.employment_type || 'FULL_TIME',
+                  workplace_type: job.workplace_type || 'Onsite',
+                  education_level: job.education_level || 'Any',
+                  experience_months: job.experience_months || 0,
+                  skills: Array.isArray(job.skills) ? job.skills : [],
+                  benefits: Array.isArray(job.benefits) ? job.benefits : [],
+                  salary_min: job.salary_min ?? null,
+                  salary_max: job.salary_max ?? null,
+                  salary_currency: job.salary_currency || 'TZS',
+                });
+
+                // Show advanced section if any advanced field has data
+                if (job.industry || job.job_category || job.skills?.length) {
+                  setShowAdvanced(true);
+                }
+
+                // Skip company chooser — go straight to job form
+                setStep('job-form');
+              } else {
+                showMsg('error', 'Job not found or access denied');
+              }
+            }
+          } catch (err) {
+            console.error('Failed to load job for edit:', err);
+            showMsg('error', 'Failed to load job for editing');
+          } finally {
+            setLoadingJobForEdit(false);
+          }
         } else {
-          setSelectedCompany(profileWork);
-          setStep('job-form');
+          // ── CREATE MODE: decide starting step ──
+          if (needsCompanyParam || !profileWork) {
+            setStep('choose-company');
+          } else {
+            setSelectedCompany(profileWork);
+            setStep('job-form');
+          }
         }
       } catch (err) {
         console.error('Load failed:', err);
@@ -296,14 +384,14 @@ export default function UserJobInput() {
 
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authUser]);
+  }, [authUser, editingJobId]);
 
   // Sync description editor
   useEffect(() => {
     if (descEditMode === 'visual' && descriptionEditorRef.current) {
       descriptionEditorRef.current.innerHTML = description;
     }
-  }, [descEditMode]);
+  }, [descEditMode, description]);
 
   // ────────────────────────────────────────────────────────
   // HELPERS
@@ -313,7 +401,6 @@ export default function UserJobInput() {
     setTimeout(() => setMessage(null), 5000);
   };
 
-  // Companies options for chooser
   const chooseCompanyOptions = useMemo(() => {
     const others = companies
       .filter((c) => c.name.toLowerCase() !== profileWork.toLowerCase())
@@ -334,10 +421,7 @@ export default function UserJobInput() {
   };
 
   const handleGoCreateCompany = () => {
-    setNewCompany((prev) => ({
-      ...prev,
-      name: prev.name || '',
-    }));
+    setNewCompany((prev) => ({ ...prev, name: prev.name || '' }));
     setStep('create-company');
   };
 
@@ -413,7 +497,6 @@ export default function UserJobInput() {
         return;
       }
 
-      // Save to user profile
       const token = getUserToken();
       if (token) {
         await fetch('/api/users/me', {
@@ -426,7 +509,6 @@ export default function UserJobInput() {
         }).catch(() => {});
       }
 
-      // Go to job form
       setSelectedCompany(newCompany.name.trim());
       setStep('job-form');
       showMsg('success', `Company "${newCompany.name}" created!`);
@@ -438,7 +520,7 @@ export default function UserJobInput() {
   };
 
   // ────────────────────────────────────────────────────────
-  // FILE UPLOAD (job attachments)
+  // FILE UPLOAD
   // ────────────────────────────────────────────────────────
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files;
@@ -505,7 +587,7 @@ export default function UserJobInput() {
   };
 
   // ────────────────────────────────────────────────────────
-  // SUBMIT JOB
+  // SUBMIT (create OR update)
   // ────────────────────────────────────────────────────────
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -514,7 +596,8 @@ export default function UserJobInput() {
     const token = getUserToken();
     if (!token) { navigate('/login'); return; }
 
-    if (!selectedCompany.trim()) { showMsg('error', 'Please select a company'); return; }
+    // Validation
+    if (!isEditing && !selectedCompany.trim()) { showMsg('error', 'Please select a company'); return; }
     if (!title.trim()) { showMsg('error', 'Job title is required'); return; }
     if (!selectedRole) { showMsg('error', 'Please select a category'); return; }
     if (!expiresAt) { showMsg('error', 'Please set an expiry date'); return; }
@@ -530,7 +613,7 @@ export default function UserJobInput() {
 
     setSubmitting(true);
     try {
-      // Upload files
+      // Upload any new files
       const uploadedFiles = [];
       for (const file of files) {
         if (!file.file) continue;
@@ -566,59 +649,113 @@ export default function UserJobInput() {
         applyUrl = 'https://jobsreport.online/contact-us';
       }
 
-      const res = await fetch('/api/user/jobs', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          title: title.trim(),
-          company: selectedCompany,
-          role: selectedRole,
-          location: location || locations.city || 'Remote',
-          url: applyUrl,
-          applicationType,
-          applicationValue,
-          salary: salary?.trim() || 'Not Disclosed',
-          expiresAt,
-          description,
-          is_active: 1,
-          job_category: advanced.job_category || 'Other',
-          industry: advanced.industry || '',
-          employment_type: advanced.employment_type,
-          workplace_type: advanced.workplace_type,
-          education_level: advanced.education_level,
-          experience_months: advanced.experience_months,
-          skills: advanced.skills,
-          benefits: advanced.benefits,
-          salary_min: advanced.salary_min,
-          salary_max: advanced.salary_max,
-          salary_currency: advanced.salary_currency,
-          street_address: locations.street_address,
-          city: locations.city,
-          region: locations.region,
-          country: locations.country,
-          postcode: locations.postcode,
-          whatsapp_number,
-          application_instructions,
-          images: uploadedFiles,
-        }),
-      });
+      // ── UPDATE MODE ──
+      if (isEditing && editingJobId) {
+        const res = await fetch(`/api/users/${encodeURIComponent(authUser.id)}/jobs`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            jobId: editingJobId,
+            title: title.trim(),
+            location: location || locations.city || 'Remote',
+            url: applyUrl,
+            salary: salary?.trim() || 'Not Disclosed',
+            expiresAt,
+            description,
+            job_category: advanced.job_category || 'Other',
+            industry: advanced.industry || '',
+            employment_type: advanced.employment_type,
+            workplace_type: advanced.workplace_type,
+            education_level: advanced.education_level,
+            experience_months: advanced.experience_months,
+            skills: advanced.skills,
+            benefits: advanced.benefits,
+            salary_min: advanced.salary_min,
+            salary_max: advanced.salary_max,
+            salary_currency: advanced.salary_currency,
+            street_address: locations.street_address,
+            city: locations.city,
+            region: locations.region,
+            country: locations.country,
+            postcode: locations.postcode,
+            whatsapp_number,
+            application_instructions,
+          }),
+        });
 
-      let result: any = {};
-      try {
-        const text = await res.text();
-        result = text ? JSON.parse(text) : {};
-      } catch {
-        result = { error: `Server error (${res.status}). Please try again.` };
-      }
+        let result: any = {};
+        try {
+          const text = await res.text();
+          result = text ? JSON.parse(text) : {};
+        } catch {
+          result = { error: `Server error (${res.status})` };
+        }
 
-      if (res.ok) {
-        showMsg('success', 'Job posted successfully! Redirecting...');
-        setTimeout(() => navigate('/market'), 1500);
+        if (res.ok) {
+          showMsg('success', 'Job updated successfully! Redirecting...');
+          setTimeout(() => navigate(`/u/${authUser.id}`), 1200);
+        } else {
+          showMsg('error', result.error || `Failed to update job (${res.status})`);
+        }
       } else {
-        showMsg('error', result.error || `Failed to post job (${res.status})`);
+        // ── CREATE MODE ──
+        const res = await fetch('/api/user/jobs', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            title: title.trim(),
+            company: selectedCompany,
+            role: selectedRole,
+            location: location || locations.city || 'Remote',
+            url: applyUrl,
+            applicationType,
+            applicationValue,
+            salary: salary?.trim() || 'Not Disclosed',
+            expiresAt,
+            description,
+            is_active: 1,
+            job_category: advanced.job_category || 'Other',
+            industry: advanced.industry || '',
+            employment_type: advanced.employment_type,
+            workplace_type: advanced.workplace_type,
+            education_level: advanced.education_level,
+            experience_months: advanced.experience_months,
+            skills: advanced.skills,
+            benefits: advanced.benefits,
+            salary_min: advanced.salary_min,
+            salary_max: advanced.salary_max,
+            salary_currency: advanced.salary_currency,
+            street_address: locations.street_address,
+            city: locations.city,
+            region: locations.region,
+            country: locations.country,
+            postcode: locations.postcode,
+            whatsapp_number,
+            application_instructions,
+            images: uploadedFiles,
+          }),
+        });
+
+        let result: any = {};
+        try {
+          const text = await res.text();
+          result = text ? JSON.parse(text) : {};
+        } catch {
+          result = { error: `Server error (${res.status}). Please try again.` };
+        }
+
+        if (res.ok) {
+          showMsg('success', 'Job posted successfully! Redirecting...');
+          setTimeout(() => navigate('/market'), 1500);
+        } else {
+          showMsg('error', result.error || `Failed to post job (${res.status})`);
+        }
       }
     } catch (err: any) {
       console.error(err);
@@ -631,12 +768,12 @@ export default function UserJobInput() {
   // ────────────────────────────────────────────────────────
   // RENDER STATES
   // ────────────────────────────────────────────────────────
-  if (authLoading || loading) {
+  if (authLoading || loading || loadingJobForEdit) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
         <RefreshCw size={24} className="text-[#4A9EFF] animate-spin" />
         <span className="text-[10px] font-mono text-gray-500 tracking-widest uppercase">
-          Loading...
+          {loadingJobForEdit ? 'Loading job...' : 'Loading...'}
         </span>
       </div>
     );
@@ -645,9 +782,9 @@ export default function UserJobInput() {
   if (!authUser) return null;
 
   // ═══════════════════════════════════════════════════════
-  // STEP 1 — CHOOSE COMPANY
+  // STEP 1 — CHOOSE COMPANY (create mode only)
   // ═══════════════════════════════════════════════════════
-  if (step === 'choose-company') {
+  if (!isEditing && step === 'choose-company') {
     return (
       <>
         <SEO
@@ -690,7 +827,6 @@ export default function UserJobInput() {
             )}
           </AnimatePresence>
 
-          {/* Profile company suggestion */}
           {profileWork && (
             <div className="mb-6">
               <p className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-3">
@@ -713,7 +849,6 @@ export default function UserJobInput() {
             </div>
           )}
 
-          {/* Search companies */}
           <div className="mb-6">
             <p className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-3">
               {profileWork ? 'Or choose another company' : 'Choose a company'}
@@ -728,7 +863,6 @@ export default function UserJobInput() {
             />
           </div>
 
-          {/* Create company */}
           <div className="border-t border-white/5 pt-6">
             <p className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-3">
               Company not listed?
@@ -760,7 +894,7 @@ export default function UserJobInput() {
   // ═══════════════════════════════════════════════════════
   // STEP 3 — CREATE COMPANY
   // ═══════════════════════════════════════════════════════
-  if (step === 'create-company') {
+  if (!isEditing && step === 'create-company') {
     return (
       <>
         <SEO
@@ -1033,30 +1167,47 @@ export default function UserJobInput() {
   }
 
   // ═══════════════════════════════════════════════════════
-  // STEP 2 — JOB FORM
+  // STEP 2 — JOB FORM (create OR edit)
   // ═══════════════════════════════════════════════════════
   return (
     <>
       <SEO
-        title="Post a Job | JobsReport"
-        description="Post a job opening to reach thousands of qualified candidates on JobsReport."
+        title={isEditing ? 'Edit Job | JobsReport' : 'Post a Job | JobsReport'}
+        description={isEditing ? 'Update your job posting.' : 'Post a job opening to reach thousands of qualified candidates on JobsReport.'}
       />
 
       <div className="max-w-3xl mx-auto px-4 py-8 pb-16">
-        <button
-          onClick={() => setStep('choose-company')}
-          className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-6 text-sm"
-        >
-          <ArrowLeft size={16} />
-          Change Company
-        </button>
+        {isEditing ? (
+          <Link
+            to={`/u/${authUser.id}`}
+            className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-6 text-sm"
+          >
+            <ArrowLeft size={16} />
+            Back to Profile
+          </Link>
+        ) : (
+          <button
+            onClick={() => setStep('choose-company')}
+            className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-6 text-sm"
+          >
+            <ArrowLeft size={16} />
+            Change Company
+          </button>
+        )}
 
         <div className="mb-8">
-          <h1 className="text-2xl md:text-3xl font-black text-white">
-            Post a Job
-          </h1>
+          <div className="flex items-center gap-2 mb-1">
+            {isEditing && (
+              <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-500/10 text-amber-400 uppercase tracking-wider border border-amber-500/20">
+                Editing
+              </span>
+            )}
+            <h1 className="text-2xl md:text-3xl font-black text-white">
+              {isEditing ? 'Edit Job' : 'Post a Job'}
+            </h1>
+          </div>
           <p className="text-gray-400 text-sm mt-1">
-            Hiring on behalf of{' '}
+            {isEditing ? 'Update your job listing.' : 'Hiring on behalf of'}{' '}
             <span className="text-white font-bold">{selectedCompany}</span>
           </p>
         </div>
@@ -1080,7 +1231,7 @@ export default function UserJobInput() {
         </AnimatePresence>
 
         <form onSubmit={handleSubmit} className="space-y-0">
-          {/* COMPANY (locked) */}
+          {/* COMPANY */}
           <Section title="Company You're Hiring For" icon={<Building2 size={14} />}>
             <div className="flex items-center gap-3 p-4 bg-white/[0.02] border border-white/10 rounded-2xl">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#1877F2] to-[#7B4DFF] flex items-center justify-center shrink-0">
@@ -1089,13 +1240,15 @@ export default function UserJobInput() {
               <div className="flex-1 min-w-0">
                 <p className="text-white font-bold truncate">{selectedCompany}</p>
               </div>
-              <button
-                type="button"
-                onClick={() => setStep('choose-company')}
-                className="text-[10px] font-bold text-[#4A9EFF] hover:underline uppercase tracking-wider shrink-0"
-              >
-                Change
-              </button>
+              {!isEditing && (
+                <button
+                  type="button"
+                  onClick={() => setStep('choose-company')}
+                  className="text-[10px] font-bold text-[#4A9EFF] hover:underline uppercase tracking-wider shrink-0"
+                >
+                  Change
+                </button>
+              )}
             </div>
           </Section>
 
@@ -1500,7 +1653,7 @@ export default function UserJobInput() {
           {/* SUBMIT */}
           <div className="border-t border-white/5 mt-6 pt-6 flex gap-2">
             <Link
-              to="/"
+              to={isEditing ? `/u/${authUser.id}` : '/'}
               className="flex-1 py-4 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-bold text-sm text-center transition-colors"
             >
               Cancel
@@ -1513,12 +1666,12 @@ export default function UserJobInput() {
               {submitting ? (
                 <>
                   <RefreshCw size={16} className="animate-spin" />
-                  Publishing...
+                  {isEditing ? 'Updating...' : 'Publishing...'}
                 </>
               ) : (
                 <>
                   <CheckCircle size={16} />
-                  Publish Job
+                  {isEditing ? 'Update Job' : 'Publish Job'}
                 </>
               )}
             </button>
