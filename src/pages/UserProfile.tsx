@@ -8,7 +8,7 @@ import {
   MapPin, Briefcase, GraduationCap, BadgeCheck,
   Instagram, Globe, Pencil, ExternalLink,
   Image as ImageIcon, MessageCircle, UserPlus, UserCheck, Camera,
-  CheckCircle
+  CheckCircle, MoreVertical, Trash2, AlertTriangle
 } from 'lucide-react';
 import {
   StoryViewer,
@@ -48,13 +48,16 @@ interface JobItem {
   id: string;
   title: string;
   company: string;
+  logoUrl?: string | null;
   company_logo?: string | null;
   location?: string | null;
   role?: string | null;
   salary?: string | null;
   employment_type?: string | null;
+  postedAt?: string | null;
   posted_at?: string | null;
   slug?: string | null;
+  user_id?: string | null;
 }
 
 // ============================================================
@@ -348,50 +351,181 @@ const Field: React.FC<{
 );
 
 // ============================================================
-// JOB CARD
+// JOB CARD — with owner/admin menu
 // ============================================================
-const JobCard: React.FC<{ job: JobItem }> = ({ job }) => {
+interface JobCardProps {
+  job: JobItem;
+  canManage: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}
+
+const JobCard: React.FC<JobCardProps> = ({ job, canManage, onEdit, onDelete }) => {
+  const logo = job.logoUrl || job.company_logo || '';
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const href = `/market/${job.slug || `${job.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${job.id}`}`;
+
+  useEffect(() => {
+    const onClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, []);
+
   return (
-    <Link
-      to={href}
-      className="block p-4 bg-white/[0.02] border border-white/5 rounded-2xl hover:bg-white/[0.04] hover:border-[#1877F2]/30 transition-all group"
-    >
-      <div className="flex items-start gap-3">
-        <div className="w-11 h-11 rounded-xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
-          {job.company_logo ? (
-            <img src={job.company_logo} alt={job.company} className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400">
-              {job.company?.charAt(0)?.toUpperCase() || '?'}
+    <div className="relative">
+      <Link
+        to={href}
+        className="block p-4 bg-white/[0.02] border border-white/5 rounded-2xl hover:bg-white/[0.04] hover:border-[#1877F2]/30 transition-all group"
+      >
+        <div className="flex items-start gap-3">
+          <div className="w-11 h-11 rounded-xl bg-white/[0.02] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
+            {logo ? (
+              <img src={logo} alt={job.company} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-white/5 flex items-center justify-center text-xs font-bold text-gray-400">
+                {job.company?.charAt(0)?.toUpperCase() || '?'}
+              </div>
+            )}
+          </div>
+          <div className="flex-1 min-w-0 pr-8">
+            {job.role && (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#1877F2]/10 text-[#4A9EFF] uppercase tracking-wider">
+                {job.role}
+              </span>
+            )}
+            <h3 className="text-sm font-bold text-white group-hover:text-[#4A9EFF] transition-colors truncate mt-1">
+              {job.title}
+            </h3>
+            <div className="flex items-center gap-2 mt-1.5 text-[11px] text-gray-500 flex-wrap">
+              <span className="flex items-center gap-1">
+                <Briefcase size={10} />{job.company}
+              </span>
+              {job.location && (
+                <span className="flex items-center gap-1">
+                  <MapPin size={10} />{job.location}
+                </span>
+              )}
+            </div>
+            {job.salary && (
+              <span className="text-[10px] text-emerald-400 font-mono mt-1.5 block">{job.salary}</span>
+            )}
+          </div>
+        </div>
+      </Link>
+
+      {/* Menu (owner or admin only) */}
+      {canManage && (
+        <div ref={menuRef} className="absolute top-3 right-3 z-10">
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setMenuOpen((v) => !v);
+            }}
+            className="w-7 h-7 rounded-full bg-white/[0.04] hover:bg-white/[0.10] border border-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+            aria-label="Job options"
+          >
+            <MoreVertical size={14} />
+          </button>
+
+          {menuOpen && (
+            <div className="absolute right-0 top-full mt-1 w-36 bg-[#0B1120] border border-white/10 rounded-xl shadow-2xl overflow-hidden">
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setMenuOpen(false);
+                  onEdit();
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-xs font-medium text-white hover:bg-white/5 transition-colors"
+              >
+                <Pencil size={12} className="text-[#4A9EFF]" />
+                Edit Job
+              </button>
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setMenuOpen(false);
+                  onDelete();
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
+              >
+                <Trash2 size={12} />
+                Delete Job
+              </button>
             </div>
           )}
         </div>
-        <div className="flex-1 min-w-0">
-          {job.role && (
-            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#1877F2]/10 text-[#4A9EFF] uppercase tracking-wider">
-              {job.role}
-            </span>
-          )}
-          <h3 className="text-sm font-bold text-white group-hover:text-[#4A9EFF] transition-colors truncate mt-1">
-            {job.title}
-          </h3>
-          <div className="flex items-center gap-2 mt-1.5 text-[11px] text-gray-500 flex-wrap">
-            <span className="flex items-center gap-1">
-              <Briefcase size={10} />{job.company}
-            </span>
-            {job.location && (
-              <span className="flex items-center gap-1">
-                <MapPin size={10} />{job.location}
-              </span>
-            )}
+      )}
+    </div>
+  );
+};
+
+// ============================================================
+// DELETE CONFIRM MODAL
+// ============================================================
+interface DeleteJobModalProps {
+  job: JobItem;
+  onCancel: () => void;
+  onConfirm: () => Promise<void>;
+}
+
+const DeleteJobModal: React.FC<DeleteJobModalProps> = ({ job, onCancel, onConfirm }) => {
+  const [deleting, setDeleting] = useState(false);
+
+  const handleConfirm = async () => {
+    setDeleting(true);
+    try {
+      await onConfirm();
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[400] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="w-full max-w-[420px] bg-[#0B1120] rounded-3xl border border-white/10 shadow-2xl overflow-hidden">
+        <div className="p-6 space-y-4">
+          <div className="flex items-start gap-3">
+            <div className="w-11 h-11 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
+              <AlertTriangle size={20} className="text-red-400" />
+            </div>
+            <div>
+              <h3 className="text-white font-bold text-base">Delete this job?</h3>
+              <p className="text-xs text-gray-500 mt-1">This action cannot be undone.</p>
+            </div>
           </div>
-          {job.salary && (
-            <span className="text-[10px] text-emerald-400 font-mono mt-1.5 block">{job.salary}</span>
-          )}
+          <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5">
+            <p className="text-[10px] font-mono text-gray-500 uppercase tracking-wider mb-1">Job</p>
+            <p className="text-sm text-white font-bold truncate">{job.title}</p>
+            <p className="text-xs text-gray-500 truncate">{job.company}</p>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={onCancel}
+              disabled={deleting}
+              className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold text-sm transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleConfirm}
+              disabled={deleting}
+              className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+              Delete
+            </button>
+          </div>
         </div>
       </div>
-    </Link>
+    </div>
   );
 };
 
@@ -413,23 +547,22 @@ export default function UserProfile() {
   const [following, setFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
 
-  // ─── Pagination state ───
   const [jobsVisible, setJobsVisible] = useState(JOBS_PER_PAGE);
   const [storiesVisible, setStoriesVisible] = useState(STORIES_PER_PAGE);
 
-  // Story viewing
   const [viewingStory, setViewingStory] = useState<StoryType | null>(null);
   const [createStoryOpen, setCreateStoryOpen] = useState(false);
 
-  // Inline cover / avatar upload state
   const coverInputRef = useRef<HTMLInputElement>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [uploadingCover, setUploadingCover] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
-  // Share toast
   const [shareToast, setShareToast] = useState<string | null>(null);
+
+  // Delete job modal
+  const [jobToDelete, setJobToDelete] = useState<JobItem | null>(null);
 
   const currentUser: StoryUser | null = authUser
     ? {
@@ -443,16 +576,15 @@ export default function UserProfile() {
 
   const isOwnProfile = authUser && user && String(authUser.id) === String(user.id);
   const hasCompany = String((authUser as any)?.work || '').trim().length > 0;
+  const isAdmin = (authUser as any)?.role === 'admin';
 
-  // ─── Reset pagination on tab change ───
   useEffect(() => {
     setJobsVisible(JOBS_PER_PAGE);
     setStoriesVisible(STORIES_PER_PAGE);
   }, [activeTab]);
 
   // ────────────────────────────────────────────────────────
-  // LOAD PROFILE
-  // Uses /api/market?user_id=... for jobs (same endpoint MarketPage uses)
+  // LOAD PROFILE + JOBS (dedicated endpoint) + STORIES
   // ────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
@@ -468,32 +600,34 @@ export default function UserProfile() {
         setUser(data.user);
         setFollowing(!!data.user.is_following);
 
-        // Jobs: use /api/market with user_id filter — proven to work
+        // Jobs — dedicated endpoint
         const jobsRes = await fetch(
-          `/api/market?user_id=${encodeURIComponent(id)}&limit=100`
+          `/api/users/${encodeURIComponent(id)}/jobs?limit=100`
         ).catch(() => null);
 
-        if (jobsRes && jobsRes.ok) {
+        if (jobsRes && jobsRes.ok && !cancelled) {
           const jobsData = await jobsRes.json();
-          if (cancelled) return;
           const rawJobs = Array.isArray(jobsData?.jobs) ? jobsData.jobs : [];
-          // Normalize to JobItem shape
-          const normalized: JobItem[] = rawJobs.map((j: any) => ({
-            id: j.id,
-            title: j.title,
-            company: j.company || 'Unknown',
-            company_logo: j.logoUrl || j.company_logo || null,
-            location: j.location || null,
-            role: j.role || null,
-            salary: j.salary || null,
-            employment_type: j.employment_type || null,
-            posted_at: j.postedAt || j.posted_at || null,
-            slug: j.slug || null,
-          }));
-          setJobs(normalized);
+          setJobs(
+            rawJobs.map((j: any) => ({
+              id: j.id,
+              title: j.title,
+              company: j.company || 'Unknown',
+              logoUrl: j.logoUrl || null,
+              company_logo: j.logoUrl || j.company_logo || null,
+              location: j.location || null,
+              role: j.role || null,
+              salary: j.salary || null,
+              employment_type: j.employment_type || null,
+              postedAt: j.postedAt || j.posted_at || null,
+              posted_at: j.postedAt || j.posted_at || null,
+              slug: j.slug || null,
+              user_id: j.user_id || null,
+            }))
+          );
         }
 
-        // Stories (unchanged)
+        // Stories
         const storiesData = await apiFetch(
           `/api/users/${encodeURIComponent(id)}/stories`
         ).catch(() => ({ stories: [] }));
@@ -512,13 +646,11 @@ export default function UserProfile() {
     return () => { cancelled = true; };
   }, [id]);
 
-  // ────────────────────────────────────────────────────────
   // Sorted jobs
-  // ────────────────────────────────────────────────────────
   const sortedJobs = useMemo(() => {
     return [...jobs].sort((a, b) => {
-      const ta = parseServerTime(a.posted_at);
-      const tb = parseServerTime(b.posted_at);
+      const ta = parseServerTime(a.postedAt || a.posted_at);
+      const tb = parseServerTime(b.postedAt || b.posted_at);
       return tb - ta;
     });
   }, [jobs]);
@@ -530,9 +662,7 @@ export default function UserProfile() {
 
   const hasMoreJobs = jobsVisible < sortedJobs.length;
 
-  // ────────────────────────────────────────────────────────
   // Sorted stories
-  // ────────────────────────────────────────────────────────
   const sortedStories = useMemo(() => {
     return [...stories].sort((a, b) => {
       const ta = parseServerTime(a.created_at);
@@ -552,6 +682,39 @@ export default function UserProfile() {
   );
 
   const hasMoreStories = storiesVisible < sortedStories.length;
+
+  // ────────────────────────────────────────────────────────
+  // JOB PERMISSIONS
+  // ────────────────────────────────────────────────────────
+  const canManageJob = (job: JobItem): boolean => {
+    if (!authUser) return false;
+    if (isAdmin) return true;
+    return String(job.user_id || '') === String(authUser.id);
+  };
+
+  const handleEditJob = (job: JobItem) => {
+    navigate(`/post-job?edit=${encodeURIComponent(job.id)}`);
+  };
+
+  const handleDeleteJob = async (job: JobItem) => {
+    const token = getUserToken();
+    if (!token) { navigate('/login'); return; }
+    try {
+      await apiFetch(`/api/user/jobs/${encodeURIComponent(job.id)}`, {
+        method: 'DELETE',
+      });
+      setJobs((prev) => prev.filter((j) => j.id !== job.id));
+      setUser((prev) =>
+        prev ? { ...prev, jobs_count: Math.max(0, (prev.jobs_count || 0) - 1) } : prev
+      );
+      setJobToDelete(null);
+      setShareToast('Job deleted');
+      setTimeout(() => setShareToast(null), 2000);
+    } catch (err: any) {
+      setShareToast(err?.message || 'Failed to delete job');
+      setTimeout(() => setShareToast(null), 3000);
+    }
+  };
 
   // ────────────────────────────────────────────────────────
   // FOLLOW
@@ -582,9 +745,6 @@ export default function UserProfile() {
     }
   };
 
-  // ────────────────────────────────────────────────────────
-  // SAVE PROFILE
-  // ────────────────────────────────────────────────────────
   const handleSaveProfile = async (updates: Partial<ProfileUser>) => {
     await apiFetch('/api/users/me', {
       method: 'PUT',
@@ -593,9 +753,6 @@ export default function UserProfile() {
     setUser((prev) => (prev ? { ...prev, ...updates } : prev));
   };
 
-  // ────────────────────────────────────────────────────────
-  // INLINE COVER / AVATAR UPLOAD
-  // ────────────────────────────────────────────────────────
   const handleCoverUpload = async (file: File) => {
     setUploadError(null);
     setUploadingCover(true);
@@ -634,9 +791,6 @@ export default function UserProfile() {
     }
   };
 
-  // ────────────────────────────────────────────────────────
-  // SHARE PROFILE
-  // ────────────────────────────────────────────────────────
   const handleShareProfile = async () => {
     const url = `${window.location.origin}/u/${user?.username || user?.id}`;
     try {
@@ -649,9 +803,6 @@ export default function UserProfile() {
     }
   };
 
-  // ────────────────────────────────────────────────────────
-  // POST JOB
-  // ────────────────────────────────────────────────────────
   const handlePostJob = () => {
     if (!hasCompany) {
       navigate('/post-job?needs-company=1');
@@ -660,9 +811,6 @@ export default function UserProfile() {
     navigate('/post-job');
   };
 
-  // ────────────────────────────────────────────────────────
-  // CREATE / DELETE STORY
-  // ────────────────────────────────────────────────────────
   const handleCreateStory = async (payload: CreateStoryPayload) => {
     await apiFetch('/api/stories', {
       method: 'POST',
@@ -681,7 +829,7 @@ export default function UserProfile() {
   };
 
   // ────────────────────────────────────────────────────────
-  // RENDER STATES
+  // RENDER
   // ────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -767,7 +915,6 @@ export default function UserProfile() {
         )}
       </div>
 
-      {/* Toast */}
       {shareToast && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[400] px-4 py-3 rounded-xl bg-[#0B1120] border border-emerald-500/30 shadow-2xl flex items-center gap-2">
           <CheckCircle size={16} className="text-emerald-400" />
@@ -775,7 +922,6 @@ export default function UserProfile() {
         </div>
       )}
 
-      {/* Body */}
       <div className="max-w-3xl mx-auto px-4 pb-16">
         {uploadError && (
           <div className="mt-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
@@ -894,7 +1040,6 @@ export default function UserProfile() {
           </div>
         </div>
 
-        {/* Actions */}
         <div className="flex items-center gap-2 mt-4">
           {isOwnProfile ? (
             <>
@@ -1033,7 +1178,15 @@ export default function UserProfile() {
               ) : (
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {visibleJobs.map((j) => <JobCard key={j.id} job={j} />)}
+                    {visibleJobs.map((j) => (
+                      <JobCard
+                        key={j.id}
+                        job={j}
+                        canManage={canManageJob(j)}
+                        onEdit={() => handleEditJob(j)}
+                        onDelete={() => setJobToDelete(j)}
+                      />
+                    ))}
                   </div>
 
                   {hasMoreJobs && (
@@ -1230,6 +1383,15 @@ export default function UserProfile() {
             if (prev) setViewingStory(prev); else setViewingStory(null);
           }}
           onDeleteStory={isOwnProfile ? handleDeleteStory : undefined}
+        />
+      )}
+
+      {/* Delete job modal */}
+      {jobToDelete && (
+        <DeleteJobModal
+          job={jobToDelete}
+          onCancel={() => setJobToDelete(null)}
+          onConfirm={() => handleDeleteJob(jobToDelete)}
         />
       )}
     </>
