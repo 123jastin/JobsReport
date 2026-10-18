@@ -1,255 +1,90 @@
-import { useState, useEffect } from 'react';
-import { Bell, BellOff, Globe, Check, X, RefreshCw } from 'lucide-react';
-import { requestNotificationPermission, onForegroundMessage } from '../lib/firebase';
-
-const COUNTRIES = [
-  { name: 'Worldwide', flag: '🌍' },
-  { name: 'Tanzania', flag: '🇹🇿' },
-  { name: 'Kenya', flag: '🇰🇪' },
-  { name: 'Uganda', flag: '🇺🇬' },
-  { name: 'Rwanda', flag: '🇷🇼' },
-  { name: 'Burundi', flag: '🇧🇮' },
-  { name: 'South Africa', flag: '🇿🇦' },
-  { name: 'Nigeria', flag: '🇳🇬' },
-  { name: 'Ghana', flag: '🇬🇭' },
-  { name: 'India', flag: '🇮🇳' },
-  { name: 'United States', flag: '🇺🇸' },
-  { name: 'United Kingdom', flag: '🇬🇧' },
-  { name: 'Canada', flag: '🇨🇦' },
-  { name: 'Germany', flag: '🇩🇪' },
-  { name: 'United Arab Emirates', flag: '🇦🇪' }
-];
+import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
+import { Bell } from 'lucide-react';
+import { useUserAuth, getUserToken } from '../context/UserAuthContext';
 
 export default function NotificationBell() {
-  const [subscribed, setSubscribed] = useState(false);
-  const [showPanel, setShowPanel] = useState(false);
-  const [selectedCountry, setSelectedCountry] = useState('Worldwide');
-  const [loading, setLoading] = useState(false);
-  const [successMessage, setSuccessMessage] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
+  const { user } = useUserAuth();
+  const [unreadCount, setUnreadCount] = useState(0);
 
-  useEffect(() => {
-    const token = localStorage.getItem('fcm_token');
-    if (token) {
-      setSubscribed(true);
-      const savedCountry = localStorage.getItem('fcm_country') || 'Worldwide';
-      setSelectedCountry(savedCountry);
+  const fetchUnread = useCallback(async () => {
+    const token = getUserToken();
+    if (!token) {
+      setUnreadCount(0);
+      return;
     }
-  }, []);
-
-  useEffect(() => {
-    const unsubscribe = onForegroundMessage((payload) => {
-      if (Notification.permission === 'granted') {
-        new Notification(payload.notification.title, {
-          body: payload.notification.body,
-          icon: '/logo-192.png'
-        });
-      }
-    });
-
-    return () => unsubscribe?.();
-  }, []);
-
-  const handleCountrySelect = async (country: string) => {
-    setSelectedCountry(country);
-    setLoading(true);
-    setErrorMessage('');
-
-    // 🔥 Ask for permission IMMEDIATELY while click context is active
-    try {
-      const token = await requestNotificationPermission();
-
-      // Close panel after permission prompt
-      setShowPanel(false);
-
-      if (token) {
-        localStorage.setItem('fcm_token', token);
-        localStorage.setItem('fcm_country', country);
-        setSubscribed(true);
-        setSuccessMessage(`✅ Alerts enabled for ${country}`);
-
-        await fetch('/api/notifications/subscribe', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token, country })
-        });
-
-        setTimeout(() => setSuccessMessage(''), 3000);
-      } else {
-        setErrorMessage('Allow notifications in browser settings to enable alerts');
-        setTimeout(() => setErrorMessage(''), 5000);
-      }
-    } catch (err: any) {
-      setShowPanel(false);
-      setErrorMessage('Could not request permission. Try again.');
-      setTimeout(() => setErrorMessage(''), 4000);
-    }
-
-    setLoading(false);
-  };
-
-  const handleRetry = async () => {
-    setErrorMessage('');
-    setLoading(true);
 
     try {
-      const token = await requestNotificationPermission();
-      setShowPanel(false);
-
-      if (token) {
-        localStorage.setItem('fcm_token', token);
-        localStorage.setItem('fcm_country', selectedCountry);
-        setSubscribed(true);
-        setSuccessMessage(`✅ Alerts enabled for ${selectedCountry}`);
-
-        await fetch('/api/notifications/subscribe', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token, country: selectedCountry })
-        });
-
-        setTimeout(() => setSuccessMessage(''), 3000);
-      } else {
-        setErrorMessage('Allow notifications in browser settings');
-        setTimeout(() => setErrorMessage(''), 5000);
-      }
-    } catch (err: any) {
-      setShowPanel(false);
-      setErrorMessage('Could not request permission. Try again.');
-      setTimeout(() => setErrorMessage(''), 4000);
-    }
-
-    setLoading(false);
-  };
-
-  const handleUnsubscribe = async () => {
-    const token = localStorage.getItem('fcm_token');
-    if (token) {
-      await fetch('/api/notifications/unsubscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token })
+      const res = await fetch('/api/notifications?limit=1', {
+        headers: { Authorization: `Bearer ${token}` },
       });
 
-      localStorage.removeItem('fcm_token');
-      localStorage.removeItem('fcm_country');
-      setSubscribed(false);
-      setSelectedCountry('Worldwide');
-      setSuccessMessage('Alerts disabled');
-      setTimeout(() => setSuccessMessage(''), 2000);
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setUnreadCount(Number(data?.unread) || 0);
+      }
+    } catch {
+      // silent
     }
-  };
+  }, []);
 
-  const handleBellClick = () => {
-    if (subscribed) {
-      handleUnsubscribe();
-    } else {
-      setShowPanel(!showPanel);
-      setErrorMessage('');
+  // Only poll when logged in
+  useEffect(() => {
+    if (!user) {
+      setUnreadCount(0);
+      return;
     }
-  };
+
+    // Initial fetch
+    fetchUnread();
+
+    // Poll every 45s
+    const interval = setInterval(fetchUnread, 45_000);
+
+    // Refetch on tab focus
+    const onFocus = () => fetchUnread();
+    window.addEventListener('focus', onFocus);
+
+    // Refetch when notifications page updates (mark-all-read, delete, etc.)
+    const onUpdate = () => fetchUnread();
+    window.addEventListener('notifications:updated', onUpdate);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('notifications:updated', onUpdate);
+    };
+  }, [user?.id, fetchUnread]);
+
+  // Hide entirely for logged-out users
+  if (!user) return null;
+
+  const displayCount = unreadCount > 99 ? '99+' : String(unreadCount);
 
   return (
-    <div className="relative">
-      {/* Bell Icon */}
-      <button
-        onClick={handleBellClick}
-        className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all relative"
-        title={subscribed ? `Alerts: ${selectedCountry} (click to unsubscribe)` : 'Enable job alerts'}
-      >
-        {subscribed ? (
-          <Bell size={18} className="text-green-400" />
-        ) : (
-          <BellOff size={18} />
-        )}
-        {subscribed && (
-          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-        )}
-      </button>
+    <Link
+      to="/notifications"
+      className="relative p-2 text-gray-400 hover:text-white transition-colors"
+      aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
+      title={
+        unreadCount > 0
+          ? `${unreadCount} unread notification${unreadCount !== 1 ? 's' : ''}`
+          : 'Notifications'
+      }
+      id="notification-bell-btn"
+    >
+      <Bell size={18} />
 
-      {/* Success Toast */}
-      {successMessage && (
-        <div className="absolute top-full right-0 mt-2 px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-[10px] font-bold whitespace-nowrap z-50">
-          {successMessage}
-        </div>
+      {unreadCount > 0 && (
+        <span
+          className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-[#F3425F] text-white text-[9px] font-bold flex items-center justify-center leading-none ring-2 ring-bg-surface"
+          style={{
+            boxShadow: '0 0 8px rgba(243, 66, 95, 0.5)',
+          }}
+        >
+          {displayCount}
+        </span>
       )}
-
-      {/* Error Toast */}
-      {errorMessage && (
-        <div className="absolute top-full right-0 mt-2 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-bold whitespace-nowrap z-50 max-w-[200px]">
-          {errorMessage}
-        </div>
-      )}
-
-      {/* Country Panel */}
-      {showPanel && !subscribed && (
-        <>
-          <div 
-            className="fixed inset-0 z-40 bg-transparent"
-            onClick={() => setShowPanel(false)}
-          />
-          
-          <div className="absolute top-full right-0 mt-2 w-60 bg-black border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden">
-            {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
-              <div className="flex items-center gap-2">
-                <Bell size={14} className="text-blue-400" />
-                <span className="text-[11px] font-bold text-white uppercase tracking-wider">Job Alerts</span>
-              </div>
-              <button 
-                onClick={() => setShowPanel(false)}
-                className="p-1 rounded-lg hover:bg-white/5 text-gray-500 hover:text-white transition-colors"
-              >
-                <X size={14} />
-              </button>
-            </div>
-
-            {/* Description */}
-            <div className="px-4 py-2 border-b border-white/5">
-              <p className="text-[10px] text-gray-500 leading-relaxed">
-                Tap a country to get notified when new jobs are posted
-              </p>
-            </div>
-
-            {/* Country List */}
-            <div className="max-h-[220px] overflow-y-auto py-1">
-              {COUNTRIES.map(country => (
-                <button
-                  key={country.name}
-                  onClick={() => handleCountrySelect(country.name)}
-                  disabled={loading}
-                  className={`w-full flex items-center justify-between px-4 py-2.5 text-xs transition-all ${
-                    loading ? 'opacity-50 cursor-wait' :
-                    selectedCountry === country.name 
-                      ? 'bg-blue-600/10 text-blue-400' 
-                      : 'text-gray-400 hover:text-white hover:bg-white/[0.02]'
-                  }`}
-                >
-                  <span className="flex items-center gap-2.5">
-                    <span className="text-base">{country.flag}</span>
-                    <span>{country.name}</span>
-                  </span>
-                  {selectedCountry === country.name && (
-                    <Check size={14} className="text-blue-400" />
-                  )}
-                </button>
-              ))}
-            </div>
-
-            {/* Retry Button */}
-            <div className="px-4 py-2.5 border-t border-white/5">
-              <p className="text-[9px] text-gray-600 mb-2">Permission popup not appearing?</p>
-              <button
-                onClick={handleRetry}
-                className="w-full py-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white text-[10px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5"
-              >
-                <RefreshCw size={10} />
-                Try Again
-              </button>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
+    </Link>
   );
 }
