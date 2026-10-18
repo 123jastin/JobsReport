@@ -19,8 +19,13 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
   try {
     const story: any = await DB.prepare(`
-      SELECT s.*, u.name AS author_name, u.username AS author_username, u.profile_image_url AS author_avatar
-      FROM stories s LEFT JOIN users u ON u.id = s.user_id
+      SELECT s.*,
+             u.name AS author_name,
+             u.username AS author_username,
+             u.profile_image_url AS author_avatar,
+             u.is_verified AS author_verified
+      FROM stories s
+      LEFT JOIN users u ON u.id = s.user_id
       WHERE s.id = ? OR s.slug = ?
     `).bind(key, key).first();
 
@@ -49,6 +54,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         name: story.author_name || 'User',
         username: story.author_username || null,
         profile_image_url: story.author_avatar || '',
+        is_verified: story.author_verified ?? 0,
       },
     }), {
       headers: {
