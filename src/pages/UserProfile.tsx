@@ -3,12 +3,12 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import SEO from '../components/SEO';
 import { useUserAuth, getUserToken } from '../context/UserAuthContext';
 import {
-  X, Plus, Share2, Eye, Calendar, Clock,
+  X, Plus, Share2, Eye, Calendar,
   ChevronLeft, ChevronDown, RefreshCw, Loader2,
   MapPin, Briefcase, GraduationCap, BadgeCheck,
   Instagram, Globe, Pencil, ExternalLink,
   Image as ImageIcon, MessageCircle, UserPlus, UserCheck, Camera,
-  Building2, CheckCircle, Copy
+  CheckCircle
 } from 'lucide-react';
 import {
   StoryViewer,
@@ -144,7 +144,7 @@ const uploadImageFile = async (file: File): Promise<string> => {
 };
 
 // ============================================================
-// EDIT PROFILE MODAL (LinkedIn removed)
+// EDIT PROFILE MODAL
 // ============================================================
 interface EditProfileModalProps {
   user: ProfileUser;
@@ -452,6 +452,7 @@ export default function UserProfile() {
 
   // ────────────────────────────────────────────────────────
   // LOAD PROFILE
+  // Uses /api/market?user_id=... for jobs (same endpoint MarketPage uses)
   // ────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
@@ -467,10 +468,35 @@ export default function UserProfile() {
         setUser(data.user);
         setFollowing(!!data.user.is_following);
 
-        const jobsData = await apiFetch(`/api/users/${encodeURIComponent(id)}/jobs`).catch(() => ({ jobs: [] }));
-        if (!cancelled) setJobs(Array.isArray(jobsData?.jobs) ? jobsData.jobs : []);
+        // Jobs: use /api/market with user_id filter — proven to work
+        const jobsRes = await fetch(
+          `/api/market?user_id=${encodeURIComponent(id)}&limit=100`
+        ).catch(() => null);
 
-        const storiesData = await apiFetch(`/api/users/${encodeURIComponent(id)}/stories`).catch(() => ({ stories: [] }));
+        if (jobsRes && jobsRes.ok) {
+          const jobsData = await jobsRes.json();
+          if (cancelled) return;
+          const rawJobs = Array.isArray(jobsData?.jobs) ? jobsData.jobs : [];
+          // Normalize to JobItem shape
+          const normalized: JobItem[] = rawJobs.map((j: any) => ({
+            id: j.id,
+            title: j.title,
+            company: j.company || 'Unknown',
+            company_logo: j.logoUrl || j.company_logo || null,
+            location: j.location || null,
+            role: j.role || null,
+            salary: j.salary || null,
+            employment_type: j.employment_type || null,
+            posted_at: j.postedAt || j.posted_at || null,
+            slug: j.slug || null,
+          }));
+          setJobs(normalized);
+        }
+
+        // Stories (unchanged)
+        const storiesData = await apiFetch(
+          `/api/users/${encodeURIComponent(id)}/stories`
+        ).catch(() => ({ stories: [] }));
         if (!cancelled) {
           const list: StoryType[] = Array.isArray(storiesData?.stories) ? storiesData.stories : [];
           setStories(list.filter((s) => !isExpired(s)));
@@ -487,7 +513,7 @@ export default function UserProfile() {
   }, [id]);
 
   // ────────────────────────────────────────────────────────
-  // Sorted jobs (newest first) + paginated slice
+  // Sorted jobs
   // ────────────────────────────────────────────────────────
   const sortedJobs = useMemo(() => {
     return [...jobs].sort((a, b) => {
@@ -580,6 +606,8 @@ export default function UserProfile() {
         body: JSON.stringify({ cover_image_url: url }),
       });
       setUser((prev) => (prev ? { ...prev, cover_image_url: url } : prev));
+      setShareToast('Cover updated!');
+      setTimeout(() => setShareToast(null), 2000);
     } catch (err: any) {
       setUploadError(err?.message || 'Cover upload failed');
     } finally {
@@ -597,6 +625,8 @@ export default function UserProfile() {
         body: JSON.stringify({ profile_image_url: url }),
       });
       setUser((prev) => (prev ? { ...prev, profile_image_url: url } : prev));
+      setShareToast('Avatar updated!');
+      setTimeout(() => setShareToast(null), 2000);
     } catch (err: any) {
       setUploadError(err?.message || 'Avatar upload failed');
     } finally {
@@ -605,7 +635,7 @@ export default function UserProfile() {
   };
 
   // ────────────────────────────────────────────────────────
-  // SHARE PROFILE — copy link + toast
+  // SHARE PROFILE
   // ────────────────────────────────────────────────────────
   const handleShareProfile = async () => {
     const url = `${window.location.origin}/u/${user?.username || user?.id}`;
@@ -620,11 +650,10 @@ export default function UserProfile() {
   };
 
   // ────────────────────────────────────────────────────────
-  // POST JOB — guard on company
+  // POST JOB
   // ────────────────────────────────────────────────────────
   const handlePostJob = () => {
     if (!hasCompany) {
-      // Navigate with flag — UserJobInput will show "Choose your company or create one"
       navigate('/post-job?needs-company=1');
       return;
     }
@@ -738,7 +767,7 @@ export default function UserProfile() {
         )}
       </div>
 
-      {/* Share toast */}
+      {/* Toast */}
       {shareToast && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[400] px-4 py-3 rounded-xl bg-[#0B1120] border border-emerald-500/30 shadow-2xl flex items-center gap-2">
           <CheckCircle size={16} className="text-emerald-400" />
@@ -856,11 +885,11 @@ export default function UserProfile() {
             <span className="text-gray-500 ml-1">followers</span>
           </div>
           <div>
-            <span className="font-bold text-white">{fmtCount(user.jobs_count || jobs.length)}</span>
+            <span className="font-bold text-white">{fmtCount(sortedJobs.length)}</span>
             <span className="text-gray-500 ml-1">job adverts</span>
           </div>
           <div>
-            <span className="font-bold text-white">{fmtCount(user.stories_count || stories.length)}</span>
+            <span className="font-bold text-white">{fmtCount(sortedStories.length)}</span>
             <span className="text-gray-500 ml-1">stories</span>
           </div>
         </div>
@@ -924,7 +953,7 @@ export default function UserProfile() {
           )}
         </div>
 
-        {/* Mini stories row — LATEST 5 */}
+        {/* Mini stories row */}
         {topStories.length > 0 && (
           <div className="mt-6">
             <div className="flex gap-3 overflow-x-auto scrollbar-hide py-1 -mx-1 px-1">
@@ -963,8 +992,8 @@ export default function UserProfile() {
         {/* Tabs */}
         <div className="flex items-center gap-6 mt-6 border-b border-white/[0.06]">
           {[
-            { key: 'jobs' as const, label: 'Job Adverts', icon: <Briefcase size={14} />, count: jobs.length },
-            { key: 'stories' as const, label: 'Stories', icon: <Instagram size={14} />, count: stories.length },
+            { key: 'jobs' as const, label: 'Job Adverts', icon: <Briefcase size={14} />, count: sortedJobs.length },
+            { key: 'stories' as const, label: 'Stories', icon: <Instagram size={14} />, count: sortedStories.length },
             { key: 'about' as const, label: 'About', icon: <MessageCircle size={14} /> },
           ].map((tab) => (
             <button
