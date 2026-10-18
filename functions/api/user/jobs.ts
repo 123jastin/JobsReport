@@ -130,8 +130,61 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       body.country || 'Tanzania',
       whatsapp_number,
       application_instructions,
-      payload.sub   // ← user_id (must be here!)
+      payload.sub
     ).run();
+
+    // ─────────────────────────────────────────────
+    // 🔔 FAN OUT NOTIFICATIONS TO FOLLOWERS
+    // Non-blocking: failures here don't fail the job creation
+    // ─────────────────────────────────────────────
+    try {
+      const titleSlug = title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+      const jobLink = `/market/${titleSlug}-${id}`;
+
+      // Fetch followers of the posting user
+      const followersRes: any = await DB.prepare(
+        'SELECT follower_id FROM follows WHERE following_id = ?'
+      ).bind(payload.sub).all();
+
+      const followerIds = (followersRes.results || [])
+        .map((r: any) => r.follower_id)
+        .filter((uid: string) => uid && uid !== payload.sub); // exclude self
+
+      if (followerIds.length > 0) {
+        const now = new Date().toISOString();
+        const notifTitle = `posted a new job: ${title}`;
+        const notifBody = companyName;
+
+        const stmts = followerIds.map((uid: string) => {
+          const notifId = `notif-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+          return DB.prepare(`
+            INSERT INTO notifications (
+              id, user_id, actor_id, type, title, body, link, image_url,
+              entity_type, entity_id, is_read, created_at
+            ) VALUES (?, ?, ?, 'job_created', ?, ?, ?, NULL, 'job', ?, 0, ?)
+          `).bind(
+            notifId,
+            uid,
+            payload.sub,
+            notifTitle,
+            notifBody,
+            jobLink,
+            id,
+            now
+          );
+        });
+
+        await DB.batch(stmts);
+        console.log(`[jobs] Fan-out notifications sent to ${followerIds.length} followers`);
+      }
+    } catch (notifErr) {
+      // Log but don't fail the job creation
+      console.warn('[jobs] Notification fan-out failed:', notifErr);
+    }
 
     return jsonResponse({ success: true, id }, 201);
   } catch (err: any) {
