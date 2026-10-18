@@ -119,6 +119,59 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       FROM stories s LEFT JOIN users u ON u.id = s.user_id WHERE s.id = ?
     `).bind(id).first();
 
+    // ─────────────────────────────────────────────
+    // 🔔 FAN OUT NOTIFICATIONS TO FOLLOWERS
+    // Non-blocking: failures here don't fail story creation
+    // ─────────────────────────────────────────────
+    try {
+      const storyLink = `/story/${slug}`;
+
+      // Fetch followers of the poster
+      const followersRes: any = await DB.prepare(
+        'SELECT follower_id FROM follows WHERE following_id = ?'
+      ).bind(payload.sub).all();
+
+      const followerIds = (followersRes.results || [])
+        .map((r: any) => r.follower_id)
+        .filter((uid: string) => uid && uid !== payload.sub); // exclude self
+
+      if (followerIds.length > 0) {
+        const now = new Date().toISOString();
+        const notifTitle = 'shared a new job story';
+
+        // Body: short preview of the story content
+        const previewBody = type === 'text'
+          ? (textContent || '').slice(0, 100)
+          : 'View story';
+
+        const stmts = followerIds.map((uid: string) => {
+          const notifId = `notif-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+          return DB.prepare(`
+            INSERT INTO notifications (
+              id, user_id, actor_id, type, title, body, link, image_url,
+              entity_type, entity_id, is_read, created_at
+            ) VALUES (?, ?, ?, 'story_created', ?, ?, ?, ?, 'story', ?, 0, ?)
+          `).bind(
+            notifId,
+            uid,
+            payload.sub,
+            notifTitle,
+            previewBody,
+            storyLink,
+            mediaThumb || mediaUrl || null,
+            id,
+            now
+          );
+        });
+
+        await DB.batch(stmts);
+        console.log(`[stories] Fan-out notifications sent to ${followerIds.length} followers`);
+      }
+    } catch (notifErr) {
+      // Log but don't fail story creation
+      console.warn('[stories] Notification fan-out failed:', notifErr);
+    }
+
     return jsonResponse({
       story: {
         id: created.id,
