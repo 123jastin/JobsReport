@@ -170,7 +170,7 @@ const Label: React.FC<{ children: React.ReactNode; required?: boolean }> = ({ ch
 type Step = 'choose-company' | 'job-form' | 'create-company';
 
 export default function UserJobInput() {
-  const { user: authUser, loading: authLoading } = useUserAuth();
+  const { user: authUser, loading: authLoading, refreshUser } = useUserAuth() as any;
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const needsCompanyParam = searchParams.get('needs-company') === '1';
@@ -252,7 +252,6 @@ export default function UserJobInput() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const profileWork = String((authUser as any)?.work || '').trim();
-  const hasCompany = profileWork.length > 0;
   const isEditing = !!editingJobId;
 
   // ────────────────────────────────────────────────────────
@@ -294,7 +293,6 @@ export default function UserJobInput() {
               const job = allJobs.find((j) => j.id === editingJobId);
 
               if (job) {
-                // Prefill all fields
                 setTitle(job.title || '');
                 setSelectedCompany(job.company || '');
                 setSelectedRole(job.role || '');
@@ -303,7 +301,6 @@ export default function UserJobInput() {
                 setDescription(job.description || '');
                 setApplicationValue(job.url || '');
 
-                // Expiry
                 if (job.expiresAt) {
                   const d = new Date(job.expiresAt);
                   if (Number.isFinite(d.getTime())) {
@@ -311,7 +308,6 @@ export default function UserJobInput() {
                   }
                 }
 
-                // Application type from URL
                 if (job.url?.startsWith('mailto:')) {
                   setApplicationType('email');
                   setApplicationValue(job.url.replace('mailto:', ''));
@@ -325,7 +321,6 @@ export default function UserJobInput() {
                   setApplicationType('url');
                 }
 
-                // Locations
                 setLocations({
                   street_address: job.street_address || '',
                   city: job.city || '',
@@ -334,7 +329,6 @@ export default function UserJobInput() {
                   postcode: job.postcode || '',
                 });
 
-                // Advanced
                 setAdvanced({
                   job_category: job.job_category || '',
                   industry: job.industry || '',
@@ -349,12 +343,10 @@ export default function UserJobInput() {
                   salary_currency: job.salary_currency || 'TZS',
                 });
 
-                // Show advanced section if any advanced field has data
                 if (job.industry || job.job_category || job.skills?.length) {
                   setShowAdvanced(true);
                 }
 
-                // Skip company chooser — go straight to job form
                 setStep('job-form');
               } else {
                 showMsg('error', 'Job not found or access denied');
@@ -411,13 +403,89 @@ export default function UserJobInput() {
     return [...profile, ...others];
   }, [companies, profileWork]);
 
-  const handleChooseCompany = (name: string) => {
+  // ────────────────────────────────────────────────────────
+  // SAVE COMPANY TO PROFILE (persists across visits)
+  // ────────────────────────────────────────────────────────
+  const saveCompanyToProfile = async (companyName: string): Promise<boolean> => {
+    const token = getUserToken();
+    if (!token) return false;
+
+    // Skip if it's already the user's saved work
+    if (companyName.trim().toLowerCase() === profileWork.toLowerCase()) {
+      return true;
+    }
+
+    try {
+      const res = await fetch('/api/users/me', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ work: companyName.trim() }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.warn('[saveCompanyToProfile] failed:', res.status, err);
+        return false;
+      }
+
+      // Refresh auth state so `hasCompany` updates without reload
+      if (typeof refreshUser === 'function') {
+        try {
+          await refreshUser();
+        } catch (e) {
+          console.warn('[saveCompanyToProfile] refreshUser failed:', e);
+        }
+      } else {
+        // Fallback: refresh profile via GET
+        try {
+          const meRes = await fetch('/api/auth/user/me', {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (meRes.ok) {
+            const meData = await meRes.json();
+            if (meData?.user) {
+              try {
+                localStorage.setItem(
+                  'jobsreport_user',
+                  JSON.stringify(meData.user)
+                );
+              } catch {}
+            }
+          }
+        } catch {}
+      }
+
+      return true;
+    } catch (err) {
+      console.warn('[saveCompanyToProfile] network error:', err);
+      return false;
+    }
+  };
+
+  // ────────────────────────────────────────────────────────
+  // CHOOSE COMPANY
+  // ────────────────────────────────────────────────────────
+  const handleChooseCompany = async (name: string) => {
     if (!name.trim()) {
       showMsg('error', 'Please select a company');
       return;
     }
+
+    // 1. Move to job form immediately (feels instant)
     setSelectedCompany(name);
     setStep('job-form');
+
+    // 2. Persist to profile in background
+    const saved = await saveCompanyToProfile(name);
+    if (!saved) {
+      // Non-fatal: form still works, but next visit will ask again
+      console.warn(
+        '[UserJobInput] Could not save "work" to profile. Next visit will re-prompt.'
+      );
+    }
   };
 
   const handleGoCreateCompany = () => {
@@ -497,21 +565,17 @@ export default function UserJobInput() {
         return;
       }
 
-      const token = getUserToken();
-      if (token) {
-        await fetch('/api/users/me', {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ work: newCompany.name.trim() }),
-        }).catch(() => {});
-      }
+      // Save to profile — same helper
+      const saved = await saveCompanyToProfile(newCompany.name.trim());
 
       setSelectedCompany(newCompany.name.trim());
       setStep('job-form');
-      showMsg('success', `Company "${newCompany.name}" created!`);
+      showMsg(
+        'success',
+        saved
+          ? `Company "${newCompany.name}" created and saved to your profile!`
+          : `Company "${newCompany.name}" created!`
+      );
     } catch (err: any) {
       showMsg('error', err?.message || 'Failed to create company');
     } finally {
@@ -596,7 +660,6 @@ export default function UserJobInput() {
     const token = getUserToken();
     if (!token) { navigate('/login'); return; }
 
-    // Validation
     if (!isEditing && !selectedCompany.trim()) { showMsg('error', 'Please select a company'); return; }
     if (!title.trim()) { showMsg('error', 'Job title is required'); return; }
     if (!selectedRole) { showMsg('error', 'Please select a category'); return; }
@@ -613,7 +676,6 @@ export default function UserJobInput() {
 
     setSubmitting(true);
     try {
-      // Upload any new files
       const uploadedFiles = [];
       for (const file of files) {
         if (!file.file) continue;
@@ -782,7 +844,7 @@ export default function UserJobInput() {
   if (!authUser) return null;
 
   // ═══════════════════════════════════════════════════════
-  // STEP 1 — CHOOSE COMPANY (create mode only)
+  // STEP 1 — CHOOSE COMPANY
   // ═══════════════════════════════════════════════════════
   if (!isEditing && step === 'choose-company') {
     return (
@@ -1167,7 +1229,7 @@ export default function UserJobInput() {
   }
 
   // ═══════════════════════════════════════════════════════
-  // STEP 2 — JOB FORM (create OR edit)
+  // STEP 2 — JOB FORM
   // ═══════════════════════════════════════════════════════
   return (
     <>
@@ -1231,7 +1293,6 @@ export default function UserJobInput() {
         </AnimatePresence>
 
         <form onSubmit={handleSubmit} className="space-y-0">
-          {/* COMPANY */}
           <Section title="Company You're Hiring For" icon={<Building2 size={14} />}>
             <div className="flex items-center gap-3 p-4 bg-white/[0.02] border border-white/10 rounded-2xl">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#1877F2] to-[#7B4DFF] flex items-center justify-center shrink-0">
@@ -1252,7 +1313,6 @@ export default function UserJobInput() {
             </div>
           </Section>
 
-          {/* JOB BASICS */}
           <Section title="Job Basics" icon={<Briefcase size={14} />}>
             <div className="space-y-4">
               <div>
@@ -1315,7 +1375,6 @@ export default function UserJobInput() {
             </div>
           </Section>
 
-          {/* LOCATIONS */}
           <Section title="Locations" icon={<MapPin size={14} />}>
             <div className="space-y-3">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1375,7 +1434,6 @@ export default function UserJobInput() {
             </div>
           </Section>
 
-          {/* APPLICATION */}
           <Section title="How to Apply" icon={<ExternalLink size={14} />}>
             <div className="space-y-3">
               <div className="flex flex-wrap gap-1 p-1 bg-white/[0.03] border border-white/10 rounded-xl">
@@ -1436,7 +1494,6 @@ export default function UserJobInput() {
             </div>
           </Section>
 
-          {/* ATTACHMENTS */}
           <Section title="Attachments" icon={<File size={14} />}>
             <label className="flex items-center justify-center gap-2 p-6 border-2 border-dashed border-white/10 hover:border-[#1877F2]/40 rounded-2xl cursor-pointer transition-all group">
               <input
@@ -1478,7 +1535,6 @@ export default function UserJobInput() {
             )}
           </Section>
 
-          {/* DESCRIPTION */}
           <Section title="Job Description" icon={<FileText size={14} />}>
             <div className="space-y-3">
               <div className="flex justify-end">
@@ -1555,7 +1611,6 @@ export default function UserJobInput() {
             </div>
           </Section>
 
-          {/* ADVANCED */}
           <div className="border-t border-white/5 mt-6 pt-6">
             <button
               type="button"
@@ -1650,7 +1705,6 @@ export default function UserJobInput() {
             )}
           </div>
 
-          {/* SUBMIT */}
           <div className="border-t border-white/5 mt-6 pt-6 flex gap-2">
             <Link
               to={isEditing ? `/u/${authUser.id}` : '/'}
