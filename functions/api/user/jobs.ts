@@ -27,7 +27,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       return jsonResponse({ error: 'Expiry date must be in the future' }, 400);
     }
 
-    // ─── Resolve company_id (create if missing) ───
+    // Resolve company_id (create if missing)
     let companyId: string;
     const existingCompany: any = await DB.prepare(
       'SELECT id FROM companies WHERE LOWER(name) = LOWER(?)'
@@ -43,7 +43,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       `).bind(companyId, companyName).run();
     }
 
-    // ─── Resolve role_id (create if missing) ───
+    // Resolve role_id (create if missing)
     let roleId: string;
     const existingRole: any = await DB.prepare(
       'SELECT id FROM roles WHERE LOWER(name) = LOWER(?)'
@@ -60,27 +60,28 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       `).bind(roleId, roleTitle, roleSlug).run();
     }
 
-    // ─── Build apply URL ───
+    // Application
     let applyUrl = '';
     let whatsapp_number = '';
     let application_instructions = '';
-
     const appType = String(body.applicationType || 'url');
     const appValue = String(body.applicationValue || body.url || '');
 
     if (appType === 'url') applyUrl = appValue;
     else if (appType === 'email') applyUrl = appValue.startsWith('mailto:') ? appValue : `mailto:${appValue}`;
-    else if (appType === 'whatsapp') whatsapp_number = appValue;
-    else if (appType === 'instructions') application_instructions = appValue;
+    else if (appType === 'whatsapp') {
+      whatsapp_number = appValue;
+      applyUrl = `https://wa.me/${appValue.replace(/[^0-9]/g, '')}`;
+    } else if (appType === 'instructions') {
+      application_instructions = appValue;
+      applyUrl = 'https://jobsreport.online/contact-us';
+    }
+    if (!applyUrl) applyUrl = 'https://jobsreport.online/contact-us';
 
-    // apply_url is NOT NULL — fall back to a placeholder if empty
-    if (!applyUrl) applyUrl = `https://jobsreport.online/contact-us`;
-
-    // ─── Generate id + hash (hash is UNIQUE) ───
     const id = `job-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
     const hash = `job-${id}-${Date.now()}`;
 
-    // ─── Insert job ───
+    // ── INSERT with user_id = payload.sub ──
     await DB.prepare(`
       INSERT INTO jobs (
         id, title, role_id, company_id, location, apply_url, salary,
@@ -129,27 +130,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       body.country || 'Tanzania',
       whatsapp_number,
       application_instructions,
-      payload.sub          // ← user_id (the poster)
+      payload.sub   // ← user_id (must be here!)
     ).run();
 
-    // ─── Notify Google (fire-and-forget) ───
-    try {
-      const slugBase = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-      const jobUrl = `https://jobsreport.online/market/${slugBase}-${id}`;
-      context.waitUntil(
-        fetch('https://jobsreport.online/api/test-indexing', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: jobUrl }),
-        }).catch(() => {})
-      );
-    } catch {}
-
-    return jsonResponse({
-      success: true,
-      id,
-      message: 'Job posted successfully',
-    }, 201);
+    return jsonResponse({ success: true, id }, 201);
   } catch (err: any) {
     console.error('User job post error:', err);
     return jsonResponse({
