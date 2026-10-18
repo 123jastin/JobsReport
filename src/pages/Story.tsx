@@ -281,7 +281,6 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
 
   const isAuthor = !!currentUser && String(currentUser.id) === String(user.id);
 
-  // ─── Profile click — parent can override; falls back to /u/:id ───
   const handleProfileClick = useCallback(() => {
     if (onProfileClick) {
       onProfileClick(user.id);
@@ -523,7 +522,6 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
           className="absolute top-0 left-0 right-0 px-4 pt-6 pb-4 z-30 flex items-center justify-between bg-gradient-to-b from-[#0B1120]/90 via-[#0B1120]/40 to-transparent"
           data-no-nav="true"
         >
-          {/* ───── Clickable author row → UserProfile ───── */}
           <button
             onClick={(e) => { e.stopPropagation(); handleProfileClick(); }}
             className="flex items-center gap-3 hover:opacity-90 transition-opacity"
@@ -738,7 +736,6 @@ export const StoryReel: React.FC<StoryReelProps> = ({
 }) => {
   const navigate = useNavigate();
 
-  // ─── Fallback: if parent doesn't provide onProfileClick → /u/:id ───
   const handleProfileClick = useCallback((id: string) => {
     if (onProfileClick) onProfileClick(id);
     else navigate(`/u/${id}`);
@@ -766,7 +763,6 @@ export const StoryReel: React.FC<StoryReelProps> = ({
 
   return (
     <div className="w-full bg-[#0F172A] border-b-[8px] border-[#050B18] py-3.5 px-3 overflow-x-auto flex gap-2.5 scrollbar-hide">
-      {/* Create card — always first */}
       <div
         className="min-w-[110px] sm:min-w-[135px] h-[200px] sm:h-[240px] bg-[#0F172A] rounded-2xl shadow-sm overflow-hidden cursor-pointer relative group flex-shrink-0 border border-[#1E293B]"
         onClick={() => (currentUser ? onCreateStory?.() : onRequestLogin())}
@@ -796,7 +792,6 @@ export const StoryReel: React.FC<StoryReelProps> = ({
         </div>
       </div>
 
-      {/* Story cards */}
       {uniqueUsers.map((story) => {
         const author = story.user || {
           id: story.user_id,
@@ -839,7 +834,6 @@ export const StoryReel: React.FC<StoryReelProps> = ({
 
             <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
 
-            {/* Author avatar chip → UserProfile */}
             <button
               className="absolute top-3 left-3 w-9 h-9 rounded-full border-4 border-[#1877F2] overflow-hidden z-10 shadow-md"
               onClick={(e) => { e.stopPropagation(); handleProfileClick(story.user_id); }}
@@ -852,7 +846,6 @@ export const StoryReel: React.FC<StoryReelProps> = ({
               />
             </button>
 
-            {/* Small + on owner's card */}
             {isMine && (
               <button
                 onClick={(e) => {
@@ -1130,14 +1123,27 @@ export const CreateStoryModal: React.FC<CreateStoryModalProps> = ({
 };
 
 // ============================================================
-// PUBLIC STORY PAGE — author block → UserProfile
+// PUBLIC STORY PAGE — SEO page + clickable → opens StoryViewer
 // ============================================================
 export const PublicStoryPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  const { user: authUser } = useUserAuth();
+
   const [story, setStory] = useState<StoryType | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
+
+  const currentUser: StoryUser | null = authUser
+    ? {
+        id: String(authUser.id),
+        name: authUser.name || authUser.username || 'User',
+        username: authUser.username || null,
+        email: authUser.email,
+        profile_image_url: authUser.profile_image_url || null,
+      }
+    : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -1223,6 +1229,13 @@ export const PublicStoryPage: React.FC = () => {
     },
   };
 
+  // Author object for StoryViewer
+  const viewingUser: StoryUser = story.user || {
+    id: story.user_id,
+    name: authorName,
+    profile_image_url: getDefaultAvatar(authorName, story.user_id),
+  };
+
   return (
     <>
       <SEO
@@ -1258,7 +1271,13 @@ export const PublicStoryPage: React.FC = () => {
           </div>
         </Link>
 
-        <article className="rounded-3xl overflow-hidden border border-white/5 bg-white/[0.01]">
+        {/* ─── CLICKABLE STORY PREVIEW → OPENS FULL-SCREEN VIEWER ─── */}
+        <button
+          type="button"
+          onClick={() => setViewerOpen(true)}
+          className="block w-full text-left rounded-3xl overflow-hidden border border-white/5 bg-white/[0.01] hover:border-[#1877F2]/40 transition-all group relative focus:outline-none focus:ring-2 focus:ring-[#1877F2]/40"
+          aria-label="Open full-screen story viewer"
+        >
           {story.type === 'text' ? (
             <div
               className="p-10 text-center min-h-[300px] flex items-center justify-center"
@@ -1269,15 +1288,35 @@ export const PublicStoryPage: React.FC = () => {
               </div>
             </div>
           ) : (
-            <img
-              src={story.media_thumb || story.media_url || ''}
-              alt="Story"
-              className="w-full max-h-[70vh] object-contain bg-black"
-              loading="lazy"
-            />
+            <div className="relative">
+              <img
+                src={story.media_thumb || story.media_url || ''}
+                alt="Story preview"
+                className="w-full max-h-[70vh] object-contain bg-black"
+                loading="lazy"
+              />
+              {/* Hover overlay */}
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center pointer-events-none">
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/20 backdrop-blur-md rounded-full p-5 border border-white/30">
+                  <Eye size={32} className="text-white" />
+                </div>
+              </div>
+            </div>
           )}
-        </article>
 
+          {/* "Tap to view" bar */}
+          <div className="px-4 py-3 bg-white/[0.02] border-t border-white/5 flex items-center justify-between">
+            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Eye size={12} className="text-[#4A9EFF]" />
+              Tap to view full story
+            </span>
+            <span className="text-[10px] text-gray-500 font-mono">
+              {fmtCount(story.views_count || 0)} views
+            </span>
+          </div>
+        </button>
+
+        {/* Meta */}
         <div className="flex items-center justify-between text-sm text-gray-500">
           <div className="flex items-center gap-2">
             <Eye size={16} />
@@ -1289,6 +1328,7 @@ export const PublicStoryPage: React.FC = () => {
           </div>
         </div>
 
+        {/* CTA buttons */}
         <div className="flex gap-3">
           <button
             onClick={() => navigate('/')}
@@ -1311,6 +1351,25 @@ export const PublicStoryPage: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* ─── FULL-SCREEN VIEWER ─── */}
+      {viewerOpen && (
+        <StoryViewer
+          story={story}
+          user={viewingUser}
+          currentUser={currentUser}
+          allStories={[story]}
+          onClose={() => setViewerOpen(false)}
+          onViewRecorded={(id) => {
+            setStory((prev) =>
+              prev && prev.id === id
+                ? { ...prev, views_count: (prev.views_count || 0) + 1 }
+                : prev
+            );
+          }}
+          onProfileClick={(id) => navigate(`/u/${id}`)}
+        />
+      )}
     </>
   );
 };
