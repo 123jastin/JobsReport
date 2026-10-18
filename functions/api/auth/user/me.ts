@@ -11,7 +11,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     if (!payload) return jsonResponse({ error: 'Unauthorized' }, 401);
 
     const user: any = await DB.prepare(`
-      SELECT id, name, username, email, profile_image_url, bio,
+      SELECT id, name, username, email,
+             profile_image_url, cover_image_url,
+             bio, headline, work, education, location, website, linkedin_url,
              country, role, is_verified, created_at
       FROM users WHERE id = ?
     `).bind(payload.sub).first();
@@ -25,7 +27,14 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         username: user.username || null,
         email: user.email,
         profile_image_url: user.profile_image_url || '',
+        cover_image_url: user.cover_image_url || '',
         bio: user.bio || '',
+        headline: user.headline || '',
+        work: user.work || '',              // ← CRITICAL
+        education: user.education || '',
+        location: user.location || '',
+        website: user.website || '',
+        linkedin_url: user.linkedin_url || '',
         country: user.country || 'TZ',
         role: user.role || 'user',
         is_verified: user.is_verified || 0,
