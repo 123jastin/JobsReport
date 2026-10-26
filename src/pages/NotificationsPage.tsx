@@ -68,6 +68,59 @@ const getNotificationIcon = (type: string) => {
   }
 };
 
+// ------------------------------------------------------------
+// ✅ NEW: Convert a job ID (with or without "job-" prefix) into
+// a canonical /market/... URL that JobDetailPage can parse.
+// JobDetailPage expects the "-job-{id}" marker suffix, so we
+// strip any leading "job-" and rebuild the URL correctly.
+// ------------------------------------------------------------
+const buildJobUrl = (rawId: string): string => {
+  const cleaned = String(rawId || '').trim().replace(/^job-/, '');
+  if (!cleaned) return '/market';
+  return `/market/job-${cleaned}`;
+};
+
+// ------------------------------------------------------------
+// ✅ NEW: Resolve the correct destination for a notification.
+// Priority order:
+//   1. entityType='job' + entityId  → build canonical job URL
+//   2. link that already contains "-job-{id}" → normalize & use
+//   3. link that points to /market/... (already canonical) → use as-is
+//   4. link as a fallback → use as-is
+//   5. Nothing → return null (caller decides what to do)
+// ------------------------------------------------------------
+const resolveNotificationUrl = (n: Notification): string | null => {
+  // 1. Backend told us exactly which entity
+  if (n.entityType === 'job' && n.entityId) {
+    return buildJobUrl(n.entityId);
+  }
+
+  const link = (n.link || '').trim();
+  if (!link) return null;
+
+  // 2. If the link is /market/{...}-job-{id}, extract the tail and rebuild
+  //    so we never rely on JobDetailPage's buggy parser.
+  const jobMarkerMatch = link.match(/-job-([A-Za-z0-9]+)(?:[/?#].*)?$/);
+  if (jobMarkerMatch && jobMarkerMatch[1]) {
+    return buildJobUrl(jobMarkerMatch[1]);
+  }
+
+  // 3. If it's a full URL to another site, leave it — caller opens in new tab
+  //    (we only rebuild relative /market/* paths)
+  if (/^https?:\/\//i.test(link) && !link.startsWith(window.location.origin)) {
+    return link;
+  }
+
+  // 4. /job-detail/... on this site — normalize to /market/job-{id}
+  const jobDetailMatch = link.match(/\/job-detail\/(?:.*-job-)?([A-Za-z0-9]+)(?:[/?#]|$)/);
+  if (jobDetailMatch && jobDetailMatch[1]) {
+    return buildJobUrl(jobDetailMatch[1]);
+  }
+
+  // 5. Everything else — pass through unchanged
+  return link;
+};
+
 // ============================================================
 // MAIN PAGE
 // ============================================================
@@ -230,6 +283,7 @@ export default function NotificationsPage() {
   };
 
   const handleOpenNotification = (n: Notification) => {
+    // Mark as read (optimistic + server sync)
     if (!n.isRead) {
       setNotifications((prev) => prev.map((x) => x.id === n.id ? { ...x, isRead: true } : x));
       setUnreadCount((prev) => Math.max(0, prev - 1));
@@ -243,7 +297,22 @@ export default function NotificationsPage() {
       }
     }
 
-    if (n.link) navigate(n.link);
+    // ✅ Resolve correct target URL (fixes wrong-job bug)
+    const targetUrl = resolveNotificationUrl(n);
+
+    if (!targetUrl) {
+      showMsg('error', 'This notification has no destination');
+      return;
+    }
+
+    // External links open in a new tab (never trap user inside SPA)
+    if (/^https?:\/\//i.test(targetUrl) && !targetUrl.startsWith(window.location.origin)) {
+      window.open(targetUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    // In-app navigation
+    navigate(targetUrl);
   };
 
   // ────────────────────────────────────────────────────────
