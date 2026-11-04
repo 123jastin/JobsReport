@@ -77,6 +77,13 @@ const DEFAULT_STORY_DURATION_MS = 5000;
 const THUMB_MAX_DIMENSION = 400;
 const THUMB_QUALITY = 0.8;
 
+// ✅ Absolute site URL — must match canonical / OG URL
+const SITE_URL = 'https://jobsreport.online';
+
+// ✅ Branded fallback OG image for text-only stories.
+//    Create this file at: public/og-default-story.png  (recommended 1200x630, < 500 KB)
+const OG_FALLBACK_IMAGE = `${SITE_URL}/og-default-story.png`;
+
 // ============================================================
 // HELPERS
 // ============================================================
@@ -124,6 +131,33 @@ const isExpired = (story: StoryType): boolean => {
   if (story.is_active === 0 || story.is_active === (false as any)) return true;
   if (!story.expires_at) return false;
   return parseServerTime(story.expires_at) < Date.now();
+};
+
+// ✅ Force any image path into an absolute https URL.
+//    Handles: already-absolute, protocol-relative (//...), root-relative (/...), and bare paths.
+const toAbsoluteUrl = (raw?: string | null): string | null => {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  if (/^https?:\/\//i.test(s)) return s;              // absolute
+  if (s.startsWith('//')) return `https:${s}`;        // protocol-relative
+  if (s.startsWith('/')) return `${SITE_URL}${s}`;    // root-relative
+  return `${SITE_URL}/${s}`;                          // bare
+};
+
+/**
+ * ✅ Choose the best OG image for a story:
+ *   - image story → prefer thumb (smaller, faster), fall back to full media
+ *   - text story  → branded fallback image
+ *   - always returns an absolute URL (required by WhatsApp / Facebook crawlers)
+ */
+const getStoryOgImage = (story: StoryType): string => {
+  if (story.type === 'image') {
+    const candidate = story.media_thumb || story.media_url;
+    const abs = toAbsoluteUrl(candidate);
+    if (abs) return abs;
+  }
+  return OG_FALLBACK_IMAGE;
 };
 
 // ============================================================
@@ -438,7 +472,7 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
   };
 
   const handleShare = async () => {
-    const url = `${window.location.origin}/story/${story.slug}`;
+    const url = `${SITE_URL}/story/${story.slug}`;
     const shareData = {
       title: story.text_content?.slice(0, 80) || `${user.name}'s Story`,
       text: story.text_content?.slice(0, 160) || `Check out this story on JobsReport`,
@@ -1199,12 +1233,15 @@ export const PublicStoryPage: React.FC = () => {
     );
   }
 
-  const storyUrl = `https://jobsreport.online/story/${story.slug}`;
+  const storyUrl = `${SITE_URL}/story/${story.slug}`;
   const authorName = story.user?.name || 'User';
   const authorId = story.user_id;
   const title = story.text_content?.slice(0, 70) || `${authorName}'s Story`;
   const description = story.text_content?.slice(0, 160) || `Job story shared by ${authorName} on JobsReport.`;
-  const image = story.media_url || story.media_thumb || undefined;
+
+  // ✅ OG image — always an ABSOLUTE URL and always present.
+  //    Used by WhatsApp / Facebook / LinkedIn crawlers to render the thumbnail.
+  const ogImage = getStoryOgImage(story);
 
   const articleSchema = {
     '@context': 'https://schema.org',
@@ -1214,19 +1251,19 @@ export const PublicStoryPage: React.FC = () => {
     datePublished: story.created_at,
     dateModified: story.created_at,
     url: storyUrl,
-    image: image || undefined,
+    image: ogImage,
     author: {
       '@type': 'Person',
       name: authorName,
-      url: `https://jobsreport.online/u/${authorId}`,
+      url: `${SITE_URL}/u/${authorId}`,
     },
     publisher: {
       '@type': 'Organization',
       name: 'JobsReport',
-      url: 'https://jobsreport.online',
+      url: SITE_URL,
       logo: {
         '@type': 'ImageObject',
-        url: 'https://jobsreport.online/favicon.ico',
+        url: `${SITE_URL}/favicon.ico`,
       },
     },
     interactionStatistic: {
@@ -1253,10 +1290,15 @@ export const PublicStoryPage: React.FC = () => {
         ogTitle={title}
         ogDescription={description}
         ogUrl={storyUrl}
-        ogImage={image}
+        ogImage={ogImage}
+        ogImageAlt={story.text_content ? story.text_content.slice(0, 120) : `Story by ${authorName}`}
+        ogImageType="image/jpeg"
+        ogImageWidth={1200}
+        ogImageHeight={630}
         ogType="article"
+        ogSiteName="JobsReport"
         twitterCard="summary_large_image"
-        twitterImage={image}
+        twitterImage={ogImage}
         structuredData={articleSchema}
       />
 
@@ -1299,7 +1341,7 @@ export const PublicStoryPage: React.FC = () => {
           ) : (
             <div className="relative">
               <img
-                src={story.media_thumb || story.media_url || ''}
+                src={story.media_thumb || story.media_url || ogImage}
                 alt="Story preview"
                 className="w-full max-h-[70vh] object-contain bg-black"
                 loading="lazy"
@@ -1457,6 +1499,7 @@ export default function StoryPage() {
       <SEO
         title="Job Stories | JobsReport"
         description="Real job success stories and career insights shared by the JobsReport community."
+        ogImage={OG_FALLBACK_IMAGE}
       />
 
       <div className="max-w-5xl mx-auto px-4 py-6 space-y-8">
